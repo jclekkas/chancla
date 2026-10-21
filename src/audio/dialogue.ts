@@ -170,7 +170,7 @@ export class Dialogue {
     this.playing = { line, until: t + ms + 250, src };
     this.log.push({ id: line.id, t, ms, voiced: !!src });
     if (this.log.length > 400) this.log.shift();
-    audio.duck(src ? 0.55 : 1);
+    audio.duck(src ? audio.duckDepth : 1);
     this.showSubtitle(line);
   }
 

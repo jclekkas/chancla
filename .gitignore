@@ -7,3 +7,4 @@ artifacts/
 .vercel
 .netlify
 dist-server/
+__pycache__/

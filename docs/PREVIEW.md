@@ -26,7 +26,8 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | Classic solo arcade (`/classic.html`) | Works |
 | **Online multiplayer** | **Not available.** No game server is hosted yet. The title screen says "Online play is not set up on this deployment yet." Hosting one is a separate step that may cost money; it is waiting on your approval. |
 | **Voices** | **Temporary.** Every line is spoken by a clearly synthetic placeholder voice (offline text-to-speech, Castilian Spanish). They show when and how lines play, not how the final performance should sound. Please judge the writing and timing, not the voices. |
-| Music and effects | Original and synthesized in the browser. Nobody has listened to them yet; you will be the first. |
+| Music | **The five Suno tracks**: Rosa's theme on the menus, Ruleros in Mission 1, Fricas y Fricas in Missions 2 and 3, Guerra de Vecinos in the piñata finale, and Bounce y Joke in practice. Each one loops. The loop points were chosen by analysis and nobody has listened to them yet, so you will be the first. If a track is slow to download, the old synthesized music plays until it arrives. |
+| Effects | Synthesized in the browser. |
 
 ## How to play
 
@@ -78,7 +79,10 @@ Please note your computer, browser, and whether you used a mouse or a trackpad. 
 
 **Music**
 - [ ] Each mission's music fits its mood; the piñata finale feels like a finale
-- [ ] Music never drowns out footsteps, warnings or dialogue
+- [ ] Music never drowns out footsteps, warnings or dialogue (it should dip whenever someone speaks)
+- [ ] Loops: stay in a mission for 2 minutes or more (Missions 1-3), or leave the menu running. Does the music jump or stutter when it repeats? Note roughly when.
+- [ ] Transitions: menu to mission select, mission start, leaving a mission. Is each change smooth, with no gap or clash?
+- [ ] Volume: Settings → Music at 0 silences it; other levels scale it
 - [ ] Nothing grates after several minutes
 
 **Humor**

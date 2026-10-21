@@ -724,7 +724,7 @@ function on(id: string, f: (e: Event) => void): void {
 function bindUi(): void {
   on('btn-campaign', () => campaign.openSelect());
   on('btn-online', openOnline);
-  on('btn-practice', () => { renderPracticeSetup(); show('practice'); });
+  on('btn-practice', () => { renderPracticeSetup(); show('practice'); music.preload('combat'); });
   on('btn-controls', () => pushOverlay('controls'));
   on('btn-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));

@@ -1,0 +1,21 @@
+{
+  "note": "Loop points chosen from scripts/music/find-loops.py candidates (beat-aligned, whole bars). seamPct: how the seam's similarity ranks against random pairs of points in the same song (1.0 = better than all). Edit, then run python3 scripts/music/prepare.py.",
+  "assign": {
+    "menu": "rosa-theme",
+    "select": "rosa-theme",
+    "lobby": "rosa-theme",
+    "results": "rosa-theme",
+    "ruleros": "ruleros",
+    "cocina": "fricas-y-fricas",
+    "patio": "fricas-y-fricas",
+    "pinata": "guerra-de-vecinos",
+    "combat": "bounce-y-joke"
+  },
+  "tracks": [
+    { "id": "rosa-theme", "source": "rosa-theme.mp3", "title": "Groquo de diversión", "bpm": 105.26, "key": { "root": 57, "minor": true }, "loopStart": 43.23, "loopEnd": 88.60, "seamPct": 0.88, "gainDb": 0 },
+    { "id": "ruleros", "source": "ruleros.m4a", "title": "Ruleros", "bpm": 93.75, "key": { "root": 57, "minor": true }, "loopStart": 26.60, "loopEnd": 98.45, "seamPct": 0.99, "gainDb": 0 },
+    { "id": "fricas-y-fricas", "source": "fricas-y-fricas.mp3", "title": "Fricas y Fricas", "bpm": 113.21, "key": { "root": 57, "minor": true }, "loopStart": 58.11, "loopEnd": 133.88, "seamPct": 0.95, "gainDb": 0 },
+    { "id": "guerra-de-vecinos", "source": "guerra-de-vecinos.mp3", "title": "Guerra de Vecinos", "bpm": 133.33, "key": { "root": 50, "minor": true }, "loopStart": 45.50, "loopEnd": 109.77, "seamPct": 0.975, "gainDb": 0 },
+    { "id": "bounce-y-joke", "source": "bounce-y-joke.mp3", "title": "Bounce y Joke", "bpm": 115.38, "key": { "root": 50, "minor": true }, "loopStart": 18.35, "loopEnd": 60.43, "seamPct": 0.855, "gainDb": -3 }
+  ]
+}

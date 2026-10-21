@@ -105,8 +105,9 @@ export class CampaignUi {
     $('mi-status').textContent = '';
     ($('btn-mi-start') as HTMLButtonElement).disabled = false;
     this.ctx.show('mintro');
-    // Warm the mission code and its voice lines while the player reads.
+    // Warm the mission code, its music and its voice lines while the player reads.
     this.loadingMod ??= import('./runtime');
+    music.preload(m.music);
     void this.ctx.dialogue.loadManifest(this.ctx.baseUrl).then(() => this.ctx.dialogue.preload(linesFor(m)));
   }
 

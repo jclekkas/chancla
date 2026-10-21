@@ -12,7 +12,9 @@
     "e2e": "node scripts/e2e.mjs",
     "dev:server": "tsx watch server/index.ts",
     "build:server": "vite build --ssr server/index.ts --outDir dist-server --emptyOutDir",
-    "start:server": "node dist-server/index.js"
+    "start:server": "node dist-server/index.js",
+    "e2e:music": "node --import tsx scripts/music-e2e.ts",
+    "music:prepare": "python3 scripts/music/prepare.py && python3 scripts/music/check-seams.py"
   },
   "dependencies": {
     "@fontsource/lilita-one": "5.3.0",

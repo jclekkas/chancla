@@ -1,0 +1,32 @@
+[
+  {
+    "id": "rosa-theme",
+    "noveltyAtSeamPct": 0.645,
+    "beatContinuityAtSeamPct": 0.489,
+    "verdict": "blends in"
+  },
+  {
+    "id": "ruleros",
+    "noveltyAtSeamPct": 0.598,
+    "beatContinuityAtSeamPct": 0.239,
+    "verdict": "blends in"
+  },
+  {
+    "id": "fricas-y-fricas",
+    "noveltyAtSeamPct": 0.775,
+    "beatContinuityAtSeamPct": 0.539,
+    "verdict": "blends in"
+  },
+  {
+    "id": "guerra-de-vecinos",
+    "noveltyAtSeamPct": 0.143,
+    "beatContinuityAtSeamPct": 0.424,
+    "verdict": "blends in"
+  },
+  {
+    "id": "bounce-y-joke",
+    "noveltyAtSeamPct": 0.188,
+    "beatContinuityAtSeamPct": 0.679,
+    "verdict": "blends in"
+  }
+]

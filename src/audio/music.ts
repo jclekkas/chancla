@@ -1,8 +1,20 @@
-// Original score for the shooter and the campaign, synthesized live with
-// Web Audio (no samples, no files, nothing downloaded at play time).
+// The soundtrack has two layers.
 //
-// One recurring motif, "Rosa's theme" (5-3-5-6 | 5 · 3-2 | 1-2-3-5 | 3),
-// is arranged per context:
+// Recorded: the Suno tracks in public/music (prepared from the untouched
+// originals by scripts/music/prepare.py, which bakes each loop seam and
+// matches loudness). Cue-to-recording assignments live in soundtrack.ts.
+// A recording loops sample-accurately between its loop points, and changing
+// cues crossfades equal-power over 1.5 s. Recordings load on demand; at most
+// two stay decoded.
+//
+// Synthesized: the original score below, composed in code and played live
+// with Web Audio. It plays for cues without a recording, and it is the
+// fallback while a recording loads (after a short grace period) or if one
+// fails to download or decode. Stingers are always synthesized, in the key
+// of whatever is playing.
+//
+// Synthesized arrangements of one recurring motif, "Rosa's theme"
+// (5-3-5-6 | 5 · 3-2 | 1-2-3-5 | 3):
 //   menu      relaxed cumbia groove, marimba states the motif
 //   lobby     the same groove, motif left out, guitar comping only
 //   combat    restrained: bass, soft güiro and pads, low-passed, no lead in
@@ -15,8 +27,10 @@
 //   select    mission select: harp-like plucks, motif in slow values
 // Loops are scheduled ahead on the audio clock, so they are seamless;
 // switching tracks crossfades on the next bar line. Intensity (0-1) adds
-// percussion and counter-lines without restarting the loop.
+// percussion and counter-lines without restarting the loop (synthesized
+// layer only: the recordings have no stems).
 import { audio } from './audio';
+import { ASSIGN, RECORDED, type RecordedTrack } from './soundtrack';
 
 export type TrackId = 'menu' | 'lobby' | 'combat' | 'results' | 'ruleros' | 'cocina' | 'patio' | 'pinata' | 'select' | 'off';
 type Stinger = 'objective' | 'setback' | 'phase' | 'complete' | 'fail';
@@ -57,6 +71,32 @@ const TRACKS: Record<Exclude<TrackId, 'off'>, Track> = {
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
+// Recorded layer. The prepared files are all -16 LUFS; this level puts them
+// at about the synthesized score's loudness on the music bus (measured in the
+// browser by scripts/music-e2e.ts --calibrate; see docs/AUDIO.md).
+const REC_LEVEL = 0.52;
+const REC_XFADE = 1.5; // seconds, between cues
+const REC_GRACE_MS = 1200; // wait this long for a recording before falling back
+const REC_KEEP = 2; // decoded recordings kept in memory
+// In play, a gentle dip in the 2-3 kHz band leaves room for footsteps, hit
+// cues and voices. Menus get the full mix.
+const IN_GAME_EQ_DB: Partial<Record<TrackId, number>> = { combat: -4, ruleros: -2.5, cocina: -2.5, patio: -2.5, pinata: -2.5 };
+// Dialogue ducks a dense recording further than the sparse synthesized score.
+const DUCK_SYNTH = 0.55;
+const DUCK_RECORDED = 0.42;
+const BASE = (() => { try { return import.meta.env.BASE_URL || '/'; } catch { return '/'; } })();
+
+interface RecLane { rec: RecordedTrack; src: AudioBufferSourceNode; eq: BiquadFilterNode; gain: GainNode; startedAt: number; offset: number }
+
+function equalPower(from: number, to: number, n = 32): Float32Array {
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    c[i] = Math.max(0.0001, from * Math.cos((t * Math.PI) / 2) + to * Math.sin((t * Math.PI) / 2));
+  }
+  return c;
+}
+
 class Lane {
   gain: GainNode;
   filter: BiquadFilterNode;
@@ -82,14 +122,179 @@ export class Music {
   private ks = new Map<string, AudioBuffer>();
   private live = 0;
   private seed = 12345;
+  private synthId: TrackId = 'off';
+  private rec: RecLane | null = null;
+  private bytes = new Map<string, Promise<ArrayBuffer | null>>();
+  private decoding = new Map<string, Promise<AudioBuffer | null>>();
+  private buffers = new Map<string, AudioBuffer>(); // insertion order = least recently used first
+  private failed = new Set<string>();
+  private grace: ReturnType<typeof setTimeout> | null = null;
+  /** Set false to hear only the synthesized score (tests, comparisons). */
+  recordings = true;
   current: TrackId = 'off';
   scheduled = 0; // notes scheduled (tests)
 
   play(id: TrackId): void {
     this.want = id;
+    const recId = this.recordingFor(id);
+    if (recId) void this.fetchBytes(recId); // downloading needs no audio context
     const n = audio.nodes;
     if (!n) return; // audio not unlocked yet: started on the next call after unlock
-    if (id === this.current) { this.ensureTimer(); return; }
+    if (id === this.current) { if (this.synthId !== 'off') this.ensureTimer(); return; }
+    this.current = id;
+    if (this.grace) { clearTimeout(this.grace); this.grace = null; }
+    if (recId && this.rec?.rec.id === recId) {
+      // Same recording under another cue (menu and mission select): keep it going.
+      this.setEq(this.rec, id);
+      return;
+    }
+    const buf = recId ? this.buffers.get(recId) : undefined;
+    if (recId && buf) { this.startRecorded(recId, buf, id); return; }
+    if (recId) {
+      // Not decoded yet: fade out the previous recording (it belongs to another
+      // scene), wait a moment, then fall back to the synthesized arrangement.
+      // Switch over whenever the recording is ready.
+      this.fadeRecorded(n.ctx.currentTime, 0.8);
+      const ready = this.decode(recId);
+      this.grace = setTimeout(() => { this.grace = null; if (this.current === id && !this.rec) this.synth(id); }, REC_GRACE_MS);
+      void ready.then((b) => {
+        if (!b || this.current !== id || this.rec?.rec.id === recId) {
+          if (!b && this.current === id && !this.rec) { if (this.grace) { clearTimeout(this.grace); this.grace = null; } this.synth(id); }
+          return;
+        }
+        if (this.grace) { clearTimeout(this.grace); this.grace = null; }
+        this.startRecorded(recId, b, id);
+      });
+      return;
+    }
+    this.fadeRecorded(n.ctx.currentTime, REC_XFADE);
+    this.synth(id);
+  }
+
+  /** Starts downloading and decoding a cue's recording ahead of time. */
+  preload(id: TrackId): void {
+    const recId = this.recordingFor(id);
+    if (!recId) return;
+    void this.fetchBytes(recId);
+    if (audio.nodes) void this.decode(recId);
+  }
+
+  private recordingFor(id: TrackId): string | null {
+    if (!this.recordings || id === 'off') return null;
+    const r = ASSIGN[id];
+    return r && !this.failed.has(r) && RECORDED.some((t) => t.id === r) ? r : null;
+  }
+
+  private fetchBytes(recId: string): Promise<ArrayBuffer | null> {
+    let p = this.bytes.get(recId);
+    if (!p) {
+      const rec = RECORDED.find((t) => t.id === recId)!;
+      p = fetch(`${BASE}${rec.file}`)
+        .then((r) => (r.ok ? r.arrayBuffer() : null))
+        .catch(() => null)
+        .then((b) => { if (!b) { this.failed.add(recId); this.bytes.delete(recId); } return b; });
+      this.bytes.set(recId, p);
+    }
+    return p;
+  }
+
+  private decode(recId: string): Promise<AudioBuffer | null> {
+    const have = this.buffers.get(recId);
+    if (have) return Promise.resolve(have);
+    let p = this.decoding.get(recId);
+    if (!p) {
+      p = this.fetchBytes(recId).then(async (bytes) => {
+        const n = audio.nodes;
+        if (!bytes || !n) return null;
+        try {
+          // decodeAudioData detaches its input, so keep the download for a later re-decode.
+          const buf = await n.ctx.decodeAudioData(bytes.slice(0));
+          this.buffers.set(recId, buf);
+          this.evict();
+          return buf;
+        } catch {
+          this.failed.add(recId);
+          return null;
+        } finally {
+          this.decoding.delete(recId);
+        }
+      });
+      this.decoding.set(recId, p);
+    }
+    return p;
+  }
+
+  private evict(): void {
+    for (const key of [...this.buffers.keys()]) {
+      if (this.buffers.size <= REC_KEEP) break;
+      if (key !== this.rec?.rec.id) this.buffers.delete(key);
+    }
+  }
+
+  private startRecorded(recId: string, buf: AudioBuffer, cue: TrackId): void {
+    const n = audio.nodes!;
+    const ctx = n.ctx;
+    const now = ctx.currentTime;
+    const rec = RECORDED.find((t) => t.id === recId)!;
+    this.fadeRecorded(now, REC_XFADE);
+    this.fadeSynth(now, REC_XFADE);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.loopStart = rec.loopStart;
+    src.loopEnd = Math.min(rec.loopEnd, buf.duration);
+    const eq = ctx.createBiquadFilter();
+    eq.type = 'peaking';
+    eq.frequency.value = 2600;
+    eq.Q.value = 0.8;
+    const gain = ctx.createGain();
+    src.connect(eq); eq.connect(gain); gain.connect(n.music);
+    const level = REC_LEVEL * Math.pow(10, rec.gainDb / 20);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.setValueCurveAtTime(equalPower(0, level), now + 0.02, REC_XFADE);
+    src.start(now + 0.02);
+    // LRU: the playing recording becomes the most recent.
+    this.buffers.delete(recId); this.buffers.set(recId, buf);
+    this.rec = { rec, src, eq, gain, startedAt: now + 0.02, offset: 0 };
+    this.setEq(this.rec, cue);
+    audio.duckDepth = DUCK_RECORDED;
+    this.evict();
+  }
+
+  private setEq(lane: RecLane, cue: TrackId): void {
+    const ctx = audio.nodes?.ctx;
+    if (ctx) lane.eq.gain.setTargetAtTime(IN_GAME_EQ_DB[cue] ?? 0, ctx.currentTime, 0.3);
+  }
+
+  private fadeRecorded(now: number, dur: number): void {
+    const r = this.rec;
+    if (!r) return;
+    this.rec = null;
+    audio.duckDepth = DUCK_SYNTH;
+    const g = r.gain.gain;
+    const from = Math.max(0.0001, g.value);
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(from, now);
+    g.setValueCurveAtTime(equalPower(from, 0), now, dur);
+    try { r.src.stop(now + dur + 0.05); } catch { /* already stopped */ }
+    r.src.onended = () => { for (const node of [r.src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
+  }
+
+  private fadeSynth(now: number, dur: number): void {
+    for (const l of this.lanes) {
+      l.gain.gain.cancelScheduledValues(now);
+      l.gain.gain.setValueAtTime(Math.max(0.0001, l.gain.gain.value), now);
+      l.gain.gain.linearRampToValueAtTime(0.0001, now + dur);
+      const dead = l;
+      setTimeout(() => { try { dead.gain.disconnect(); } catch { /* gone */ } this.lanes = this.lanes.filter((x) => x !== dead); }, (dur + 0.2) * 1000);
+    }
+    this.synthId = 'off';
+  }
+
+  private synth(id: TrackId): void {
+    const n = audio.nodes;
+    if (!n) return;
+    if (id === this.synthId) { this.ensureTimer(); return; }
     const ctx = n.ctx;
     const now = ctx.currentTime;
     // Crossfade on the next bar of the outgoing track (or right away).
@@ -107,7 +312,7 @@ export class Music {
         setTimeout(() => { try { dead.gain.disconnect(); } catch { /* gone */ } this.lanes = this.lanes.filter((x) => x !== dead); }, (at - now + 0.8) * 1000);
       }
     }
-    this.current = id;
+    this.synthId = id;
     if (id === 'off') return;
     const lane = new Lane(id, ctx, n.music, at);
     lane.gain.gain.setValueAtTime(0.0001, now);
@@ -117,7 +322,47 @@ export class Music {
   }
 
   /** Called after the audio context unlocks so a requested track starts. */
-  resume(): void { const w = this.want; this.current = 'off'; this.lanes = []; this.play(w); }
+  resume(): void {
+    const w = this.want;
+    this.current = 'off'; this.synthId = 'off'; this.lanes = [];
+    if (this.rec) { try { this.rec.src.stop(); } catch { /* gone */ } this.rec = null; }
+    this.play(w);
+  }
+
+  /** What is playing, for tests and the debug API. */
+  state(): { cue: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[] } {
+    const r = this.rec;
+    let position: number | null = null;
+    if (r && audio.nodes) {
+      const t = audio.nodes.ctx.currentTime - r.startedAt + r.offset;
+      const len = r.rec.loopEnd - r.rec.loopStart;
+      position = t < r.rec.loopEnd ? t : r.rec.loopStart + ((t - r.rec.loopEnd) % len);
+    }
+    return {
+      cue: this.current,
+      layer: r ? 'recorded' : this.synthId !== 'off' ? 'synth' : 'off',
+      recording: r?.rec.id ?? null,
+      position,
+      loop: r ? [r.rec.loopStart, r.rec.loopEnd] : null,
+      loaded: [...this.buffers.keys()],
+      failed: [...this.failed],
+    };
+  }
+
+  /** Test hook: restarts the playing recording at `sec` (to hear a loop seam soon). */
+  seek(sec: number): void {
+    const r = this.rec;
+    const n = audio.nodes;
+    if (!r || !n) return;
+    const src = n.ctx.createBufferSource();
+    src.buffer = r.src.buffer;
+    src.loop = true; src.loopStart = r.src.loopStart; src.loopEnd = r.src.loopEnd;
+    src.connect(r.eq);
+    const now = n.ctx.currentTime;
+    try { r.src.stop(now); } catch { /* gone */ }
+    src.start(now, sec);
+    r.src = src; r.startedAt = now; r.offset = sec;
+  }
 
   setIntensity(k: number): void { this.intensity = Math.max(0, Math.min(1, k)); }
 
@@ -141,7 +386,7 @@ export class Music {
     this.smooth += (this.intensity - this.smooth) * 0.05;
     const now = n.ctx.currentTime;
     for (const lane of this.lanes) {
-      if (lane.id !== this.current) continue;
+      if (lane.id !== this.synthId) continue;
       const tr = TRACKS[lane.id];
       const s16 = 60 / tr.bpm / 4;
       if (lane.next < now - 0.25) lane.next = now + 0.05; // after a stall, resync instead of bursting
@@ -391,7 +636,9 @@ export class Music {
     const ctx = n.ctx;
     const t = ctx.currentTime + 0.02;
     const out = n.music;
-    const tr = TRACKS[(this.current === 'off' ? 'menu' : this.current) as Exclude<TrackId, 'off'>];
+    // In the key of what is playing: the recording's if there is one.
+    const base = TRACKS[(this.synthId === 'off' ? 'menu' : this.synthId) as Exclude<TrackId, 'off'>];
+    const tr: Track = this.rec ? { ...base, root: this.rec.rec.key.root, minor: this.rec.rec.key.minor } : base;
     const f = (d: number, o = 1) => mtof(this.deg(tr, d, o));
     switch (kind) {
       case 'objective':

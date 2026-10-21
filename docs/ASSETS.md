@@ -1,6 +1,6 @@
 # Asset inventory: Chancla Warfare: La Ley de la Chancla
 
-Every visual and musical asset is generated in code at runtime. There are no downloaded models, textures, images or music files. The one exception is the temporary voice pack: 79 small audio files generated offline by the tools listed below. This table lists what exists, where it lives, and its license.
+Every visual asset is generated in code at runtime. There are no downloaded models, textures or images. There are two sets of audio files: the recorded soundtrack (five Suno tracks, prepared from the untouched originals) and the temporary voice pack (79 small clips generated offline). Everything else, including the fallback score, is synthesized in code. This table lists what exists, where it lives, and its license.
 
 | Asset | Kind | Source | License |
 | --- | --- | --- | --- |
@@ -16,7 +16,8 @@ Every visual and musical asset is generated in code at runtime. There are no dow
 | Cafecito pickup | Procedural mesh | `src/fps/engine.ts` | Original, this repo |
 | HUD and menu icons, Rosa portrait | Inline SVG | `src/ui/art.ts`, `src/fps/hud.ts` | Original, this repo |
 | Sound effects | Web Audio synthesis | `src/audio/audio.ts` | Original, this repo |
-| Score: menu, lobby, combat, results, mission select, four mission arrangements, stingers | Web Audio sequencer and synthesis (original compositions) | `src/audio/music.ts` | Original, this repo |
+| **Recorded soundtrack**: Groquo de diversión (Rosa's theme), Ruleros, Fricas y Fricas, Guerra de Vecinos, Bounce y Joke | Instrumental tracks generated with Suno by the project owner (account jclekkas142, 21 October 2026). Originals in `assets/music/originals/` (unchanged, `SHA256SUMS`). Browser loops in `public/music/`, built by `scripts/music/prepare.py` | `public/music/`, `src/audio/soundtrack.ts` | Downloaded through the owner's paid Suno subscription. Suno's terms for paid plans assign ownership of songs made while subscribed to the subscriber, with commercial use allowed. **Check this against the terms in force when the songs were made, before a commercial release.** No third-party samples were added. |
+| Fallback score and stingers: menu, lobby, combat, results, mission select, four mission arrangements, stingers | Web Audio sequencer and synthesis (original compositions) | `src/audio/music.ts` | Original, this repo |
 | Dialogue script (79 lines, Spanish delivery with English subtitles) | Text | `src/audio/lines.ts`, [VOICE_SCRIPT.md](VOICE_SCRIPT.md) | Original writing, this repo |
 | **Placeholder voice clips** (79 × MP3, about 1 MB) | Generated offline at production time with SVOX Pico 1.0 (es-ES) and eSpeak NG 1.51 (es-419), processed with ffmpeg | `public/voice/`, generator `scripts/make-voices.ts` | Pico: Apache-2.0 (language data redistributable). eSpeak NG: GPL-3.0 program; its output audio is not covered by the GPL. Synthetic, not a recorded performer, not imitating anyone. **Temporary**: recorded performances are still missing (see [AUDIO.md](AUDIO.md)). |
 | Campaign props: ruleros sets, wicker baskets, serving tray, chair stacks, wind-up delivery cart, serving trolley, debris piles, box tower, wall switches, latch, kitchen timer, bins, party tables, tangled decorations, tile mosaic panels, cafecito | Procedural meshes and canvas textures | `src/campaign/view.ts` | Original, this repo |

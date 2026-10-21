@@ -19,6 +19,7 @@ interface Ctx {
   music: GainNode;
   voice: GainNode;
   musicDuck: GainNode;
+  duckEq: BiquadFilterNode;
   noise: AudioBuffer;
   shaper: WaveShaperNode;
 }
@@ -60,12 +61,19 @@ export class AudioEngine {
         const voice = ctx.createGain();
         // Music passes through a ducking stage so dialogue stays clear.
         const musicDuck = ctx.createGain();
+        // While a line plays, the music also dips where speech sits.
+        const duckEq = ctx.createBiquadFilter();
+        duckEq.type = 'peaking';
+        duckEq.frequency.value = 2000;
+        duckEq.Q.value = 0.7;
+        duckEq.gain.value = 0;
         const comp = ctx.createDynamicsCompressor();
         comp.threshold.value = -14;
         comp.ratio.value = 4;
         sfx.connect(master);
         music.connect(musicDuck);
-        musicDuck.connect(master);
+        musicDuck.connect(duckEq);
+        duckEq.connect(master);
         voice.connect(master);
         master.connect(comp);
         comp.connect(ctx.destination);
@@ -78,7 +86,7 @@ export class AudioEngine {
         for (let i = 0; i < 256; i++) { const x = (i / 128) - 1; curve[i] = Math.tanh(x * 4); }
         shaper.curve = curve;
         shaper.connect(sfx);
-        this.a = { ctx, master, sfx, music, voice, musicDuck, noise, shaper };
+        this.a = { ctx, master, sfx, music, voice, musicDuck, duckEq, noise, shaper };
         voice.gain.value = this.voiceVol;
         this.applyGain();
         music.gain.value = 0.32 * this.musicVol;
@@ -117,9 +125,15 @@ export class AudioEngine {
     if (this.a) this.a.voice.gain.setTargetAtTime(v, this.a.ctx.currentTime, 0.03);
   }
 
+  /** How far dialogue lowers the music; the music engine sets it per layer. */
+  duckDepth = 0.55;
+
   // Lowers music while a line is spoken (1 = no ducking).
   duck(k: number): void {
-    if (this.a) this.a.musicDuck.gain.setTargetAtTime(k, this.a.ctx.currentTime, 0.12);
+    if (!this.a) return;
+    const t = this.a.ctx.currentTime;
+    this.a.musicDuck.gain.setTargetAtTime(k, t, 0.12);
+    this.a.duckEq.gain.setTargetAtTime(k < 1 ? -4 : 0, t, 0.12);
   }
 
   /** Low-level access for the music sequencer and voice playback. */

@@ -1,0 +1,492 @@
+{
+  "startedAt": "2026-10-21T17:26:24.825Z",
+  "decode": {
+    "rosa-theme": {
+      "decodedSamples": 4276320,
+      "expected": 4276320,
+      "sampleRate": 48000,
+      "duration": 89.09,
+      "seamJump": 0.02398744784295559,
+      "p999": 0.18452966399490833
+    },
+    "ruleros": {
+      "decodedSamples": 4749408,
+      "expected": 4749408,
+      "sampleRate": 48000,
+      "duration": 98.946,
+      "seamJump": 0.010711781680583954,
+      "p999": 0.11673280224204063
+    },
+    "fricas-y-fricas": {
+      "decodedSamples": 6450528,
+      "expected": 6450528,
+      "sampleRate": 48000,
+      "duration": 134.386,
+      "seamJump": 0.0165252685546875,
+      "p999": 0.1293666255660355
+    },
+    "guerra-de-vecinos": {
+      "decodedSamples": 5293056,
+      "expected": 5293056,
+      "sampleRate": 48000,
+      "duration": 110.272,
+      "seamJump": 0.03500424884259701,
+      "p999": 0.18437756970524788
+    },
+    "bounce-y-joke": {
+      "decodedSamples": 2924736,
+      "expected": 2924736,
+      "sampleRate": 48000,
+      "duration": 60.932,
+      "seamJump": 0.0059967041015625,
+      "p999": 0.19439697265625
+    }
+  },
+  "switches": {
+    "ruleros": {
+      "ms": 3,
+      "cue": "ruleros",
+      "layer": "recorded",
+      "recording": "ruleros",
+      "position": 0.06997732426303882,
+      "loop": [
+        26.6,
+        98.446
+      ],
+      "loaded": [
+        "rosa-theme",
+        "ruleros"
+      ],
+      "failed": []
+    },
+    "cocina": {
+      "ms": 3,
+      "cue": "cocina",
+      "layer": "recorded",
+      "recording": "fricas-y-fricas",
+      "position": 0.02063492063492056,
+      "loop": [
+        58.11,
+        133.886
+      ],
+      "loaded": [
+        "rosa-theme",
+        "fricas-y-fricas"
+      ],
+      "failed": []
+    },
+    "patio": {
+      "ms": 1,
+      "cue": "patio",
+      "layer": "recorded",
+      "recording": "fricas-y-fricas",
+      "position": 0.00902494331065995,
+      "loop": [
+        58.11,
+        133.886
+      ],
+      "loaded": [
+        "rosa-theme",
+        "fricas-y-fricas"
+      ],
+      "failed": []
+    },
+    "pinata": {
+      "ms": 2,
+      "cue": "pinata",
+      "layer": "recorded",
+      "recording": "guerra-de-vecinos",
+      "position": 0.009024943310656397,
+      "loop": [
+        45.5,
+        109.772
+      ],
+      "loaded": [
+        "rosa-theme",
+        "guerra-de-vecinos"
+      ],
+      "failed": []
+    }
+  },
+  "transitionMarks": [
+    [
+      0,
+      "menu (Rosa theme)"
+    ],
+    [
+      8.3,
+      "mission select (same recording continues)"
+    ],
+    [
+      15.4,
+      "Mission 1 starts: crossfade to Ruleros"
+    ],
+    [
+      24.4,
+      "a line of dialogue: music ducks"
+    ],
+    [
+      30.4,
+      "jump to 6 s before the loop seam"
+    ],
+    [
+      40.6,
+      "leave: back to Rosa theme"
+    ],
+    [
+      48.9,
+      "Mission 4 starts: crossfade to Guerra de Vecinos"
+    ]
+  ],
+  "checks": [
+    {
+      "name": "decode rosa-theme: length matches the prepared file",
+      "ok": true,
+      "detail": {
+        "decoded": 4276320,
+        "expected": 4276320
+      }
+    },
+    {
+      "name": "seam rosa-theme: jump no larger than the track's own 99.9th percentile step",
+      "ok": true,
+      "detail": {
+        "seamJump": 0.02399,
+        "p999": 0.18453
+      }
+    },
+    {
+      "name": "decode ruleros: length matches the prepared file",
+      "ok": true,
+      "detail": {
+        "decoded": 4749408,
+        "expected": 4749408
+      }
+    },
+    {
+      "name": "seam ruleros: jump no larger than the track's own 99.9th percentile step",
+      "ok": true,
+      "detail": {
+        "seamJump": 0.01071,
+        "p999": 0.11673
+      }
+    },
+    {
+      "name": "decode fricas-y-fricas: length matches the prepared file",
+      "ok": true,
+      "detail": {
+        "decoded": 6450528,
+        "expected": 6450528
+      }
+    },
+    {
+      "name": "seam fricas-y-fricas: jump no larger than the track's own 99.9th percentile step",
+      "ok": true,
+      "detail": {
+        "seamJump": 0.01653,
+        "p999": 0.12937
+      }
+    },
+    {
+      "name": "decode guerra-de-vecinos: length matches the prepared file",
+      "ok": true,
+      "detail": {
+        "decoded": 5293056,
+        "expected": 5293056
+      }
+    },
+    {
+      "name": "seam guerra-de-vecinos: jump no larger than the track's own 99.9th percentile step",
+      "ok": true,
+      "detail": {
+        "seamJump": 0.035,
+        "p999": 0.18438
+      }
+    },
+    {
+      "name": "decode bounce-y-joke: length matches the prepared file",
+      "ok": true,
+      "detail": {
+        "decoded": 2924736,
+        "expected": 2924736
+      }
+    },
+    {
+      "name": "seam bounce-y-joke: jump no larger than the track's own 99.9th percentile step",
+      "ok": true,
+      "detail": {
+        "seamJump": 0.006,
+        "p999": 0.1944
+      }
+    },
+    {
+      "name": "menu plays Rosa's theme recording",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 1.0074829931972789,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "mission select continues the same recording without restarting",
+      "ok": true,
+      "detail": {
+        "before": 2.5283900226757368,
+        "after": 3.329478458049887
+      }
+    },
+    {
+      "name": "mission ruleros plays ruleros",
+      "ok": true,
+      "detail": {
+        "ms": 3,
+        "layer": "recorded"
+      }
+    },
+    {
+      "name": "a playing recording wraps from loopEnd to loopStart",
+      "ok": true,
+      "detail": {
+        "loop": [
+          26.6,
+          98.446
+        ],
+        "position": 28.10911564625851
+      }
+    },
+    {
+      "name": "dialogue ducks a recording to 42% with a speech-band dip",
+      "ok": true,
+      "detail": {
+        "depth": 0.42,
+        "before": 1,
+        "during": 0.4203141927719116,
+        "eqDuring": -4,
+        "voiced": true
+      }
+    },
+    {
+      "name": "music comes back up after the line",
+      "ok": true
+    },
+    {
+      "name": "music volume scales the recording bus; zero silences it",
+      "ok": true,
+      "detail": {
+        "half": 0.1599999964237213,
+        "zero": 0.00005311708082444966
+      }
+    },
+    {
+      "name": "leaving ruleros returns to Rosa's theme",
+      "ok": true,
+      "detail": {
+        "cue": "select",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 0.4008616780045351,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "ruleros",
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "mission cocina plays fricas-y-fricas",
+      "ok": true,
+      "detail": {
+        "ms": 3,
+        "layer": "recorded"
+      }
+    },
+    {
+      "name": "leaving cocina returns to Rosa's theme",
+      "ok": true,
+      "detail": {
+        "cue": "select",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 0.2876643990929715,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "fricas-y-fricas",
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "mission patio plays fricas-y-fricas",
+      "ok": true,
+      "detail": {
+        "ms": 1,
+        "layer": "recorded"
+      }
+    },
+    {
+      "name": "leaving patio returns to Rosa's theme",
+      "ok": true,
+      "detail": {
+        "cue": "select",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 0.3515192743764146,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "fricas-y-fricas",
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "mission pinata plays guerra-de-vecinos",
+      "ok": true,
+      "detail": {
+        "ms": 2,
+        "layer": "recorded"
+      }
+    },
+    {
+      "name": "leaving pinata returns to Rosa's theme",
+      "ok": true,
+      "detail": {
+        "cue": "select",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 0.40956916099773366,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "guerra-de-vecinos",
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "only two recordings stay decoded",
+      "ok": true,
+      "detail": [
+        "guerra-de-vecinos",
+        "rosa-theme"
+      ]
+    },
+    {
+      "name": "practice match plays the action cue (bounce-y-joke)",
+      "ok": true,
+      "detail": {
+        "cue": "combat",
+        "layer": "recorded",
+        "recording": "bounce-y-joke",
+        "position": 0.07868480725623783,
+        "loop": [
+          18.35,
+          60.432
+        ],
+        "loaded": [
+          "rosa-theme",
+          "bounce-y-joke"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "no page errors during the run",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "with the recordings blocked, the menu plays the synthesized score",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "synth",
+        "recording": null,
+        "position": null,
+        "loop": null,
+        "loaded": [],
+        "failed": [
+          "rosa-theme"
+        ]
+      }
+    },
+    {
+      "name": "with the recordings blocked, a mission plays its synthesized arrangement",
+      "ok": true,
+      "detail": {
+        "cue": "ruleros",
+        "layer": "synth",
+        "recording": null,
+        "position": null,
+        "loop": null,
+        "loaded": [],
+        "failed": [
+          "rosa-theme",
+          "ruleros"
+        ]
+      }
+    },
+    {
+      "name": "blocked recordings cause no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "slow download: the synthesized menu plays while the recording loads",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "synth",
+        "recording": null,
+        "position": null,
+        "loop": null,
+        "loaded": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "slow download: the recording takes over once it arrives",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "position": 0.02934240362811824,
+        "loop": [
+          43.23,
+          88.59
+        ],
+        "loaded": [
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    }
+  ],
+  "passed": 32,
+  "total": 32
+}

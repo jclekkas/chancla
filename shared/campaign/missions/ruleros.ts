@@ -33,7 +33,7 @@ export const RULEROS: MissionDef = {
   music: 'ruleros',
   start: { at: [-24.6, 0, 0.5], yaw: -Math.PI / 2 },
   layout: {
-    signs: { 'CASA SOL': 'CASA DE ROSA' },
+    signs: { 'CASA SOL': 'CASA DE ROSA', 'CASA LUNA': 'CASA DE LOS VECINOS', 'PANADERÍA ROSA': 'COCINA DE ROSA' },
     add: [
       bx(-26, 0, 1.8, -25.35, 1.1, 3.4, 'stall', 'vanity'), // Rosa's vanity, set 1 on top
       bx(-6.55, 2.7, -10.95, -6.2, 6.4, -10.6, 'wood', 'pole'), // balcony pole holding the basket

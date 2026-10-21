@@ -160,6 +160,21 @@ export class MissionRuntime implements Controller {
     }
     e.proj.sync(map, 0, cam, this.paused ? 0 : dt);
 
+    // What Rosa is carrying, held low on the left of the first-person view.
+    const carried = p.carrying ? s.pickups.find((x) => x.id === p.carrying)?.item ?? null : null;
+    if (carried !== this.carryItem) {
+      if (this.carryObj) { this.carryObj.removeFromParent(); this.carryObj = null; }
+      this.carryItem = carried;
+      if (carried) {
+        this.carryObj = this.view.buildCarried(carried);
+        const sc = carried === 'chairs' ? 0.42 : 0.6;
+        this.carryObj.scale.setScalar(sc);
+        this.carryObj.position.set(-0.32, carried === 'chairs' ? -0.62 : -0.42, -0.78);
+        this.carryObj.rotation.set(0.35, 0.4, 0);
+        e.vmScene.add(this.carryObj);
+      }
+    }
+    if (this.carryObj) this.carryObj.position.y += Math.sin(performance.now() / 160) * 0.0008 * speedNow(p);
     const speed = Math.hypot(p.vx, p.vz);
     e.vm.update({ weapon: p.weapon, cooldownMs: p.cooldownMs, switchMs: p.switchMs, speed, onGround: p.onGround, crouched: p.crouched, alive: p.alive, msSinceThrow: performance.now() - this.lastThrow }, dt, reduced);
 
@@ -204,6 +219,8 @@ export class MissionRuntime implements Controller {
     }
   }
   private brightness = -1;
+  private carryItem: string | null = null;
+  private carryObj: THREE.Object3D | null = null;
 
   private intensity(): number {
     const s = this.sim.state;
@@ -380,6 +397,7 @@ export class MissionRuntime implements Controller {
       this.victory.avatar.root.removeFromParent(); this.victory.avatar.dispose();
       for (const o of this.victory.extras) o.removeFromParent();
     }
+    if (this.carryObj) this.carryObj.removeFromParent();
     this.view.dispose();
     this.hud.show(false);
     this.dialogue.reset();
@@ -387,6 +405,8 @@ export class MissionRuntime implements Controller {
     this.engine.vm.root.visible = true;
   }
 }
+
+function speedNow(p: { vx: number; vz: number }): number { return Math.hypot(p.vx, p.vz); }
 
 function dist(p: { x: number; z: number }, h: MHint): number {
   const a = h.stand ?? h.pos;

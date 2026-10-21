@@ -48,8 +48,8 @@ function render(id: string, who: Speaker, text: string): { file: string; ms: num
     'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse',
     'loudnorm=I=-18:TP=-2:LRA=7',
   ].filter(Boolean).join(',');
-  const file = `${id}.m4a`;
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', raw, '-af', filters, '-ac', '1', '-ar', '24000', '-c:a', 'aac', '-b:a', '40k', path.join(OUT, file)]);
+  const file = `${id}.mp3`;
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', raw, '-af', filters, '-ac', '1', '-ar', '24000', '-c:a', 'libmp3lame', '-b:a', '40k', path.join(OUT, file)]);
   const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(OUT, file)]).toString().trim());
   return { file, ms: Math.round(dur * 1000) };
 }

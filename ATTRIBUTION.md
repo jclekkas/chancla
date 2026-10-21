@@ -16,5 +16,8 @@ Everything in Chancla Warfare is original to this project except the items below
 | --- | --- | --- | --- |
 | Lilita One typeface | Juan Montoreano | SIL Open Font License 1.1 | `node_modules/@fontsource/lilita-one`, bundled into `dist/assets/` at build time. License text ships in the package (`LICENSE`) and is copied to `public/licenses/LilitaOne-OFL.txt`, which deploys with the site. |
 | three.js | three.js authors | MIT | Runtime dependency (`three`). |
+| ws | ws authors | MIT | Game server dependency. |
+| SVOX Pico 1.0 (es-ES voice) | SVOX AG / Android Open Source Project | Apache-2.0 (language data redistributable) | Used offline to generate the temporary voice clips in `public/voice/`. Not shipped as software. |
+| eSpeak NG 1.51 | eSpeak NG contributors | GPL-3.0 (program); generated audio is not covered | Used offline to generate the machine voices in `public/voice/`. Not shipped as software. |
 
 Build and test tooling (Vite, TypeScript, Vitest, jsdom, Playwright) is used only during development and is not shipped.

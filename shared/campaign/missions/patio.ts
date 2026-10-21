@@ -30,7 +30,7 @@ export const PATIO: MissionDef = {
   music: 'patio',
   start: { at: [14.5, 0, 0], yaw: -Math.PI / 2 },
   layout: {
-    signs: { 'CASA LUNA': 'CASA DE LOS VECINOS' },
+    signs: { 'CASA SOL': 'CASA DE ROSA', 'CASA LUNA': 'CASA DE LOS VECINOS', 'PANADERÍA ROSA': 'COCINA DE ROSA' },
     add: [
       // Marked bank panels on the separation house's plaza face.
       bx(16.92, 1.6, -7.4, 17.0, 4.6, -4.2, 'stone', 'bank:tiles1'),
@@ -114,9 +114,9 @@ export const PATIO: MissionDef = {
       onDone: [{ do: 'say', line: 'm3_done' }],
     },
   ],
-  // Time target: 2.5x the helper bot's median over 8 seeds (136.9 s, scripts/campaign-sim.ts),
+  // Time target: 2.5x the helper bot's median over 8 seeds (148.2 s, scripts/campaign-sim.ts),
   // rounded up to 15 s. The bot plays near-perfectly; human playtesting has not tuned this yet.
-  timeTargetMs: 345000,
+  timeTargetMs: 375000,
   challenges: [
     { id: 'complete', label: 'ch.complete' },
     { id: 'time', label: 'ch.time' },

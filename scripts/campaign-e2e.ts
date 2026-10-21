@@ -178,7 +178,8 @@ async function playMission(page: Page, id: string, videoStart: number): Promise<
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, `${m.order}-${id}-results.png`) });
   r.results = await page.evaluate(() => ({ stats: document.getElementById('mr-stats')!.textContent, ch: [...document.querySelectorAll('#mr-ch li')].map((li) => li.className) }));
-  r.dialogue = await page.evaluate(() => (window as any).__fps.dialogue().log.map((l: any) => l.id));
+  r.dialogue = await page.evaluate(() => (window as any).__fps.dialogue().log.map((l: any) => `${l.id}${l.voiced ? '' : ' (subtitles only)'}`));
+  r.voiced = await page.evaluate(() => { const d = (window as any).__fps.dialogue(); return { quality: d.quality, failed: d.voiceFailed, voiced: d.log.filter((l: any) => l.voiced).length, total: d.log.length }; });
   r.dropped = await page.evaluate(() => (window as any).__fps.dialogue().dropped);
   r.shots = [...taken];
   // Save the audio recording.

@@ -33,7 +33,7 @@ export const COCINA: MissionDef = {
   music: 'cocina',
   start: { at: [9.2, T, 9.4], yaw: 0 },
   layout: {
-    signs: { 'CASA LUNA': 'CASA DE LOS VECINOS', 'PANADERÍA ROSA': 'COCINA DE ROSA' },
+    signs: { 'CASA SOL': 'CASA DE ROSA', 'CASA LUNA': 'CASA DE LOS VECINOS', 'PANADERÍA ROSA': 'COCINA DE ROSA' },
     add: [
       bx(6.8, T, 10.3, 8.0, T + 0.9, 11, 'stall', 'counter'),
       bx(8.4, T, 10.3, 9.8, T + 0.9, 11, 'stone', 'stove'),

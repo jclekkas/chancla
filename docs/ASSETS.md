@@ -1,6 +1,6 @@
 # Asset inventory: Chancla Warfare: La Ley de la Chancla
 
-Every visual and audio asset in the online game is generated in code at runtime. There are no downloaded models, textures, images or sound files. This table lists what exists, where it lives, and its license.
+Every visual and musical asset is generated in code at runtime. There are no downloaded models, textures, images or music files. The one exception is the temporary voice pack: 79 small audio files generated offline by the tools listed below. This table lists what exists, where it lives, and its license.
 
 | Asset | Kind | Source | License |
 | --- | --- | --- | --- |
@@ -15,7 +15,15 @@ Every visual and audio asset in the online game is generated in code at runtime.
 | Trails, impact particles, splash rings | Procedural effects | `src/fps/render/projectiles.ts`, `src/fx/` | Original, this repo |
 | Cafecito pickup | Procedural mesh | `src/fps/engine.ts` | Original, this repo |
 | HUD and menu icons, Rosa portrait | Inline SVG | `src/ui/art.ts`, `src/fps/hud.ts` | Original, this repo |
-| Sound effects and music | Web Audio synthesis | `src/audio/audio.ts` | Original, this repo |
+| Sound effects | Web Audio synthesis | `src/audio/audio.ts` | Original, this repo |
+| Score: menu, lobby, combat, results, mission select, four mission arrangements, stingers | Web Audio sequencer and synthesis (original compositions) | `src/audio/music.ts` | Original, this repo |
+| Dialogue script (79 lines, Spanish delivery with English subtitles) | Text | `src/audio/lines.ts`, [VOICE_SCRIPT.md](VOICE_SCRIPT.md) | Original writing, this repo |
+| **Placeholder voice clips** (79 × MP3, about 1 MB) | Generated offline at production time with SVOX Pico 1.0 (es-ES) and eSpeak NG 1.51 (es-419), processed with ffmpeg | `public/voice/`, generator `scripts/make-voices.ts` | Pico: Apache-2.0 (language data redistributable). eSpeak NG: GPL-3.0 program; its output audio is not covered by the GPL. Synthetic, not a recorded performer, not imitating anyone. **Temporary**: recorded performances are still missing (see [AUDIO.md](AUDIO.md)). |
+| Campaign props: ruleros sets, wicker baskets, serving tray, chair stacks, wind-up delivery cart, serving trolley, debris piles, box tower, wall switches, latch, kitchen timer, bins, party tables, tangled decorations, tile mosaic panels, cafecito | Procedural meshes and canvas textures | `src/campaign/view.ts` | Original, this repo |
+| The piñata, its shield panels, decoy mini-piñatas, confetti and candy | Procedural meshes | `src/campaign/view.ts`, `src/campaign/runtime.ts` | Original, this repo |
+| Campaign NPCs (influencer, Bocinas with his speaker cart, Soplador with his leaf blower) | The classic game's procedural rigs, converted to toon shading | `src/models/characters.ts`, `src/campaign/view.ts` | Original, this repo |
+| Rosa's campaign look (no hat, six curler slots) | Procedural mesh variant | `src/fps/render/rosa.ts` | Original, this repo |
+| Mission lighting themes (morning, noon, afternoon, dusk) | Parameters | `src/fps/render/world.ts` | Original, this repo |
 | Interface text (English and Spanish) | Strings | `src/fps/strings.ts` | Original, this repo |
 | Lilita One typeface | Font | `@fontsource/lilita-one` | SIL OFL 1.1 (`public/licenses/LilitaOne-OFL.txt`) |
 | three.js | Library | npm `three` | MIT |

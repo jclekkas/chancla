@@ -44,7 +44,7 @@ export const PINATA_MISSION: MissionDef = {
       goals: [{ id: 'g1', kind: 'boss', label: 'm4.g1' }],
     },
   ],
-  // Time target: 2.5x the helper bot's median over 8 seeds (50.9 s, scripts/campaign-sim.ts),
+  // Time target: 2.5x the helper bot's median over 8 seeds (51.4 s, scripts/campaign-sim.ts),
   // rounded up to 15 s. The bot plays near-perfectly; human playtesting has not tuned this yet.
   timeTargetMs: 135000,
   challenges: [

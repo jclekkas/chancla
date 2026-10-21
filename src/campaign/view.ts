@@ -503,7 +503,8 @@ export class MissionView {
     // Pickups.
     for (const ps of st.pickups) {
       const v = this.pickups.get(ps.id)!;
-      v.obj.visible = ps.state !== 'collected' && ps.state !== 'held';
+      // Items for a later stage stay out of sight until their stage.
+      v.obj.visible = ps.state !== 'collected' && ps.state !== 'held' && (this.inStage(v.spec) || ps.state === 'delivered');
       if (ps.state === 'held') this.attachHeld(ps, v.obj);
       if (!v.obj.visible) continue;
       v.obj.position.set(ps.x, ps.y, ps.z);
@@ -775,6 +776,13 @@ export class MissionView {
       m.visible = !!p;
       if (p) { m.position.set(p.x, p.y, p.z); m.rotation.x += dt * 8; }
     });
+  }
+
+  /** A copy of an item for Rosa's hands (shown in the first-person view). */
+  buildCarried(item: string): THREE.Group {
+    const g = item === 'tray' ? buildTray() : item === 'chairs' ? buildChairs() : buildBasket(0xf3e2b0);
+    g.traverse((o) => { o.frustumCulled = false; });
+    return g;
   }
 
   dispose(): void {

@@ -8,6 +8,7 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 
 - **Online:** private rooms for 2 to 4 players, 2v2 team deathmatch, joined with a shareable invite link.
 - **Practice:** offline against clearly labeled bots, in the same simulation as online.
+- **Story: Doña Rosa: Antes de que lleguen (Before the Guests Arrive):** a four-mission solo campaign. Rosa's missing ruleros, a kitchen under siege, a patio to rescue, and a piñata that fights back. It runs entirely in the browser. See [docs/CAMPAIGN.md](docs/CAMPAIGN.md).
 - **Languages:** English and Spanish throughout.
 - **Classic solo arcade:** the original wave-and-boss game is still at [`/classic.html`](docs/CLASSIC.md).
 
@@ -38,7 +39,9 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 
 **Weapons:** La Chancla is fast and accurate. It lands where the crosshair points, bounces once off walls, and recovers in 0.42 s. La Pesada is a slow, arcing clog: 62 damage plus 26 splash around corners and big knockback, but a 1.15 s recovery and no bounce. A bot or player in the open is easier to tag with the chancla; someone camping behind cover is a job for La Pesada.
 
-**Settings** (saved per browser): language, mouse sensitivity, invert Y, field of view, reduced motion, graphics quality, music and effects volume, and an FPS/ping readout.
+**Settings** (saved per browser): language, mouse sensitivity, invert Y, field of view, reduced motion, graphics quality, separate music, effects and dialogue volumes, automatic banter on or off, subtitles (menu language, Spanish, English or off), objective markers and tips, and an FPS/ping readout.
+
+**Music and voices:** an original score is synthesized live (cumbia and son-influenced, one recurring "Rosa's theme" arranged per mission). Dialogue is in Spanish with English or Spanish subtitles. **The voices in this build are temporary synthetic placeholders, not recorded performances**; see [docs/AUDIO.md](docs/AUDIO.md).
 
 Phones and tablets can open the menus, but touch combat is not supported in this release. The title screen says so on touch devices.
 
@@ -141,6 +144,9 @@ Nothing has been provisioned or paid for. Once a server exists, set `VITE_GAME_S
 Everything is generated in code: geometry, textures, animation and synthesized audio. The only third-party pieces are the Lilita One font (OFL) and the three.js and ws libraries (MIT). Full inventory: [docs/ASSETS.md](docs/ASSETS.md) and [ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## Known limitations
+
+- **Voice acting is missing.** All 79 lines ship as clearly synthetic placeholder clips (SVOX Pico and eSpeak NG). The script and file list for a recording session are in [docs/VOICE_SCRIPT.md](docs/VOICE_SCRIPT.md).
+- **Campaign tuning is unvalidated by people.** Durations and time targets come from a helper bot's runs, not human playtests.
 
 - **One server process.** Rooms live in memory, so a restart or deploy ends running matches. Clients see a clear message and can make a new room.
 - **No lag compensation.** At high ping, lead your targets.

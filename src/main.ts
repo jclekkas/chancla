@@ -2,6 +2,7 @@ import './styles.css';
 import { applyDom, detectLang, setLang, t } from './i18n/i18n';
 import type { StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, defaultSettings } from './persistence/storage';
+import { inputProfile } from './ui/device';
 
 // Tiny entry: shows real loading progress, checks WebGL, then loads the
 // engine chunk. Failures land on a friendly, actionable screen.
@@ -59,7 +60,7 @@ function webglAvailable(): boolean {
 
 async function boot(): Promise<void> {
   const storage = new SafeStorage();
-  const mobile = matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+  const mobile = inputProfile().touchOnly; // fingers only: start on the light preset
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const settings = new SettingsStore(storage, defaultSettings({ lang: detectLang(), reducedMotion, mobile }));
   const progressStore = new ProgressStore(storage);

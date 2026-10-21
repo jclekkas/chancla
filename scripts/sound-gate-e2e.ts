@@ -158,6 +158,8 @@ async function main(): Promise<void> {
       const a = await page.evaluate(() => (window as any).__chancla.snapshot());
       check('Arcade: the button starts audio and its title music', a.audioState === 'running' && a.musicTimer === true && !(await gate(page)).shown, { audio: a.audioState, timer: a.musicTimer });
       await page.click('#btn-play');
+      await page.click('#btn-maps-start'); // Play opens the map choice first
+      await page.waitForFunction(() => (window as any).__chancla.snapshot().state === 'playing');
       await page.waitForTimeout(1500);
       check('Arcade run: the control stays hidden', !(await gate(page)).shown);
       await page.keyboard.press('Escape');

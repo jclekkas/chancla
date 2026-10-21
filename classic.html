@@ -123,7 +123,15 @@
           <button type="button" class="tbtn tbtn-throw" id="t-throw" data-i18n-aria="touch.throw"><span class="tbtn-chancla" aria-hidden="true"></span></button>
         </div>
       </div>
-      <div class="rotate-hint" id="rotate-hint" data-i18n="touch.rotate" hidden></div>
+      <!-- Portrait during a touch run: the run pauses and asks for landscape. -->
+      <section class="rotate-screen" id="rotate-hint" hidden role="dialog" aria-modal="true" aria-labelledby="rotate-title">
+        <div class="rotate-card">
+          <div class="rotate-icon" aria-hidden="true"><span class="phone"></span></div>
+          <h2 id="rotate-title" data-i18n="touch.rotateTitle"></h2>
+          <p data-i18n="touch.rotate"></p>
+          <button type="button" class="btn-ghost" id="btn-rotate-menu" data-i18n="touch.rotateMenu"></button>
+        </div>
+      </section>
 
       <!-- Title -->
       <section id="screen-title" class="screen title" hidden aria-labelledby="logo">
@@ -246,6 +254,7 @@
           <label class="field check"><input type="checkbox" id="set-mute" /><span data-i18n="settings.mute"></span></label>
           <label class="field check"><input type="checkbox" id="set-music" /><span data-i18n="settings.music"></span></label>
           <label class="field"><span class="label" data-i18n="settings.sensitivity"></span><input type="range" min="20" max="300" step="5" id="set-sens" /><output id="out-sens"></output></label>
+          <label class="field"><span class="label" data-i18n="settings.touchSensitivity"></span><input type="range" min="30" max="300" step="5" id="set-tsens" /><output id="out-tsens"></output></label>
           <label class="field check"><input type="checkbox" id="set-invert" /><span data-i18n="settings.invertY"></span></label>
           <label class="field check"><input type="checkbox" id="set-assist" /><span data-i18n="settings.aimAssist"></span></label>
           <label class="field check"><input type="checkbox" id="set-motion" /><span data-i18n="settings.reducedMotion"></span></label>

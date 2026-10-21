@@ -22,6 +22,7 @@ import type { Engine } from './engine';
 import { music } from '../audio/music';
 import { SoundGate } from '../ui/soundGate';
 import { renderMapCards, type MapChoice } from '../ui/mapSelect';
+import { copyLink, inputProfile, watchInputProfile, type InputProfile } from '../ui/device';
 import { isMapId, mapEntry, randomMapId, type MapId } from '../../shared/maps';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
@@ -223,9 +224,12 @@ async function boot(): Promise<void> {
   applyDom(document);
   bootProgress(15, 'loading.shell');
   ($('lnk-classic') as HTMLAnchorElement).href = `${BASE}classic.html`;
+  ($('lnk-touch-arcade') as HTMLAnchorElement).href = `${BASE}classic.html`;
   $('rosa-portrait').style.backgroundImage = svgUrl(rosaSVG('smirk'));
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
-  $('mobile-note').hidden = !coarse;
+  // Touch-only devices (phones, tablets without a mouse) get the Arcade's
+  // touch beta and a link to play the rest on a computer.
+  applyInputProfile(inputProfile());
+  watchInputProfile(applyInputProfile);
   bindUi();
   soundGate = new SoundGate({
     text: (k) => t(`sound.${k}` as Key),
@@ -263,6 +267,30 @@ async function boot(): Promise<void> {
   checkServer();
   if (pendingInviteCode) openOnline();
   (window as unknown as { __fps: unknown }).__fps = debugApi();
+}
+
+let touchOnly = false;
+let showAllModes = false;
+
+let lastProfile: InputProfile | null = null;
+
+function applyInputProfile(p: InputProfile): void {
+  lastProfile = p;
+  touchOnly = p.touchOnly;
+  document.body.classList.toggle('touch-only', touchOnly);
+  document.body.classList.toggle('small-screen', p.small);
+  $('mobile-gate').hidden = !touchOnly;
+  $('title-actions').classList.toggle('collapsed', touchOnly && !showAllModes);
+  document.body.classList.toggle('modes-collapsed', touchOnly && !showAllModes);
+  $('mobile-note').hidden = true;
+  for (const el of document.querySelectorAll<HTMLElement>('.needs-pc')) el.dataset.pcLabel = t('mobile.pcOnly');
+}
+
+/** Desktop-only modes on a touch-only device: explain instead of starting something unplayable. */
+function needsComputer(): boolean {
+  if (!touchOnly) return false;
+  toast(t('mobile.pcOnlyToast'), 4200);
+  return true;
 }
 
 function showNoWebgl(): void {
@@ -678,6 +706,7 @@ function changeLang(lang: 'en' | 'es'): void {
   applyDom(document);
   hud.invalidate();
   soundGate?.render();
+  if (lastProfile) applyInputProfile(lastProfile); // relabel, keeping a detected mouse or keyboard
   if (serverOk !== null || !serverUrl()) checkServer();
   if (lastRoom && base === 'lobby') renderLobby(lastRoom);
   if (lastRoom && base === 'results') renderResults(lastRoom);
@@ -785,9 +814,15 @@ function on(id: string, f: (e: Event) => void): void {
 }
 
 function bindUi(): void {
-  on('btn-campaign', () => campaign.openSelect());
-  on('btn-online', openOnline);
-  on('btn-practice', () => { renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-campaign', () => { if (!needsComputer()) campaign.openSelect(); });
+  on('btn-online', () => { if (!needsComputer()) openOnline(); });
+  on('btn-practice', () => { if (needsComputer()) return; renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-copy-link', () => {
+    void copyLink(`${location.origin}${BASE}`, $('mg-link') as HTMLInputElement).then((ok) => toast(t(ok ? 'mobile.copied' : 'mobile.copyManual'), 3600));
+  });
+  on('btn-mg-settings', () => { renderSettings(); pushOverlay('settings'); });
+  on('btn-mg-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));
+  on('btn-mg-more', () => { showAllModes = true; if (lastProfile) applyInputProfile(lastProfile); $('btn-mg-more').hidden = true; });
   on('btn-controls', () => pushOverlay('controls'));
   on('btn-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));

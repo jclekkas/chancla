@@ -129,10 +129,25 @@
           <p class="subtitle" data-t="brand.subtitle"></p>
           <p class="tagline" data-t="brand.tagline"></p>
           <p class="pitch" data-t="brand.pitch"></p>
-          <div class="title-actions">
-            <button type="button" class="btn primary big" id="btn-campaign" data-t="title.campaign"></button>
-            <button type="button" class="btn big alt2" id="btn-online" data-t="title.online"></button>
-            <button type="button" class="btn big alt" id="btn-practice" data-t="title.practice"></button>
+          <!-- Phones and tablets without a mouse: what works here, and how to get the rest. -->
+          <div class="mobile-gate" id="mobile-gate" hidden role="region" aria-labelledby="mg-title">
+            <h2 id="mg-title" data-t="mobile.title"></h2>
+            <p data-t="mobile.body"></p>
+            <a class="btn primary big" id="lnk-touch-arcade" href="/classic.html" data-t="mobile.arcade"></a>
+            <p class="mg-note" data-t="mobile.arcadeNote"></p>
+            <h3 data-t="mobile.computer"></h3>
+            <button type="button" class="btn" id="btn-copy-link" data-t="mobile.copy"></button>
+            <input type="text" class="mg-link" id="mg-link" readonly hidden aria-label="Link" />
+            <div class="mg-row">
+              <button type="button" class="btn ghost" id="btn-mg-settings" data-t="title.settings"></button>
+              <button type="button" class="btn ghost" id="btn-mg-lang" data-t="title.lang" data-t-aria="title.langAria"></button>
+              <button type="button" class="btn ghost" id="btn-mg-more" data-t="mobile.more"></button>
+            </div>
+          </div>
+          <div class="title-actions" id="title-actions">
+            <button type="button" class="btn primary big needs-pc" id="btn-campaign" data-t="title.campaign"></button>
+            <button type="button" class="btn big alt2 needs-pc" id="btn-online" data-t="title.online"></button>
+            <button type="button" class="btn big alt needs-pc" id="btn-practice" data-t="title.practice"></button>
           </div>
           <p class="server-status" id="server-status" role="status"></p>
           <p class="server-status warn" id="webgl-status" hidden role="alert"></p>

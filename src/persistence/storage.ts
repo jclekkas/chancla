@@ -95,6 +95,8 @@ export interface Settings {
   showFps: boolean;
   /** The last Arcade map chosen: 'patio', 'plaza', 'fiesta' or 'random'. */
   arcadeMap: string;
+  /** Touch aiming speed (1 = the tuned default). */
+  touchSensitivity: number;
 }
 
 export interface Progress {
@@ -121,6 +123,7 @@ export function defaultSettings(env?: { lang?: Lang; reducedMotion?: boolean; mo
     quality: env?.mobile ? 'low' : 'medium',
     showFps: false,
     arcadeMap: 'patio',
+    touchSensitivity: 1,
   };
 }
 
@@ -154,6 +157,7 @@ export class SettingsStore {
           ? raw.quality
           : defaults.quality,
       showFps: bool(raw.showFps, defaults.showFps),
+      touchSensitivity: num(raw.touchSensitivity, defaults.touchSensitivity, 0.3, 3),
     };
   }
 

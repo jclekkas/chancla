@@ -7,6 +7,9 @@ import { Game, emptyInput, type RunResult } from '../src/game/game';
 import { SIM_DT } from '../src/config';
 import { playArcadeBot } from './helpers/arcadeBot';
 import { mapData, type MapId } from '../shared/maps';
+import { provideMapArena } from '../src/game/game';
+import { buildMapArena } from '../src/world/mapArena';
+provideMapArena(buildMapArena);
 
 describe('Arcade on La Plaza and La Fiesta', () => {
   for (const map of ['plaza', 'fiesta'] as MapId[]) {

@@ -7,6 +7,9 @@ import { wrapAngle } from '../../src/core/math';
 import { Rng } from '../../src/core/rng';
 import { lineOfSight } from '../../src/physics/collision';
 import type { MapId } from '../../shared/maps';
+import { provideMapArena } from '../../src/game/game';
+import { buildMapArena } from '../../src/world/mapArena';
+provideMapArena(buildMapArena);
 
 export interface BotOutcome { result: RunResult | null; seconds: number; minHp: number; spawnsUsed: number; enemiesSeen: number }
 

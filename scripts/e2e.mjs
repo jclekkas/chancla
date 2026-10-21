@@ -376,6 +376,15 @@ for (const [name, vp] of [['landscape', { width: 844, height: 390 }], ['portrait
   await wait(page, 300);
   await page.tap('#btn-maps-start');
   await wait(page, 500);
+  if (name === 'portrait') {
+    // Portrait: the run waits paused behind the rotate screen; "Open the menu" then Resume plays on in portrait.
+    const r = await snap(page);
+    ok(`[${name}] a run started in portrait waits paused behind the rotate screen`, r.state === 'paused' && (await page.isVisible('#rotate-hint')), r.state);
+    await page.tap('#btn-rotate-menu');
+    await wait(page, 200);
+    await page.tap('#btn-resume');
+    await wait(page, 500);
+  }
   const s = await snap(page);
   ok(`[${name}] touch mode with on-screen controls`, s.touch && (await page.isVisible('#touch')));
   const sizes = await page.evaluate(() => ['t-throw', 't-recall', 't-special', 'btn-pause'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return { id, w: r.width, h: r.height, inView: r.right <= innerWidth && r.bottom <= innerHeight && r.left >= 0 && r.top >= 0 }; }));

@@ -20,6 +20,8 @@ Everything runs client-side. No accounts, no API keys, no backend. All models, a
 | La Chancla Legendaria | Q (when the ★ meter is full) | ★ button |
 | Pause | Esc (also P) | ❚❚ button |
 
+Touch is a beta, checked in emulation only: details, the touch-only render scale and a real-device checklist are in [MOBILE.md](MOBILE.md). Touch aim has its own sensitivity setting.
+
 Mac trackpad tip: Space throws (hold to charge), so your fingers can stay on the pad. Sensitivity, invert-Y, aim assistance, reduced motion, graphics quality, volume, music and language are in Settings.
 
 ## Running it

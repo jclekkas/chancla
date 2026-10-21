@@ -18,6 +18,8 @@
     "e2e:music-lifecycle": "node --import tsx scripts/music-lifecycle-e2e.ts",
     "e2e:sound": "node --import tsx scripts/sound-gate-e2e.ts",
     "e2e:play": "node --import tsx scripts/play-e2e.ts",
+    "e2e:touch": "node --import tsx scripts/touch-e2e.ts",
+    "perf:mobile": "node --import tsx scripts/perf-mobile.ts",
     "perf:maps": "node --import tsx scripts/perf-maps.ts",
     "shots:maps": "node --import tsx scripts/map-shots.ts"
   },

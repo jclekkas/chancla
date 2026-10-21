@@ -395,3 +395,25 @@ table.stats tr.team-head.mine th { color: #ffe08a; }
 .map-field { flex-direction: column; align-items: stretch; }
 @media (max-width: 720px) { .map-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-height: 560px) { .map-card .mc-desc { display: none; } }
+/* ---------- phones and tablets without a mouse ---------- */
+.mobile-gate { width: min(520px, 100%); display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; border-radius: 18px; background: rgba(18, 8, 28, 0.88); border: 2px solid rgba(244, 230, 200, 0.5); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.mobile-gate[hidden] { display: none; }
+.mobile-gate h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(22px, 5vw, 28px); color: var(--marigold); }
+.mobile-gate h3 { margin: 6px 0 0; font-size: 15px; letter-spacing: 0.04em; }
+.mobile-gate p { margin: 0; line-height: 1.45; }
+.mobile-gate .mg-note { font-size: 13px; opacity: 0.85; }
+.mobile-gate .btn { min-height: 48px; justify-content: center; text-align: center; }
+.mobile-gate .btn.big { min-height: 56px; font-size: 19px; }
+.mobile-gate .mg-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mobile-gate .mg-row .btn { flex: 1 1 auto; min-height: 44px; }
+.mg-link { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--cream); background: #fff; color: #1a0d26; font: inherit; }
+.title-actions.collapsed { display: none; }
+/* Desktop-only modes say so on touch-only devices. */
+body.touch-only .needs-pc { position: relative; opacity: 0.72; }
+body.touch-only .needs-pc::after { content: attr(data-pc-label); display: block; font-size: 11px; letter-spacing: 0.08em; font-weight: 900; opacity: 0.95; margin-top: 2px; }
+body.touch-only .title { grid-template-columns: 1fr; align-content: start; }
+body.touch-only .title-side { display: none; }
+body.small-screen .title .logo-main { font-size: clamp(44px, 14vw, 72px); }
+body.small-screen .title .pitch { display: none; }
+@media (max-height: 520px) { body.touch-only .title .subtitle, body.touch-only .title .tagline { display: none; } }
+body.modes-collapsed .title .server-status, body.modes-collapsed .title .title-row { display: none; }

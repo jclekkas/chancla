@@ -24,6 +24,7 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | Story campaign (4 missions) | **Works**, fully in the browser |
 | Practice with bots | **Works**, fully in the browser |
 | Classic solo arcade (`/classic.html`) | Works |
+| **Phones and tablets** | **Touch Beta (experimental).** The Arcade plays by touch, on all three maps. Story, Practice and Online are marked computer only. Checked only in mobile emulation, never on a real phone. Please try it on yours and use the device checklist in [MOBILE.md](MOBILE.md). |
 | **Online multiplayer** | **Not available.** No game server is hosted yet. The title screen says "Online play is not set up on this deployment yet." Hosting one is a separate step that may cost money; it is waiting on your approval. |
 | **Voices** | **Temporary.** Every line is spoken by a clearly synthetic placeholder voice (offline text-to-speech, Castilian Spanish). They show when and how lines play, not how the final performance should sound. Please judge the writing and timing, not the voices. |
 | Music | **The five Suno tracks**: Rosa's theme on the menus, Ruleros in Mission 1, Fricas y Fricas in Missions 2 and 3, Guerra de Vecinos in the piñata finale, and Bounce y Joke in practice. Each one loops. The loop points were chosen by analysis and nobody has listened to them yet, so you will be the first. If a track is slow to download, the old synthesized music plays until it arrives. |

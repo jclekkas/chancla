@@ -173,10 +173,11 @@ export class InputManager {
     this.throwSources.add(source);
   }
 
-  release(source: string): void {
+  /** `cancel`: the hold was interrupted (pause, rotation, a lost touch), so the charge is dropped, not thrown. */
+  release(source: string, cancel = false): void {
     if (!this.throwSources.has(source)) return;
     this.throwSources.delete(source);
-    if (this.throwSources.size === 0) this.throwUp = true;
+    if (this.throwSources.size === 0) { if (cancel) this.cancel = true; else this.throwUp = true; }
   }
 
   tapRecall(): void {
@@ -187,10 +188,14 @@ export class InputManager {
     if (this.enabled) this.special = true;
   }
 
-  addLook(dx: number, dy: number): void {
+  /** Touch aiming has its own sensitivity (a finger is not a mouse). */
+  touchSensitivity = 1;
+
+  addLook(dx: number, dy: number, touch = false): void {
     if (!this.enabled) return;
-    this.lookX += dx * this.sensitivity;
-    this.lookY += dy * this.sensitivity * (this.invertY ? -1 : 1);
+    const k = touch ? this.touchSensitivity : this.sensitivity;
+    this.lookX += dx * k;
+    this.lookY += dy * k * (this.invertY ? -1 : 1);
   }
 
   setStick(x: number, y: number): void {

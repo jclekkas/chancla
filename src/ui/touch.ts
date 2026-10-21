@@ -17,6 +17,18 @@ export class TouchControls {
   private throwBtn: HTMLElement;
   private input: InputManager;
   private radius = 56;
+  /** Touches that began before this time (the tap on Resume or Play) are ignored. */
+  private armedAt = 0;
+
+  /** Call when the controls appear: a finger still down from a menu tap must not move or throw. */
+  arm(delayMs = 250): void {
+    this.reset();
+    this.armedAt = performance.now() + delayMs;
+  }
+
+  private armed(): boolean {
+    return performance.now() >= this.armedAt;
+  }
 
   constructor(input: InputManager) {
     this.input = input;
@@ -30,7 +42,7 @@ export class TouchControls {
     const special = $('t-special');
 
     this.bag.on<PointerEvent>(move, 'pointerdown', (e) => {
-      if (this.stickId !== -1) return;
+      if (this.stickId !== -1 || !this.armed()) return;
       e.preventDefault();
       this.stickId = e.pointerId;
       capture(move, e.pointerId);
@@ -63,27 +75,30 @@ export class TouchControls {
     };
     this.bag.on<PointerEvent>(move, 'pointerup', endStick);
     this.bag.on<PointerEvent>(move, 'pointercancel', endStick);
+    this.bag.on<PointerEvent>(move, 'lostpointercapture', endStick);
 
     this.bag.on<PointerEvent>(look, 'pointerdown', (e) => {
       e.preventDefault();
+      if (!this.armed()) return;
       capture(look, e.pointerId);
       this.lookIds.set(e.pointerId, { x: e.clientX, y: e.clientY });
     });
     this.bag.on<PointerEvent>(look, 'pointermove', (e) => {
       const p = this.lookIds.get(e.pointerId);
       if (!p) return;
-      this.input.addLook((e.clientX - p.x) * 0.0062, (e.clientY - p.y) * 0.0062);
+      this.input.addLook((e.clientX - p.x) * 0.0062, (e.clientY - p.y) * 0.0062, true);
       p.x = e.clientX;
       p.y = e.clientY;
     });
     const endLook = (e: PointerEvent): void => { this.lookIds.delete(e.pointerId); };
     this.bag.on<PointerEvent>(look, 'pointerup', endLook);
     this.bag.on<PointerEvent>(look, 'pointercancel', endLook);
+    this.bag.on<PointerEvent>(look, 'lostpointercapture', endLook);
 
     // Throw: hold to charge, release to throw. Dragging on the button aims.
     this.bag.on<PointerEvent>(this.throwBtn, 'pointerdown', (e) => {
       e.preventDefault();
-      if (this.throwId !== -1) return;
+      if (this.throwId !== -1 || !this.armed()) return;
       this.throwId = e.pointerId;
       capture(this.throwBtn, e.pointerId);
       this.throwLast = { x: e.clientX, y: e.clientY };
@@ -92,7 +107,7 @@ export class TouchControls {
     });
     this.bag.on<PointerEvent>(this.throwBtn, 'pointermove', (e) => {
       if (e.pointerId !== this.throwId) return;
-      this.input.addLook((e.clientX - this.throwLast.x) * 0.0055, (e.clientY - this.throwLast.y) * 0.0055);
+      this.input.addLook((e.clientX - this.throwLast.x) * 0.0055, (e.clientY - this.throwLast.y) * 0.0055, true);
       this.throwLast = { x: e.clientX, y: e.clientY };
     });
     const endThrow = (e: PointerEvent): void => {
@@ -103,9 +118,10 @@ export class TouchControls {
     };
     this.bag.on<PointerEvent>(this.throwBtn, 'pointerup', endThrow);
     this.bag.on<PointerEvent>(this.throwBtn, 'pointercancel', endThrow);
+    this.bag.on<PointerEvent>(this.throwBtn, 'lostpointercapture', endThrow);
 
-    this.bag.on<PointerEvent>(recall, 'pointerdown', (e) => { e.preventDefault(); this.input.tapRecall(); });
-    this.bag.on<PointerEvent>(special, 'pointerdown', (e) => { e.preventDefault(); this.input.tapSpecial(); });
+    this.bag.on<PointerEvent>(recall, 'pointerdown', (e) => { e.preventDefault(); if (this.armed()) this.input.tapRecall(); });
+    this.bag.on<PointerEvent>(special, 'pointerdown', (e) => { e.preventDefault(); if (this.armed()) this.input.tapSpecial(); });
     for (const el of [move, look, this.throwBtn, recall, special]) {
       this.bag.on(el, 'contextmenu', (e) => e.preventDefault());
     }
@@ -115,7 +131,10 @@ export class TouchControls {
     this.knob.style.transform = `translate(${x}px, ${y}px)`;
   }
 
+  /** Drops every held touch: the stick recentres, a held throw is cancelled (not fired). */
   reset(): void {
+    if (this.throwId !== -1) this.input.release('touch', true);
+    this.input.setStick(0, 0);
     this.stickId = -1;
     this.throwId = -1;
     this.lookIds.clear();

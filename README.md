@@ -43,7 +43,7 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 
 **Music and voices:** an original score is synthesized live (cumbia and son-influenced, one recurring "Rosa's theme" arranged per mission). Dialogue is in Spanish with English or Spanish subtitles. **The voices in this build are temporary synthetic placeholders, not recorded performances**; see [docs/AUDIO.md](docs/AUDIO.md).
 
-Phones and tablets can open the menus, but touch combat is not supported in this release. The title screen says so on touch devices.
+On phones and tablets without a mouse, the Arcade plays with touch controls (**Touch Beta, experimental**, not yet tried on a real device). Story, Practice and Online need a keyboard and mouse, and are labelled that way. The phone card also offers a link to copy for a computer. See [docs/MOBILE.md](docs/MOBILE.md).
 
 ## Running it locally
 
@@ -154,6 +154,6 @@ Geometry, textures, animation and sound effects are generated in code. The music
 - **One server process.** Rooms live in memory, so a restart or deploy ends running matches. Clients see a clear message and can make a new room.
 - **No lag compensation.** At high ping, lead your targets.
 - **Bots:** they navigate, see, chase and throw with deliberate aim error, but they are simple. They don't flank, and they don't use La Pesada splash cleverly.
-- **Touch:** touch combat is not supported.
+- **Touch:** only the Arcade, as an experimental beta, checked in mobile emulation only (see [docs/MOBILE.md](docs/MOBILE.md)).
 - **Not in this release:** text or voice chat, accounts, ranked play, cosmetics, more maps.
 - **Unverified:** frame rates on real hardware, Safari, and real Windows and macOS machines (see Verification).

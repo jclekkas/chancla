@@ -4,9 +4,17 @@ import { Emitter } from '../core/emitter';
 import { Rng } from '../core/rng';
 import { clamp } from '../core/math';
 import { buildArena, type Arena } from '../world/arena';
-import { buildMapArena } from '../world/mapArena';
 import { GEO } from '../world/palette';
-import { mapEntry, type MapId } from '../../shared/maps';
+import { mapEntry, type MapEntry, type MapId } from '../../shared/maps';
+
+/**
+ * Builds La Plaza and La Fiesta for the Arcade. Loaded on demand
+ * (src/world/mapArena.ts pulls in the shared renderer), so a player who only
+ * plays El Patio never downloads it.
+ */
+export type MapArenaBuilder = (entry: MapEntry, quality: Quality) => Arena;
+let mapArenaBuilder: MapArenaBuilder | null = null;
+export function provideMapArena(b: MapArenaBuilder): void { mapArenaBuilder = b; }
 import type { Quality } from '../persistence/storage';
 import { Player } from './player';
 import { ChanclaSystem, type Chancla, type HitTarget } from './chanclas';
@@ -261,7 +269,8 @@ export class Game {
     if (id === this.mapId) return;
     this.scene.remove(this.arena.group);
     disposeArena(this.arena.group);
-    this.arena = id === 'patio' ? buildArena() : buildMapArena(mapEntry(id), quality);
+    if (id !== 'patio' && !mapArenaBuilder) throw new Error('load src/world/mapArena first (provideMapArena)');
+    this.arena = id === 'patio' ? buildArena() : mapArenaBuilder!(mapEntry(id), quality);
     this.mapId = id;
     this.scene.add(this.arena.group);
     this.player.bounds = this.arena.bounds ?? null;

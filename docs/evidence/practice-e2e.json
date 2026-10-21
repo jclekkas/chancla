@@ -1,0 +1,56 @@
+[
+  {
+    "check": "language toggle switches the title to Spanish",
+    "ok": true,
+    "detail": "Jugar en línea"
+  },
+  {
+    "check": "practice room has 3 bots and the player, 2v2",
+    "ok": true
+  },
+  {
+    "check": "every bot is labeled BOT on the scoreboard",
+    "ok": true
+  },
+  {
+    "check": "the HUD shows the PRACTICE badge",
+    "ok": true
+  },
+  {
+    "check": "practice pauses while the menu is open",
+    "ok": true,
+    "detail": "296117 -> 296117"
+  },
+  {
+    "check": "pause menu says practice is paused",
+    "ok": true,
+    "detail": "Practice is paused."
+  },
+  {
+    "check": "quality setting applies without reload",
+    "ok": true
+  },
+  {
+    "check": "practice resumes after the menu closes",
+    "ok": true,
+    "detail": "296117 -> 291617"
+  },
+  {
+    "check": "leave practice with confirmation returns to the title",
+    "ok": true
+  },
+  {
+    "check": "settings persist across reloads",
+    "ok": true,
+    "detail": "95"
+  },
+  {
+    "check": "no console errors during practice",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "without WebGL the title explains why, play is disabled, settings still open",
+    "ok": true
+  }
+]

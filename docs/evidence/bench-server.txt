@@ -1,0 +1,5 @@
+node v22.22.0, tick 60 Hz, snapshots 20 Hz, 15 s simulated per run
+{"rooms":1,"cpuMsPerSecond":2.8,"cpuPercentOfOneCore":0.3,"perRoomMsPerSecond":2.81,"worstLoopMs":1.12,"snapshotBytesPerRoomPerSec":8029}
+{"rooms":10,"cpuMsPerSecond":12,"cpuPercentOfOneCore":1.2,"perRoomMsPerSecond":1.2,"worstLoopMs":1.43,"snapshotBytesPerRoomPerSec":7909}
+{"rooms":25,"cpuMsPerSecond":31.3,"cpuPercentOfOneCore":3.1,"perRoomMsPerSecond":1.25,"worstLoopMs":3.33,"snapshotBytesPerRoomPerSec":7884}
+{"rooms":50,"cpuMsPerSecond":67.3,"cpuPercentOfOneCore":6.7,"perRoomMsPerSecond":1.35,"worstLoopMs":5.22,"snapshotBytesPerRoomPerSec":7870}

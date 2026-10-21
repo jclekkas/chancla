@@ -1,0 +1,211 @@
+{
+  "players": 4,
+  "startedAt": "2026-10-21T13:36:12.866Z",
+  "steps": [
+    "0.6s server and site up",
+    "2.0s title shows server ready",
+    "7.1s room created; invite link format http://localhost:4173/#room=<code>",
+    "42.3s Beto joined by invite link",
+    "106.1s Carmen joined by invite link",
+    "175.0s Dani joined by invite link",
+    "182.8s everyone ready; host can start",
+    "183.1s match started on every client",
+    "193.9s combat screenshot (enemy within 12 m)",
+    "196.2s score [0,0] phases playing,playing,playing,playing | -21.9,-0.2 path=3 mv=true shots=0 remotes=3 vx=6.0 | 24.6,4.2 path=5 mv=false shots=0 remotes=3 vx=0.0 | -24.6,-4.2 path=5 mv=false shots=0 remotes=3 vx=0.0 | 24.6,-4.2 path=3 mv=true shots=0 remotes=3 vx=0.0",
+    "206.4s score [0,0] phases playing,playing,playing,playing | -16.8,-2.6 path=3 mv=true shots=0 remotes=3 vx=5.9 | 19.6,3.4 path=3 mv=true shots=0 remotes=3 vx=-5.9 | -19.6,-3.4 path=3 mv=true shots=0 remotes=3 vx=5.9 | 21.3,1.7 path=2 mv=true shots=0 remotes=3 vx=0.0",
+    "216.6s score [0,0] phases playing,playing,playing,playing | -6.4,-4.8 path=1 mv=true shots=0 remotes=3 vx=4.6 | 9.6,3.7 path=2 mv=true shots=0 remotes=3 vx=-5.9 | -9.0,-3.8 path=2 mv=true shots=0 remotes=3 vx=5.9 | 11.4,2.6 path=1 mv=true shots=0 remotes=3 vx=-6.0",
+    "226.6s score [0,0] phases playing,playing,playing,playing | -4.0,-6.7 path=0 mv=false shots=33 remotes=3 vx=0.0 | 6.3,4.8 path=2 mv=true shots=12 remotes=3 vx=4.6 | -4.5,-6.4 path=0 mv=false shots=27 remotes=3 vx=0.0 | 6.5,3.9 path=1 mv=true shots=7 remotes=3 vx=-0.1",
+    "238.2s score [0,0] phases playing,playing,playing,playing | -4.1,-6.8 path=0 mv=false shots=41 remotes=3 vx=0.0 | 4.3,6.5 path=0 mv=false shots=34 remotes=3 vx=0.0 | -4.5,-6.4 path=0 mv=false shots=38 remotes=3 vx=0.0 | 4.6,6.3 path=1 mv=false shots=30 remotes=3 vx=0.0",
+    "248.3s score [0,0] phases playing,playing,playing,playing | -0.6,-3.7 path=2 mv=true shots=44 remotes=3 vx=4.8 | 0.6,3.9 path=1 mv=true shots=61 remotes=3 vx=5.8 | -2.2,-5.4 path=1 mv=true shots=44 remotes=3 vx=-5.2 | 1.8,3.7 path=2 mv=false shots=62 remotes=3 vx=5.8",
+    "258.4s score [0,0] phases playing,playing,playing,playing | -1.6,-2.8 path=1 mv=false shots=93 remotes=3 vx=0.0 | 0.3,4.1 path=1 mv=true shots=64 remotes=3 vx=-5.8 | -3.4,-6.2 path=1 mv=false shots=135 remotes=3 vx=0.0 | 0.6,4.6 path=1 mv=true shots=64 remotes=3 vx=5.2",
+    "268.6s score [0,0] phases playing,playing,playing,playing | -0.4,-4.2 path=1 mv=true shots=171 remotes=3 vx=-2.4 | 0.4,4.4 path=1 mv=true shots=67 remotes=3 vx=-5.2 | -2.5,-5.6 path=2 mv=true shots=211 remotes=3 vx=5.2 | 0.9,4.6 path=1 mv=true shots=67 remotes=3 vx=5.1",
+    "278.7s score [0,0] phases playing,playing,playing,playing | -0.2,-4.3 path=1 mv=true shots=241 remotes=3 vx=5.3 | 1.4,5.0 path=2 mv=true shots=70 remotes=3 vx=-5.2 | -1.7,-5.2 path=2 mv=false shots=302 remotes=3 vx=0.0 | 0.7,4.0 path=2 mv=true shots=70 remotes=3 vx=-5.9",
+    "286.2s results on every client",
+    "292.3s rematch started; scores [0,0]",
+    "295.8s guest left with confirmation; host sees the roster shrink",
+    "298.2s invalid room code shows an error"
+  ],
+  "inviteHasOnlyCode": true,
+  "startGatedOnReady": true,
+  "resultsConsistent": true,
+  "results": {
+    "title": "It’s a tie",
+    "sol": "0",
+    "luna": "0"
+  },
+  "clientInfo": [
+    {
+      "mode": "match",
+      "fps": 12,
+      "frameMs": 3.45,
+      "drawCalls": 25,
+      "triangles": 1374,
+      "geometries": 142,
+      "textures": 12,
+      "avatars": 3,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 1,
+        "state": "online",
+        "phase": "playing",
+        "team": 0,
+        "alive": true,
+        "hp": 66,
+        "weapon": 1,
+        "rtt": 1,
+        "pos": [
+          -2.63,
+          0,
+          -5.61
+        ],
+        "scores": [
+          0,
+          0
+        ],
+        "remotes": 3,
+        "projectiles": 0,
+        "corrections": 0,
+        "maxCorrection": 0,
+        "code": "set"
+      }
+    },
+    {
+      "mode": "match",
+      "fps": 11,
+      "frameMs": 3.48,
+      "drawCalls": 25,
+      "triangles": 1374,
+      "geometries": 152,
+      "textures": 12,
+      "avatars": 3,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 2,
+        "state": "online",
+        "phase": "playing",
+        "team": 1,
+        "alive": true,
+        "hp": 66,
+        "weapon": 1,
+        "rtt": 2,
+        "pos": [
+          1.62,
+          0,
+          3.78
+        ],
+        "scores": [
+          0,
+          0
+        ],
+        "remotes": 3,
+        "projectiles": 0,
+        "corrections": 0,
+        "maxCorrection": 0,
+        "code": "set"
+      }
+    },
+    {
+      "mode": "match",
+      "fps": 11,
+      "frameMs": 2.94,
+      "drawCalls": 22,
+      "triangles": 1720,
+      "geometries": 143,
+      "textures": 12,
+      "avatars": 3,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 3,
+        "state": "online",
+        "phase": "playing",
+        "team": 0,
+        "alive": true,
+        "hp": 100,
+        "weapon": 0,
+        "rtt": 1,
+        "pos": [
+          -2.4,
+          0,
+          -5.57
+        ],
+        "scores": [
+          0,
+          0
+        ],
+        "remotes": 3,
+        "projectiles": 0,
+        "corrections": 0,
+        "maxCorrection": 0,
+        "code": "set"
+      }
+    },
+    {
+      "mode": "match",
+      "fps": 11,
+      "frameMs": 3.76,
+      "drawCalls": 25,
+      "triangles": 1374,
+      "geometries": 152,
+      "textures": 12,
+      "avatars": 3,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 4,
+        "state": "online",
+        "phase": "playing",
+        "team": 1,
+        "alive": true,
+        "hp": 66,
+        "weapon": 1,
+        "rtt": 1,
+        "pos": [
+          2.48,
+          0,
+          5.61
+        ],
+        "scores": [
+          0,
+          0
+        ],
+        "remotes": 3,
+        "projectiles": 0,
+        "corrections": 1,
+        "maxCorrection": 0.025,
+        "code": "set"
+      }
+    }
+  ],
+  "rematchHostOnly": true,
+  "rematchScoresReset": true,
+  "errors": [
+    {
+      "player": "Ana",
+      "errors": []
+    },
+    {
+      "player": "Beto",
+      "errors": []
+    },
+    {
+      "player": "Carmen",
+      "errors": []
+    },
+    {
+      "player": "Dani",
+      "errors": []
+    }
+  ],
+  "fpsPlayer1": {
+    "samples": 305,
+    "median": 10,
+    "p10": 10,
+    "note": "Headless Chromium with SwiftShader (CPU rendering), all clients on one machine. Not representative of real GPUs."
+  },
+  "video": "artifacts/mp/4p-match.webm",
+  "finishedAt": "2026-10-21T13:41:12.441Z",
+  "ok": true
+}

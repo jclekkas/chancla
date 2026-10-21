@@ -6,7 +6,9 @@ export type Sfx =
   | 'throw' | 'throwCharged' | 'throwGold' | 'thwap' | 'thwapBig' | 'ricochet' | 'land' | 'catch' | 'empty'
   | 'recall' | 'hurt' | 'pratfall' | 'pickup' | 'ui' | 'uiBack' | 'legendary' | 'blast' | 'telegraph'
   | 'gust' | 'heart' | 'bassDrop' | 'scratch' | 'bossHit' | 'blocked' | 'victory' | 'defeat' | 'waveStart'
-  | 'waveClear' | 'chargeReady' | 'meterFull' | 'splash';
+  | 'waveClear' | 'chargeReady' | 'meterFull' | 'splash'
+  | 'throwHeavy' | 'hitConfirm' | 'headshot' | 'hurtFps' | 'elimConfirm' | 'died' | 'heartbeat' | 'countdown' | 'go'
+  | 'win' | 'lose' | 'switch' | 'jump' | 'landSoft' | 'step' | 'spawn' | 'shielded' | 'heavyImpact';
 
 type MusicMode = 'off' | 'title' | 'game' | 'boss';
 
@@ -71,6 +73,8 @@ export class AudioEngine {
         shaper.connect(sfx);
         this.a = { ctx, master, sfx, music, noise, shaper };
         this.applyGain();
+        music.gain.value = 0.32 * this.musicVol;
+        sfx.gain.value = this.sfxVol;
       }
       if (this.a.ctx.state === 'suspended') void this.a.ctx.resume().catch(() => undefined);
     } catch {
@@ -82,7 +86,20 @@ export class AudioEngine {
   setMuted(m: boolean): void { this.muted = m; this.applyGain(); }
   setMusic(on: boolean): void {
     this.musicOn = on;
-    if (this.a) this.a.music.gain.setTargetAtTime(on ? 0.32 : 0, this.a.ctx.currentTime, 0.05);
+    if (this.a) this.a.music.gain.setTargetAtTime(on ? 0.32 * this.musicVol : 0, this.a.ctx.currentTime, 0.05);
+  }
+
+  private musicVol = 1;
+  private sfxVol = 1;
+
+  // Separate music and effects levels (0..1), on top of the master volume.
+  setLevels(music: number, sfx: number): void {
+    this.musicVol = music;
+    this.sfxVol = sfx;
+    this.musicOn = music > 0.001;
+    if (!this.a) return;
+    this.a.music.gain.setTargetAtTime(0.32 * music, this.a.ctx.currentTime, 0.05);
+    this.a.sfx.gain.setTargetAtTime(sfx, this.a.ctx.currentTime, 0.02);
   }
 
   private applyGain(): void {
@@ -313,6 +330,71 @@ export class AudioEngine {
         [523, 659, 784].forEach((f) => this.tone('triangle', f, f, t + 0.9, 1.0, 0.07));
         break;
       }
+      case 'throwHeavy':
+        this.noise(t, 0.34, 0.34, { filter: 'bandpass', fq: 220, fq1: 900, q: 2.5 });
+        this.tone('sine', 140, 70, t, 0.3, 0.16);
+        break;
+      case 'hitConfirm':
+        // Crisp, server-confirmed: a short high tick over the slap.
+        this.tone('square', 1900, 1900, t, 0.03, 0.06, { filter: 'lowpass', fq: 5000 });
+        this.tone('triangle', 1300, 1600, t + 0.015, 0.06, 0.08);
+        break;
+      case 'headshot':
+        this.tone('triangle', 1760, 2350, t, 0.09, 0.12, { curve: 'lin' });
+        this.tone('sine', 2640, 2640, t + 0.06, 0.12, 0.07);
+        break;
+      case 'hurtFps':
+        this.tone('triangle', 300, 150, t, 0.14, 0.18, { filter: 'lowpass', fq: 1400 });
+        this.noise(t, 0.08, 0.2, { filter: 'lowpass', fq: 900 });
+        break;
+      case 'elimConfirm':
+        [784, 988, 1319].forEach((f, i) => this.tone('triangle', f, f, t + i * 0.06, 0.14, 0.12));
+        this.tone('sine', 1500, 300, t + 0.05, 0.45, 0.06, { vibrato: 20 });
+        break;
+      case 'died':
+        this.tone('sine', 900, 180, t, 0.55, 0.14, { vibrato: 18 });
+        this.tone('triangle', 110, 55, t + 0.5, 0.2, 0.25);
+        break;
+      case 'heartbeat':
+        this.tone('sine', 70, 48, t, 0.12, 0.35);
+        this.tone('sine', 66, 46, t + 0.18, 0.12, 0.25);
+        break;
+      case 'countdown':
+        this.tone('square', 660, 660, t, 0.09, 0.07, { filter: 'lowpass', fq: 2400 });
+        break;
+      case 'go':
+        [523, 784, 1047].forEach((f) => this.tone('sawtooth', f, f, t, 0.35, 0.05, { filter: 'lowpass', fq: 3000 }));
+        break;
+      case 'win':
+        [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone('triangle', f, f, t + i * 0.1, i === 4 ? 0.7 : 0.16, 0.11));
+        break;
+      case 'lose':
+        [392, 349, 311].forEach((f, i) => this.tone('sawtooth', f, f * 0.97, t + i * 0.32, 0.3, 0.08, { filter: 'lowpass', fq: 900 }));
+        break;
+      case 'switch':
+        this.noise(t, 0.05, 0.12, { filter: 'bandpass', fq: 2200, q: 3 });
+        this.tone('triangle', 500, 700, t + 0.04, 0.05, 0.05);
+        break;
+      case 'jump':
+        this.noise(t, 0.06, 0.06, { filter: 'lowpass', fq: 700 });
+        break;
+      case 'landSoft':
+        this.tone('sine', 120, 70, t, 0.08, 0.1);
+        this.noise(t, 0.06, 0.08, { filter: 'lowpass', fq: 500 });
+        break;
+      case 'step':
+        this.noise(t, 0.035, 0.035 * k, { filter: 'bandpass', fq: 600 + Math.random() * 300, q: 1.5 });
+        break;
+      case 'spawn':
+        [880, 1175, 1568].forEach((f, i) => this.tone('sine', f, f, t + i * 0.05, 0.16, 0.05));
+        break;
+      case 'shielded':
+        this.tone('sine', 1800, 2400, t, 0.08, 0.07);
+        break;
+      case 'heavyImpact':
+        this.tone('sine', 110, 40, t, 0.3, 0.4);
+        this.noise(t, 0.16, 0.35, { filter: 'lowpass', fq: 900, fq1: 200 });
+        break;
       case 'defeat':
         // Sad trombone: four sagging notes with a wah on the last.
         [392, 370, 349, 330].forEach((f, i) => {

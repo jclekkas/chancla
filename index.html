@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Chancla Warfare: La Ley de la Chancla</title>
+    <meta name="description" content="Doña Rosa versus Doña Rosa: a comedic online team shooter with flying chanclas. Private rooms for 2 to 4 players, practice with bots, free in your browser." />
+    <meta name="theme-color" content="#4b2a6b" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="canonical" href="%SITE_URL%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Chancla Warfare" />
+    <meta property="og:title" content="Chancla Warfare: La Ley de la Chancla" />
+    <meta property="og:description" content="Se acabó la tontería. Team deathmatch with flying chanclas, in your browser." />
+    <meta property="og:url" content="%SITE_URL%" />
+    <meta property="og:image" content="%SITE_URL%og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="%SITE_URL%og-image.jpg" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #2e1846; color: #f4e6c8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #f2a33a 0%, #c8553d 45%, #2e1846 100%); z-index: 100; }
+      #boot .bt { font: 900 clamp(32px, 7vw, 64px)/1 system-ui, sans-serif; color: #f4e6c8; text-shadow: 0 4px 0 #4b2a6b; text-align: center; }
+      #boot .bar { width: min(320px, 70vw); height: 12px; margin: 20px auto 10px; border-radius: 99px; background: rgba(46, 24, 70, 0.6); overflow: hidden; border: 2px solid #f4e6c8; }
+      #boot .fill { height: 100%; width: 4%; background: #f4e6c8; transition: width 0.25s ease; }
+      #boot .st { font-size: 15px; text-align: center; min-height: 1.4em; }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div>
+        <div class="bt">CHANCLA WARFARE</div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="4" aria-label="Loading"><div class="fill" id="boot-fill"></div></div>
+        <div class="st" id="boot-status">Loading…</div>
+        <noscript><p>Chancla Warfare needs JavaScript. Please enable it and reload.</p></noscript>
+      </div>
+    </div>
+
+    <div id="app" hidden>
+      <div id="stage" aria-hidden="true"></div>
+
+      <!-- In-match HUD -->
+      <div id="hud" class="hud" hidden>
+        <div class="hud-top">
+          <div class="teamscore sol"><span class="ts-icon" aria-hidden="true">☀</span><span data-t="hud.sol"></span><b id="sc-sol">0</b></div>
+          <div class="timer" id="timer" aria-live="off">5:00</div>
+          <div class="teamscore luna"><b id="sc-luna">0</b><span data-t="hud.luna"></span><span class="ts-icon" aria-hidden="true">☾</span></div>
+        </div>
+        <div class="hud-practice" id="hud-practice" hidden data-t="hud.practice"></div>
+        <div class="killfeed" id="killfeed" aria-live="polite"></div>
+        <div class="hud-tr">
+          <div class="net" id="net"><span class="dot" id="net-dot"></span><span id="net-ping"></span></div>
+          <div class="fps" id="fps" hidden></div>
+          <button type="button" class="hud-btn" id="btn-menu" data-t-aria="hud.pause">☰</button>
+        </div>
+        <div class="crosshair" id="crosshair" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="64" height="64">
+            <circle cx="32" cy="32" r="2.4" class="dot" />
+            <path d="M32 14 v8 M32 42 v8 M14 32 h8 M42 32 h8" class="lines" />
+            <circle cx="32" cy="32" r="22" class="cd-bg" />
+            <circle cx="32" cy="32" r="22" class="cd" id="cd-ring" />
+            <g class="hitmarker" id="hitmarker"><path d="M22 22 l6 6 M42 22 l-6 6 M22 42 l6 -6 M42 42 l-6 -6" /></g>
+          </svg>
+        </div>
+        <div class="dmg-ind" id="dmg-ind" aria-hidden="true"></div>
+        <div class="center-msg" id="center-msg" aria-live="assertive" hidden></div>
+        <div class="sub-msg" id="sub-msg" aria-live="polite" hidden></div>
+        <div class="region" id="region"></div>
+        <div class="hud-bl">
+          <div class="hp" id="hp" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" data-t-aria="hud.health">
+            <div class="hp-face" aria-hidden="true"></div>
+            <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div></div>
+            <div class="hp-num" id="hp-num">100</div>
+          </div>
+          <div class="protect" id="protect" hidden data-t="hud.protected"></div>
+        </div>
+        <div class="weapons" id="weapons">
+          <div class="wslot" data-w="0"><span class="wkey">1</span><span class="wicon w0" aria-hidden="true"></span><span class="wname" data-t="hud.weapon0"></span><span class="wcd"><i></i></span></div>
+          <div class="wslot" data-w="1"><span class="wkey">2</span><span class="wicon w1" aria-hidden="true"></span><span class="wname" data-t="hud.weapon1"></span><span class="wcd"><i></i></span></div>
+        </div>
+        <div class="banner-conn" id="banner-conn" hidden role="status"></div>
+        <div class="hint" id="hint" data-t="hud.scoreHint"></div>
+        <div class="vig hurt" id="vig-hurt" aria-hidden="true"></div>
+        <div class="vig low" id="vig-low" aria-hidden="true"></div>
+        <div class="names" id="names" aria-hidden="true"></div>
+        <div class="click-to-play" id="click-to-play" hidden><button type="button" class="btn primary" id="btn-click-play" data-t="hud.clickToPlay"></button></div>
+      </div>
+
+      <!-- Scoreboard (hold Tab) -->
+      <section class="scoreboard" id="scoreboard" hidden aria-labelledby="sb-title">
+        <h2 id="sb-title" data-t="score.title"></h2>
+        <div id="sb-body"></div>
+      </section>
+
+      <!-- Title -->
+      <section id="scr-title" class="screen title" hidden aria-labelledby="logo">
+        <div class="title-col">
+          <h1 class="logo" id="logo"><span class="logo-main">CHANCLA</span><span class="logo-stamp">WARFARE</span></h1>
+          <p class="subtitle" data-t="brand.subtitle"></p>
+          <p class="tagline" data-t="brand.tagline"></p>
+          <p class="pitch" data-t="brand.pitch"></p>
+          <div class="title-actions">
+            <button type="button" class="btn primary big" id="btn-online" data-t="title.online"></button>
+            <button type="button" class="btn big alt" id="btn-practice" data-t="title.practice"></button>
+          </div>
+          <p class="server-status" id="server-status" role="status"></p>
+          <p class="server-status warn" id="webgl-status" hidden role="alert"></p>
+          <div class="title-row">
+            <button type="button" class="btn ghost" id="btn-controls" data-t="title.controls"></button>
+            <button type="button" class="btn ghost" id="btn-settings" data-t="title.settings"></button>
+            <button type="button" class="btn ghost" id="btn-lang" data-t="title.lang" data-t-aria="title.langAria"></button>
+            <a class="btn ghost" id="lnk-classic" href="/classic.html" data-t="title.classic"></a>
+          </div>
+          <p class="note" id="mobile-note" hidden data-t="controls.mobile"></p>
+        </div>
+        <div class="title-side">
+          <figure class="rosa-card">
+            <div class="rosa-portrait" id="rosa-portrait" role="img" data-t-alt="title.portraitAlt"></div>
+            <figcaption><strong data-t="title.rosa"></strong><span data-t="title.rosaBio"></span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Online: name, create, join -->
+      <section id="scr-online" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="online-title">
+        <div class="panel">
+          <h2 id="online-title" data-t="online.title"></h2>
+          <label class="field"><span data-t="online.name"></span><input id="in-name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" data-t-ph="online.namePh" /></label>
+          <button type="button" class="btn primary" id="btn-create" data-t="online.create"></button>
+          <div class="join-row">
+            <label class="field grow"><span data-t="online.joinLabel"></span><input id="in-code" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" data-t-ph="online.codePh" /></label>
+            <button type="button" class="btn" id="btn-join" data-t="online.join"></button>
+          </div>
+          <p class="note" data-t="online.note"></p>
+          <p class="err" id="online-err" role="alert"></p>
+          <button type="button" class="btn ghost" id="btn-online-back" data-t="online.back"></button>
+        </div>
+      </section>
+
+      <!-- Practice setup -->
+      <section id="scr-practice" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="practice-title">
+        <div class="panel">
+          <h2 id="practice-title" data-t="practice.title"></h2>
+          <p class="note" data-t="practice.note"></p>
+          <div class="field"><span id="lbl-diff" data-t="practice.difficulty"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-diff">
+              <button type="button" role="radio" data-diff="easy" data-t="practice.easy"></button>
+              <button type="button" role="radio" data-diff="normal" data-t="practice.normal"></button>
+              <button type="button" role="radio" data-diff="hard" data-t="practice.hard"></button>
+            </div>
+          </div>
+          <div class="field"><span id="lbl-allies" data-t="practice.allies"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-allies">
+              <button type="button" role="radio" data-allies="0" data-t="practice.none"></button>
+              <button type="button" role="radio" data-allies="1" data-t="practice.one"></button>
+            </div>
+          </div>
+          <div class="field"><span id="lbl-enemies" data-t="practice.enemies"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-enemies">
+              <button type="button" role="radio" data-enemies="1" data-t="practice.one"></button>
+              <button type="button" role="radio" data-enemies="2" data-t="practice.two"></button>
+            </div>
+          </div>
+          <button type="button" class="btn primary" id="btn-practice-start" data-t="practice.start"></button>
+          <button type="button" class="btn ghost" id="btn-practice-back" data-t="online.back"></button>
+        </div>
+      </section>
+
+      <!-- Lobby -->
+      <section id="scr-lobby" class="screen overlay lobby" hidden role="dialog" aria-modal="true" aria-labelledby="lobby-title">
+        <div class="panel wide">
+          <h2 id="lobby-title" data-t="lobby.title"></h2>
+          <div class="codebox" id="codebox">
+            <div><span class="label" data-t="lobby.code"></span><strong class="code" id="room-code"></strong></div>
+            <div class="codebtns">
+              <button type="button" class="btn" id="btn-copy-invite" data-t="lobby.copy"></button>
+              <button type="button" class="btn ghost" id="btn-share-invite" data-t="lobby.share" hidden></button>
+            </div>
+          </div>
+          <input class="invite" id="invite-url" readonly aria-label="Invite link" hidden />
+          <div class="teams">
+            <div class="team sol"><h3><span aria-hidden="true">☀</span> <span data-t="lobby.teamSol"></span></h3><ul id="team-0"></ul></div>
+            <div class="team luna"><h3><span aria-hidden="true">☾</span> <span data-t="lobby.teamLuna"></span></h3><ul id="team-1"></ul></div>
+          </div>
+          <p class="rules" data-t="lobby.rules"></p>
+          <div class="lobby-owner" id="lobby-owner">
+            <label class="field check"><input type="checkbox" id="chk-bots" /><span data-t="lobby.bots"></span></label>
+            <div class="seg small" role="radiogroup" aria-labelledby="lbl-diff">
+              <button type="button" role="radio" data-bdiff="easy" data-t="practice.easy"></button>
+              <button type="button" role="radio" data-bdiff="normal" data-t="practice.normal"></button>
+              <button type="button" role="radio" data-bdiff="hard" data-t="practice.hard"></button>
+            </div>
+            <p class="note" data-t="lobby.botsNote"></p>
+          </div>
+          <p class="lobby-status" id="lobby-status" role="status"></p>
+          <p class="err" id="lobby-err" role="alert"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-start" data-t="lobby.start"></button>
+            <button type="button" class="btn primary" id="btn-ready" data-t="lobby.readyBtn"></button>
+            <button type="button" class="btn" id="btn-switch" data-t="lobby.switch"></button>
+            <button type="button" class="btn ghost" id="btn-lobby-settings" data-t="title.settings"></button>
+            <button type="button" class="btn ghost" id="btn-leave-room" data-t="lobby.leave"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section id="scr-results" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="res-title">
+        <div class="panel wide">
+          <h2 id="res-title"></h2>
+          <p class="res-sub" id="res-sub"></p>
+          <div class="res-score"><span class="sol" id="res-sol">0</span><span class="vs">–</span><span class="luna" id="res-luna">0</span></div>
+          <div id="res-table"></div>
+          <p class="lobby-status" id="res-status"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-rematch" data-t="results.rematch"></button>
+            <button type="button" class="btn" id="btn-to-lobby" data-t="results.lobby"></button>
+            <button type="button" class="btn ghost" id="btn-res-leave" data-t="results.leave"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- In-match menu -->
+      <section id="scr-pause" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="panel">
+          <h2 id="pause-title" data-t="pause.title"></h2>
+          <p class="note" id="pause-note"></p>
+          <button type="button" class="btn primary" id="btn-resume" data-t="pause.resume"></button>
+          <button type="button" class="btn" id="btn-pause-settings" data-t="pause.settings"></button>
+          <button type="button" class="btn" id="btn-pause-controls" data-t="pause.controls"></button>
+          <button type="button" class="btn" id="btn-fullscreen" data-t="pause.fullscreen"></button>
+          <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.leave"></button>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="scr-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="panel settings">
+          <h2 id="settings-title" data-t="settings.title"></h2>
+          <div class="field"><span id="lbl-lang" data-t="settings.language"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">
+              <button type="button" role="radio" data-lang="en">English</button>
+              <button type="button" role="radio" data-lang="es">Español</button>
+            </div>
+          </div>
+          <label class="field"><span data-t="settings.sensitivity"></span><input type="range" id="set-sens" min="10" max="400" step="5" /><output id="out-sens"></output></label>
+          <label class="field check"><input type="checkbox" id="set-invert" /><span data-t="settings.invertY"></span></label>
+          <label class="field"><span data-t="settings.fov"></span><input type="range" id="set-fov" min="70" max="105" step="1" /><output id="out-fov"></output></label>
+          <label class="field check"><input type="checkbox" id="set-motion" /><span data-t="settings.reducedMotion"></span></label>
+          <div class="field"><span id="lbl-q" data-t="settings.quality"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-q">
+              <button type="button" role="radio" data-q="low" data-t="settings.low"></button>
+              <button type="button" role="radio" data-q="medium" data-t="settings.medium"></button>
+              <button type="button" role="radio" data-q="high" data-t="settings.high"></button>
+            </div>
+          </div>
+          <label class="field"><span data-t="settings.music"></span><input type="range" id="set-music" min="0" max="100" step="1" /><output id="out-music"></output></label>
+          <label class="field"><span data-t="settings.sfx"></span><input type="range" id="set-sfx" min="0" max="100" step="1" /><output id="out-sfx"></output></label>
+          <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
+          <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section id="scr-controls" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="controls-title">
+        <div class="panel">
+          <h2 id="controls-title" data-t="controls.title"></h2>
+          <dl class="controls">
+            <dt data-t="controls.kMove"></dt><dd data-t="controls.move"></dd>
+            <dt data-t="controls.kLook"></dt><dd data-t="controls.look"></dd>
+            <dt data-t="controls.kThrow"></dt><dd data-t="controls.throw"></dd>
+            <dt data-t="controls.kJump"></dt><dd data-t="controls.jump"></dd>
+            <dt data-t="controls.kCrouch"></dt><dd data-t="controls.crouch"></dd>
+            <dt data-t="controls.kWeapon"></dt><dd data-t="controls.weapon"></dd>
+            <dt data-t="controls.kScores"></dt><dd data-t="controls.scores"></dd>
+            <dt data-t="controls.kMenu"></dt><dd data-t="controls.menu"></dd>
+          </dl>
+          <div class="weapon-cards">
+            <div><span class="wicon w0" aria-hidden="true"></span><b data-t="hud.weapon0"></b><span data-t="hud.weapon0Desc"></span></div>
+            <div><span class="wicon w1" aria-hidden="true"></span><b data-t="hud.weapon1"></b><span data-t="hud.weapon1Desc"></span></div>
+          </div>
+          <p class="note" data-t="controls.tip"></p>
+          <button type="button" class="btn primary" id="btn-controls-close" data-t="settings.close"></button>
+        </div>
+      </section>
+
+      <!-- Confirm leave -->
+      <section id="scr-confirm" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+        <div class="panel">
+          <h2 id="confirm-title" data-t="confirm.leaveTitle"></h2>
+          <p id="confirm-body"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-confirm-no" data-t="confirm.no"></button>
+            <button type="button" class="btn danger" id="btn-confirm-yes" data-t="confirm.yes"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Connection lost -->
+      <section id="scr-lost" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="lost-title" aria-describedby="lost-body">
+        <div class="panel">
+          <h2 id="lost-title" data-t="lost.title"></h2>
+          <p id="lost-body"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-lost-retry" data-t="lost.retry"></button>
+            <button type="button" class="btn" id="btn-lost-practice" data-t="lost.practice"></button>
+            <button type="button" class="btn ghost" id="btn-lost-title" data-t="lost.title2"></button>
+          </div>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+    <script type="module" src="/src/fps/main.ts"></script>
+  </body>
+</html>

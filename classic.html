@@ -154,6 +154,17 @@
         </div>
       </section>
 
+      <section id="modal-maps" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="maps-title">
+        <div class="panel wide maps-panel">
+          <h2 id="maps-title" data-i18n="map.choose"></h2>
+          <div id="arcade-maps"></div>
+          <div class="results-actions">
+            <button type="button" class="btn-play small" id="btn-maps-start" data-i18n="map.start"></button>
+            <button type="button" class="btn-ghost" id="btn-maps-back" data-i18n="map.back"></button>
+          </div>
+        </div>
+      </section>
+
       <section id="modal-howto" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="howto-title">
         <div class="panel controls-card" id="controls-card">
           <h2 id="howto-title" data-i18n="controls.heading"></h2>
@@ -179,7 +190,7 @@
           <button type="button" class="btn-play small" id="btn-resume" data-i18n="pause.resume"></button>
           <button type="button" class="btn-ghost wide" id="btn-restart" data-i18n="pause.restart"></button>
           <button type="button" class="btn-ghost wide" id="btn-pause-settings" data-i18n="pause.settings"></button>
-          <button type="button" class="btn-ghost wide" id="btn-pause-maps" data-i18n="pause.maps" hidden></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-maps" data-i18n="pause.maps"></button>
           <button type="button" class="btn-ghost wide" id="btn-to-title" data-i18n="pause.toTitle"></button>
           <button type="button" class="btn-ghost wide" id="btn-pause-home" data-i18n="title.mainMenu"></button>
           <p class="note" id="pause-lock-note" data-i18n="pause.lockNote"></p>
@@ -211,7 +222,7 @@
             <button type="button" class="btn-ghost" id="btn-share" data-i18n="results.share"></button>
             <button type="button" class="btn-ghost" id="btn-copy" data-i18n="results.copy"></button>
             <button type="button" class="btn-ghost" id="btn-download" data-i18n="results.download"></button>
-            <button type="button" class="btn-ghost" id="btn-results-maps" data-i18n="pause.maps" hidden></button>
+            <button type="button" class="btn-ghost" id="btn-results-maps" data-i18n="pause.maps"></button>
             <button type="button" class="btn-ghost" id="btn-results-title" data-i18n="results.toTitle"></button>
             <button type="button" class="btn-ghost" id="btn-results-home" data-i18n="title.mainMenu"></button>
           </div>

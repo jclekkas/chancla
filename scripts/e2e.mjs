@@ -88,6 +88,8 @@ const browser = await launch();
   // Play: tutorial with real input.
   await page.mouse.move(640, 360);
   await page.click('#btn-play');
+  // Play opens the map choice (El Patio is preselected); Start begins the run.
+  await page.click('#btn-maps-start');
   await wait(page, 400);
   let s = await snap(page);
   ok('Play starts the tutorial', s.state === 'playing' && s.phase === 'tutorial', `lock=${s.lock}`);
@@ -293,6 +295,7 @@ const browser = await launch();
 
   // Context loss and restore.
   await page.click('#btn-play');
+  await page.click('#btn-maps-start');
   await wait(page, 300);
   await page.evaluate(() => {
     const gl = window.__chancla.app.renderer.getContext();
@@ -370,6 +373,8 @@ for (const [name, vp] of [['landscape', { width: 844, height: 390 }], ['portrait
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   ok(`[${name}] no horizontal overflow`, !overflow);
   await page.tap('#btn-play');
+  await wait(page, 300);
+  await page.tap('#btn-maps-start');
   await wait(page, 500);
   const s = await snap(page);
   ok(`[${name}] touch mode with on-screen controls`, s.touch && (await page.isVisible('#touch')));

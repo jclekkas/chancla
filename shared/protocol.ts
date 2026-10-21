@@ -9,9 +9,12 @@ export { PROTOCOL_VERSION };
 // [seq, moveX, moveZ, yaw, pitch, buttons, weapon]
 export type InputTuple = [number, number, number, number, number, number, number];
 
+import { isMapId, type MapId } from './maps';
+
 export type ClientMsg =
   | { t: 'hello'; v: number; name: string; resume?: string }
-  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number } }
+  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number }; map?: MapId }
+  | { t: 'map'; map: MapId }
   | { t: 'join'; code: string }
   | { t: 'team'; team: Team }
   | { t: 'ready'; ready: boolean }
@@ -67,6 +70,8 @@ export interface RoomView {
   results: Results | null;
   maxPlayers: number;
   teamSize: number;
+  /** The arena for the next (or current) match: the owner's choice. */
+  map: MapId;
 }
 
 // Per-player state in a snapshot:
@@ -147,12 +152,17 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
       if (m.resume !== undefined && !(isStr(m.resume, 64) && /^[A-Za-z0-9_-]{16,64}$/.test(m.resume))) return null;
       return { t: 'hello', v: m.v, name: m.name, resume: m.resume as string | undefined };
     case 'create': {
-      if (m.practice === undefined) return { t: 'create' };
+      if (m.map !== undefined && !isMapId(m.map)) return null;
+      const map = m.map as MapId | undefined;
+      if (m.practice === undefined) return map ? { t: 'create', map } : { t: 'create' };
       const p = m.practice as Record<string, unknown> | null;
       if (!p || typeof p !== 'object' || !DIFFS.includes(p.difficulty as string) || !isNum(p.allies) || !isNum(p.enemies)) return null;
       if (p.allies < 0 || p.allies > 1 || p.enemies < 1 || p.enemies > 2) return null;
-      return { t: 'create', practice: { difficulty: p.difficulty as BotDifficulty, allies: Math.floor(p.allies), enemies: Math.floor(p.enemies) } };
+      const practice = { difficulty: p.difficulty as BotDifficulty, allies: Math.floor(p.allies), enemies: Math.floor(p.enemies) };
+      return map ? { t: 'create', practice, map } : { t: 'create', practice };
     }
+    case 'map':
+      return isMapId(m.map) ? { t: 'map', map: m.map } : null;
     case 'join':
       return isStr(m.code, 32) ? { t: 'join', code: normalizeCode(m.code) } : null;
     case 'team':

@@ -21,6 +21,8 @@ import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
 import { music } from '../audio/music';
 import { SoundGate } from '../ui/soundGate';
+import { renderMapCards, type MapChoice } from '../ui/mapSelect';
+import { isMapId, mapEntry, randomMapId, type MapId } from '../../shared/maps';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
@@ -79,6 +81,9 @@ let pendingInviteCode = '';
 let lastCode: string | null = null;
 let lockFailures = 0;
 let pauseOpenedAt = -1e9;
+// The map the current (or last) practice match was started on: Restart keeps it,
+// even when the choice was "Random".
+let practiceMapId: MapId = 'patio';
 
 // Dialogue (campaign and multiplayer quips) with subtitles.
 const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
@@ -381,16 +386,18 @@ function startOnline(join: string | null): void {
   retry = () => startOnline(join ?? lastCode);
 }
 
-function startPractice(): void {
+/** `keepMap` (Restart) replays the same arena; otherwise the saved choice is used, resolving Random. */
+function startPractice(keepMap = false): void {
   const v = store.value;
+  if (!keepMap) practiceMapId = v.practiceMap === 'random' ? randomMapId() : isMapId(v.practiceMap) ? v.practiceMap : 'patio';
   endSession(null);
   practice = true;
   const h = new LocalHost();
   host = h;
   const s = newSession(h.transport(), () => h.now());
   s.connect(sanitizeName(store.value.name, t('online.namePh')));
-  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies } });
-  retry = startPractice;
+  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId });
+  retry = () => startPractice(true);
 }
 
 // Leaves the room and tears the session down. `to` picks the next screen.
@@ -463,7 +470,8 @@ function onRoom(room: RoomView): void {
       show('none');
       if (practice) input?.requestLock(); // the Start click is still a user gesture in most browsers
     } else if (base === 'results') {
-      // Rematch: straight back into the courtyard.
+      // Rematch: straight back in (on the room's map, which the owner may have changed).
+      engine?.useMap(room.map);
       engine?.resetRound();
       show('none');
     }
@@ -539,6 +547,13 @@ function renderLobby(room: RoomView): void {
   }
   const mine = room.members.find((m) => m.id === me);
   $('lobby-owner').hidden = !isOwner;
+  // The map is the host's call; everyone sees it, and the room enforces it.
+  document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => {
+    const on = b.dataset.lmap === room.map;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+    b.disabled = !isOwner && !on;
+  });
   ($('chk-bots') as HTMLInputElement).checked = room.bots.enabled;
   document.querySelectorAll<HTMLButtonElement>('[data-bdiff]').forEach((b) => {
     const on = b.dataset.bdiff === room.bots.difficulty;
@@ -570,7 +585,8 @@ function renderResults(room: RoomView): void {
   $('res-title').textContent = r.winner === -1 ? t('results.tie') : r.winner === 0 ? t('results.sol') : t('results.luna');
   const flavor = r.winner === -1 ? t('results.youTie') : r.winner === myTeam ? t('results.youWin') : t('results.youLose');
   const reason = r.reason === 'score' ? t('results.byScore', { n: MATCH.scoreToWin }) : t('results.byTime');
-  $('res-sub').textContent = `${reason} · ${flavor}`;
+  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}`;
+  ($('btn-res-maps') as HTMLButtonElement).hidden = !room.practice;
   $('res-sol').textContent = String(r.scores[0]);
   $('res-luna').textContent = String(r.scores[1]);
   const rows = [...r.rows].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || b.damage - a.damage);
@@ -647,6 +663,11 @@ function renderPracticeSetup(): void {
   seg('diff', v.practiceDifficulty);
   seg('allies', String(v.practiceAllies));
   seg('enemies', String(v.practiceEnemies));
+  renderMapCards($('practice-maps'), {
+    selected: v.practiceMap,
+    t: (k) => t(k as Key),
+    onPick: (c: MapChoice) => { store.update({ practiceMap: c }); renderPracticeSetup(); },
+  });
 }
 
 function changeLang(lang: 'en' | 'es'): void {
@@ -724,7 +745,14 @@ function askHome(): void {
 
 /** Practice: the same match settings and map again. */
 function askRestartPractice(): void {
-  confirmBox(t('confirm.restartPracticeTitle'), t('confirm.restartPractice'), t('confirm.restartYes'), () => { overlayStack.length = 0; startPractice(); });
+  confirmBox(t('confirm.restartPracticeTitle'), t('confirm.restartPractice'), t('confirm.restartYes'), () => { overlayStack.length = 0; startPractice(true); });
+}
+
+/** Back to the practice setup to pick another map. From the pause menu a match is in progress, so it asks. */
+function changePracticeMap(confirmFirst: boolean): void {
+  const go = () => { endSession(null); renderPracticeSetup(); show('practice'); };
+  if (confirmFirst) confirmBox(t('confirm.leaveTitle'), t('confirm.leavePractice'), t('confirm.yes'), go);
+  else go();
 }
 
 async function copyInvite(): Promise<void> {
@@ -777,7 +805,7 @@ function bindUi(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceDifficulty: b.dataset.diff as BotDifficulty }); renderPracticeSetup(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-allies]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceAllies: Number(b.dataset.allies) }); renderPracticeSetup(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-enemies]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceEnemies: Number(b.dataset.enemies) }); renderPracticeSetup(); }));
-  on('btn-practice-start', startPractice);
+  on('btn-practice-start', () => startPractice());
 
   on('btn-copy-invite', () => void copyInvite());
   on('btn-share-invite', () => { if (lastRoom) navigator.share?.({ title: t('meta.title'), url: inviteUrl(lastRoom.code) }).catch(() => { /* cancelled */ }); });
@@ -792,6 +820,9 @@ function bindUi(): void {
     $('lobby-err').textContent = '';
     session?.send({ t: 'team', team: (team === 0 ? 1 : 0) as Team });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => b.addEventListener('click', () => {
+    if (lastRoom?.owner === session?.id && isMapId(b.dataset.lmap)) session?.send({ t: 'map', map: b.dataset.lmap });
+  }));
   ($('chk-bots') as HTMLInputElement).addEventListener('change', (e) => {
     session?.send({ t: 'bots', enabled: (e.target as HTMLInputElement).checked, difficulty: lastRoom?.bots.difficulty ?? 'normal' });
   });
@@ -812,6 +843,8 @@ function bindUi(): void {
   on('btn-pause-leave', askHome);
   on('btn-pause-select', () => campaign.leave());
   on('btn-pause-restart', () => { if (campaign.active) campaign.restart(); else if (practice) askRestartPractice(); });
+  on('btn-pause-maps', () => changePracticeMap(true));
+  on('btn-res-maps', () => changePracticeMap(false));
   on('btn-menu', () => { input?.exitLock(); openPause(); });
   on('btn-click-play', () => input?.requestLock());
 
@@ -907,6 +940,9 @@ function bindInput(inp: FpsInput): void {
   inp.onScoreboard = (open) => hud.scoreboard(open, lastRoom, engine?.stats ?? new Map(), session?.id ?? -1);
   inp.onSwitch = () => audio.play('switch');
   $('stage').addEventListener('click', () => { if (inMatch && base === 'none' && !inp.locked) inp.requestLock(); });
+  // Switching tabs or windows always opens the menu (it pauses local modes),
+  // whether or not the browser also releases the mouse.
+  document.addEventListener('visibilitychange', () => { if (document.hidden && inMatch && base === 'none') openPause(); });
 }
 
 // ---------------------------------------------------------------------

@@ -4,7 +4,8 @@
 
 import { MATCH, NET, type BotDifficulty } from './config';
 import { MatchSim, BTN, type SimEvent } from './sim';
-import { EL_PATIO, type Team } from './map';
+import type { Team } from './map';
+import { DEFAULT_MAP, mapData, type MapId } from './maps';
 import { BotBrain } from './bots';
 import type { ClientMsg, MemberView, PlayerTuple, Results, RoomPhase, RoomView, SelfTuple, ServerMsg, Snapshot } from './protocol';
 import { weaponOf } from './protocol';
@@ -50,6 +51,7 @@ export class Room {
   sim: MatchSim | null = null;
   results: Results | null = null;
   bots: { enabled: boolean; difficulty: BotDifficulty } = { enabled: false, difficulty: 'normal' };
+  map: MapId = DEFAULT_MAP;
   emptySince: number;
   private acc = 0;
   private lastUpdate = -1;
@@ -182,7 +184,7 @@ export class Room {
       .map((m) => ({ id: m.id, name: m.name, team: m.team, ready: m.bot || m.ready || m.id === this.owner, connected: m.bot || !!m.conn, bot: m.bot, ping: m.ping }));
     return {
       code: this.code, owner: this.owner, phase: this.phase, practice: this.practice, members,
-      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize,
+      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize, map: this.map,
     };
   }
 
@@ -221,6 +223,12 @@ export class Room {
         for (const b of [...this.members.values()].filter((x) => x.bot)) this.removeMember(b.id);
         this.fillBots();
         this.roomDirty = true;
+        return null;
+      case 'map':
+        // The owner picks the arena between matches; everyone loads it from the room view.
+        if (!isOwner) return 'not_owner';
+        if (this.phase !== 'lobby' && this.phase !== 'results') return 'bad_message';
+        if (this.map !== msg.map) { this.map = msg.map; this.roomDirty = true; }
         return null;
       case 'start':
         if (!isOwner) return 'not_owner';
@@ -274,7 +282,7 @@ export class Room {
     const err = this.canStart(skipReady);
     if (err) return err;
     // Rebalance if one team is over capacity (people may have left).
-    const sim = new MatchSim(EL_PATIO, {
+    const sim = new MatchSim(mapData(this.map), {
       seed: this.opts.seed ?? Math.floor(Math.random() * 1e9),
       durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs,
     });

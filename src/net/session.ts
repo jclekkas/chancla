@@ -13,7 +13,8 @@
 //     Damage and hits are only ever shown when the server confirms them.
 
 import { MOVE, NET, PROTOCOL_VERSION, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../shared/config';
-import { EL_PATIO, type Team } from '../../shared/map';
+import type { Team } from '../../shared/map';
+import { DEFAULT_MAP, mapData, type MapId } from '../../shared/maps';
 import { World, newBody, stepMove, type Body } from '../../shared/physics';
 import { BTN, hitboxOf, launch, stepProjectileWorld, type Hitbox, type Projectile, type SimEvent } from '../../shared/sim';
 import { segmentCapsule } from '../../shared/collision';
@@ -89,7 +90,9 @@ interface Pending {
 }
 
 export class GameSession {
-  readonly world = new World(EL_PATIO.boxes);
+  /** Collision for prediction: the room's map, swapped when the room changes it. */
+  world = new World(mapData(DEFAULT_MAP).boxes);
+  mapId: MapId = DEFAULT_MAP;
   state: ConnState = 'idle';
   id = -1;
   name = '';
@@ -228,6 +231,7 @@ export class GameSession {
       }
       case 'room':
         this.room = m.room;
+        if (m.room.map !== this.mapId) { this.mapId = m.room.map; this.world = new World(mapData(m.room.map).boxes); }
         if (m.room.phase === 'lobby' || m.room.phase === 'results') {
           this.projectiles.clear();
         }

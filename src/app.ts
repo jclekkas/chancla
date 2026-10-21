@@ -18,6 +18,8 @@ import { copyText, downloadScoreCard, shareScore, shareText, shareUrl } from './
 import { PLAYER } from './config';
 import { clamp, damp } from './core/math';
 import { SoundGate } from './ui/soundGate';
+import { renderMapCards, type MapChoice } from './ui/mapSelect';
+import { isMapId, mapEntry, randomMapId, type MapId } from '../shared/maps';
 
 type AppState = 'title' | 'playing' | 'paused' | 'results';
 
@@ -201,7 +203,13 @@ export class App {
   }
 
   private bindUi(): void {
-    this.click('btn-play', () => this.play(!this.shouldTutorial()));
+    // Play opens the map choice; Start there begins the run.
+    this.click('btn-play', () => this.openMaps());
+    this.click('btn-maps-start', () => { this.closeMaps(); this.play(!this.shouldTutorial()); });
+    this.click('btn-maps-back', () => this.closeMaps(), 'uiBack');
+    // Change map: from the pause menu the run is in progress, so it asks first.
+    this.click('btn-pause-maps', () => this.openConfirm('confirm.leaveTitle', 'confirm.leaveBody', 'confirm.leaveYes', () => { this.toTitle(); this.openMaps(); }), 'uiBack');
+    this.click('btn-results-maps', () => { this.toTitle(); this.openMaps(); }, 'uiBack');
     this.click('btn-howto', () => {
       this.lastFocus = $('btn-howto');
       $('modal-howto').hidden = false;
@@ -259,7 +267,7 @@ export class App {
     // Keep Tab inside whichever dialog is on top.
     this.bag.on<KeyboardEvent>(document, 'keydown', (e) => {
       if (e.key !== 'Tab') return;
-      const open = ['modal-confirm', 'modal-settings', 'modal-howto', 'screen-results', 'screen-pause', 'screen-ctx']
+      const open = ['modal-confirm', 'modal-settings', 'modal-howto', 'modal-maps', 'screen-results', 'screen-pause', 'screen-ctx']
         .map((id) => $(id))
         .find((el) => !el.hidden);
       if (!open) return;
@@ -274,7 +282,8 @@ export class App {
     // Escape closes dialogs.
     this.bag.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!$('modal-howto').hidden) this.closeHowto();
+      if (!$('modal-maps').hidden) this.closeMaps();
+      else if (!$('modal-howto').hidden) this.closeHowto();
       else if (!$('modal-confirm').hidden) this.closeConfirm();
       else if (!$('modal-settings').hidden) this.closeSettings();
       else if (this.state === 'paused' && $('modal-settings').hidden) { /* stay paused: Resume is explicit */ }
@@ -283,6 +292,8 @@ export class App {
       applyDom(document);
       this.hud.invalidate();
       this.soundGate?.render();
+      this.showModeChip();
+      if (!$('modal-maps').hidden) this.renderMaps();
       this.refreshBest();
       this.updateMuteButton();
       if (this.lastResult && this.state === 'results') this.fillResults(this.lastResult, this.lastWasBest);
@@ -485,9 +496,48 @@ export class App {
     $('title-storage').hidden = this.progress.persistent;
   }
 
+  // ---------- map choice ----------
+  private openMaps(): void {
+    this.renderMaps();
+    $('modal-maps').hidden = false;
+    $('arcade-maps').querySelector<HTMLElement>('.map-card.on')?.focus();
+  }
+
+  private closeMaps(): void {
+    $('modal-maps').hidden = true;
+    $('btn-play').focus();
+  }
+
+  private renderMaps(): void {
+    renderMapCards($('arcade-maps'), {
+      selected: this.settings.value.arcadeMap as MapChoice,
+      t: (k) => t(k as StringKey),
+      marks: false, // no teams in the Arcade
+      onPick: (c) => { this.updateSettings({ arcadeMap: c }); this.renderMaps(); $('arcade-maps').querySelector<HTMLElement>('.map-card.on')?.focus(); },
+    });
+  }
+
+  /** The saved choice, with Random resolved now (Restart keeps whatever was picked). */
+  private chosenMap(): MapId {
+    const c = this.settings.value.arcadeMap;
+    return c === 'random' ? randomMapId() : isMapId(c) ? c : 'patio';
+  }
+
+  private showModeChip(): void {
+    $('mode-chip').textContent = `${t('hud.mode')} · ${t(mapEntry(this.game.mapId).nameKey as StringKey).toUpperCase()}`;
+  }
+
   play(skipTutorial: boolean): void {
     audio.unlock();
     this.clearTimers();
+    const before = this.game.mapId;
+    this.game.setMap(this.chosenMap(), this.settings.value.quality);
+    if (this.game.mapId !== before) {
+      const q = QUALITY[this.settings.value.quality];
+      this.game.arena.setShadows(q.shadows, q.shadowSize);
+      this.renderer.shadowMap.needsUpdate = true;
+    }
+    this.showModeChip();
     this.resetRunUi();
     this.game.startRun(skipTutorial);
     this.enterPlaying();

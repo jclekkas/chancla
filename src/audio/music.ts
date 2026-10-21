@@ -90,7 +90,7 @@ const DUCK_RECORDED = 0.42;
 const RETRY_MS = [4000, 15000];
 const BASE = (() => { try { return import.meta.env.BASE_URL || '/'; } catch { return '/'; } })();
 
-interface RecLane { rec: RecordedTrack; src: AudioBufferSourceNode; eq: BiquadFilterNode; gain: GainNode; startedAt: number; offset: number }
+interface RecLane { rec: RecordedTrack; src: AudioBufferSourceNode; eq: BiquadFilterNode; gain: GainNode; startedAt: number; offset: number; tag: { id: string; gain: GainNode } }
 
 function equalPower(from: number, to: number, n = 32): Float32Array {
   const c = new Float32Array(n);
@@ -133,7 +133,8 @@ export class Music {
   private buffers = new Map<string, AudioBuffer>(); // insertion order = least recently used first
   private failed = new Map<string, { attempts: number; retryAt: number; permanent: boolean }>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private recLive = 0; // recording sources still sounding (including ones fading out)
+  // Recording sources still sounding, including ones fading out (debug and tests).
+  private recLive = new Set<{ id: string; gain: GainNode }>();
   private grace: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -317,11 +318,12 @@ export class Music {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.setValueCurveAtTime(equalPower(0, level), now + 0.02, REC_XFADE);
     src.start(now + 0.02);
-    this.recLive++;
-    src.onended = () => { this.recLive--; };
+    const tag = { id: recId, gain };
+    this.recLive.add(tag);
+    src.onended = () => { this.recLive.delete(tag); };
     // LRU: the playing recording becomes the most recent.
     this.buffers.delete(recId); this.buffers.set(recId, buf);
-    this.rec = { rec, src, eq, gain, startedAt: now + 0.02, offset: 0 };
+    this.rec = { rec, src, eq, gain, startedAt: now + 0.02, offset: 0, tag };
     this.setEq(this.rec, cue);
     audio.duckDepth = DUCK_RECORDED;
     this.evict();
@@ -344,7 +346,7 @@ export class Music {
     g.setValueCurveAtTime(equalPower(from, 0), now, dur);
     try { r.src.stop(now + dur + 0.05); } catch { /* already stopped */ }
     const src = r.src;
-    src.onended = () => { this.recLive--; for (const node of [src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
+    src.onended = () => { this.recLive.delete(r.tag); for (const node of [src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
   }
 
   private fadeSynth(now: number, dur: number): void {
@@ -407,7 +409,7 @@ export class Music {
   }
 
   /** What is playing, for tests and the debug API. */
-  state(): { cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number } {
+  state(): { cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number; sources: Array<{ id: string; gain: number }> } {
     const r = this.rec;
     let position: number | null = null;
     if (r && audio.nodes) {
@@ -426,7 +428,8 @@ export class Music {
       failed: [...this.failed].filter(([, f]) => f.permanent).map(([k]) => k),
       retrying: [...this.failed].filter(([, f]) => !f.permanent).map(([k]) => k),
       context: audio.state,
-      sounding: this.recLive,
+      sounding: this.recLive.size,
+      sources: [...this.recLive].map((s) => ({ id: s.id, gain: +s.gain.gain.value.toFixed(4) })),
     };
   }
 
@@ -440,10 +443,10 @@ export class Music {
     src.loop = true; src.loopStart = r.src.loopStart; src.loopEnd = r.src.loopEnd;
     src.connect(r.eq);
     const now = n.ctx.currentTime;
+    r.src.onended = null; // the replacement carries on under the same tag
     try { r.src.stop(now); } catch { /* gone */ }
     src.start(now, sec);
-    this.recLive++;
-    src.onended = () => { this.recLive--; };
+    src.onended = () => { this.recLive.delete(r.tag); };
     r.src = src; r.startedAt = now; r.offset = sec;
   }
 

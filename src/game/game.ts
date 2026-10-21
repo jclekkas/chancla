@@ -4,6 +4,10 @@ import { Emitter } from '../core/emitter';
 import { Rng } from '../core/rng';
 import { clamp } from '../core/math';
 import { buildArena, type Arena } from '../world/arena';
+import { buildMapArena } from '../world/mapArena';
+import { GEO } from '../world/palette';
+import { mapEntry, type MapId } from '../../shared/maps';
+import type { Quality } from '../persistence/storage';
 import { Player } from './player';
 import { ChanclaSystem, type Chancla, type HitTarget } from './chanclas';
 import { EnemySystem, type Enemy, type EnemyContext, type EnemyKind } from './enemies';
@@ -105,7 +109,9 @@ export class Game {
   readonly scene = new THREE.Scene();
   readonly events = new Emitter<GameEvents>();
   readonly rng: Rng;
-  readonly arena: Arena;
+  arena: Arena;
+  /** The map this run is played on. El Patio is the original courtyard. */
+  mapId: MapId = 'patio';
   readonly player = new Player();
   readonly chanclas: ChanclaSystem;
   readonly enemies = new EnemySystem();
@@ -225,6 +231,54 @@ export class Game {
 
     this.resetRun();
     this.phase = 'title';
+  }
+
+  private pinataCd = 0;
+  // La Fiesta: a chancla through the piñata makes it spin and shower confetti. Just for fun.
+  private pinataCheck(dt: number): void {
+    const pin = this.arena.pinata;
+    if (!pin) return;
+    this.pinataCd -= dt;
+    if (this.pinataCd > 0) return;
+    for (const list of [this.chanclas.real, this.chanclas.golden]) {
+      for (const c of list) {
+        if (c.state !== 'flying' || Math.hypot(c.pos.x - pin.x, c.pos.y - pin.y, c.pos.z - pin.z) >= pin.r) continue;
+        pin.hit();
+        this.pinataCd = 0.8;
+        this.events.emit('bounce', { x: pin.x, y: pin.y, z: pin.z });
+        return;
+      }
+    }
+  }
+
+  /**
+   * Switches the arena between runs. The old one's meshes are disposed
+   * (shared geometry used by characters is kept), and everything that held
+   * the old layout (enemy navigation, the boss's stage, the tutorial
+   * dummies, the player's bounds) is pointed at the new one.
+   */
+  setMap(id: MapId, quality: Quality): void {
+    if (id === this.mapId) return;
+    this.scene.remove(this.arena.group);
+    disposeArena(this.arena.group);
+    this.arena = id === 'patio' ? buildArena() : buildMapArena(mapEntry(id), quality);
+    this.mapId = id;
+    this.scene.add(this.arena.group);
+    this.player.bounds = this.arena.bounds ?? null;
+    this.enemyCtx.colliders = this.arena.colliders;
+    this.enemyCtx.nav = this.arena.nav;
+    this.boss.pos.copy(this.arena.bossPos);
+    this.boss.waveOrigin.copy(this.arena.bossWaveOrigin);
+    this.dummies.forEach((d, i) => {
+      const s = this.arena.dummySpots[i] ?? this.arena.dummySpots[0]!;
+      d.x = s.x; d.z = s.z;
+      d.group.position.set(s.x, 0, s.z);
+    });
+    const theme = mapEntry(id).theme;
+    const fog = theme === 'dusk' ? 0x6a3a6a : theme === 'noon' ? 0xe8e4d4 : 0xf2b98a;
+    (this.scene.fog as THREE.Fog).color.setHex(fog);
+    (this.scene.background as THREE.Color).setHex(fog);
+    this.resetRun();
   }
 
   // Clears every piece of run state. Called by restart and return-to-title.
@@ -364,6 +418,7 @@ export class Game {
     this.buildTargets();
     this.player.hand(hand);
     this.chanclas.step(dt, hand, this.arena.colliders, this.targets);
+    this.pinataCheck(dt);
 
     for (const e of this.enemies.pool) {
       if (!e.active) continue;
@@ -793,4 +848,16 @@ export class Game {
   debugFillMeter(): void {
     this.addMeter(1);
   }
+}
+
+// Frees an arena's GPU resources, keeping the shared geometry characters use.
+const SHARED_GEO = new Set<THREE.BufferGeometry>(Object.values(GEO) as THREE.BufferGeometry[]);
+function disposeArena(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry && !SHARED_GEO.has(m.geometry)) m.geometry.dispose();
+    const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+    if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+    else mat?.dispose?.();
+  });
 }

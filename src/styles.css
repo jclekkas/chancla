@@ -327,3 +327,17 @@ body.reduced-motion .crosshair .hitmarker.on { animation: none; opacity: 1; }
 #screen-pause .panel > .btn-ghost.wide { width: auto; }
 @media (max-height: 420px) { #screen-pause .panel > .btn-ghost.wide { padding: 6px 10px; } }
 #screen-pause .panel > [hidden] { display: none; }
+/* Arcade map choice (cards shared with Practice: src/ui/mapSelect.ts). */
+.maps-panel { width: min(820px, 94vw); max-height: 94vh; overflow-y: auto; }
+.map-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; margin: 8px 0 12px; }
+.map-card { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px; border-radius: 14px; border: 2px solid rgba(244, 230, 200, 0.35); background: rgba(20, 10, 30, 0.55); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.map-card:hover { border-color: rgba(244, 230, 200, 0.8); }
+.map-card.on { border-color: #f2a33a; box-shadow: 0 0 0 2px #f2a33a; background: rgba(46, 24, 70, 0.9); }
+.map-card:focus-visible { outline: 3px solid #ffd27a; outline-offset: 2px; }
+.map-card .mc-pic { display: grid; place-items: center; aspect-ratio: 36 / 22; border-radius: 8px; background: #2e1846 center / cover no-repeat; font-size: 36px; font-weight: 900; color: #ffd27a; }
+.map-card.random .mc-pic { background: repeating-linear-gradient(45deg, #5a3480 0 12px, #2e1846 12px 24px); }
+.map-card .mc-name { font-size: 16px; }
+.map-card .mc-style { font-size: 11px; letter-spacing: 0.04em; color: #ffd27a; font-weight: 800; }
+.map-card .mc-desc { font-size: 12px; opacity: 0.86; line-height: 1.3; }
+@media (max-width: 720px) { .map-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-height: 560px) { .map-card .mc-desc { display: none; } .map-card .mc-pic { aspect-ratio: 36 / 16; } }

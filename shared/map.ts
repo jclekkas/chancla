@@ -21,7 +21,8 @@ export type Team = 0 | 1;
 
 export type MatKey =
   | 'stuccoTerracotta' | 'stuccoCream' | 'stuccoTurquoise' | 'stuccoMarigold' | 'stuccoViolet' | 'stuccoPink'
-  | 'stone' | 'wood' | 'planter' | 'fountain' | 'statue' | 'stall' | 'crate' | 'kiosk' | 'step' | 'parapet' | 'lintel' | 'bin';
+  | 'stone' | 'wood' | 'planter' | 'fountain' | 'statue' | 'stall' | 'crate' | 'kiosk' | 'step' | 'parapet' | 'lintel' | 'bin'
+  | 'table' | 'hedge' | 'gift' | 'stage';
 
 export interface MapBox extends AABB {
   mat: MatKey;
@@ -48,7 +49,46 @@ export interface PickupSpot {
   z: number;
 }
 
+/**
+ * Purely visual dressing, drawn by the renderer. None of it collides, and all
+ * of it is flush with a wall or above head height (≥ 2.9 m), so it never
+ * blocks movement or hides an opponent.
+ */
+export interface MapDecor {
+  ground: { w: number; d: number };
+  /** Laundry and papel picado lines: [ax, az, bx, bz, y]. */
+  laundry?: Array<[number, number, number, number, number]>;
+  papel?: Array<[number, number, number, number, number]>;
+  /** String lights: [ax, az, bx, bz, y]. */
+  lights?: Array<[number, number, number, number, number]>;
+  /** Team banners on spawn-side walls, and the emblem over each spawn exit. */
+  banners?: Array<{ x: number; z: number; ry: number; team: Team }>;
+  emblems?: Array<{ x: number; y: number; z: number; ry: number; team: Team }>;
+  /** Skyline church, outside the playable area. */
+  church?: { x: number; z: number };
+  /** Market awnings above stalls (above head height). */
+  awnings?: Array<{ minX: number; minZ: number; maxX: number; maxZ: number; y: number; color: number }>;
+  /** Tree canopies above planters (trunk inside the planter box). */
+  trees?: Array<{ x: number; z: number; y: number }>;
+  /** The party piñata, hung from a rope; a playful target with no effect on play. */
+  pinata?: { x: number; y: number; z: number };
+  /** Dance-floor tiles painted on the ground. */
+  danceFloor?: { x: number; z: number; r: number };
+}
+
+/** Wave-mode (Arcade) layout on the same geometry: the Arcade is flat, so only ground-level boxes block it. */
+export interface ArcadeLayout {
+  playerStart: { x: number; z: number; yaw: number };
+  /** Enemies appear at (x, z) and walk in to (entryX, entryZ). */
+  entrances: Array<{ x: number; z: number; entryX: number; entryZ: number }>;
+  boss: { x: number; y: number; z: number; waveX: number; waveZ: number };
+  pickups: Array<{ x: number; z: number }>;
+  dummies: Array<{ x: number; z: number }>;
+}
+
 export interface MapData {
+  /** Registry id ('patio', 'plaza', 'fiesta'). */
+  id?: string;
   name: string;
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   boxes: MapBox[];
@@ -56,16 +96,18 @@ export interface MapData {
   waypoints: Array<{ x: number; y: number; z: number }>;
   regions: Region[];
   pickups: PickupSpot[];
+  decor?: MapDecor;
+  arcade?: ArcadeLayout;
 }
 
 const HALF_PI = Math.PI / 2;
 
-function b(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, mat: MatKey, extra: Partial<MapBox> = {}): MapBox {
+export function b(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, mat: MatKey, extra: Partial<MapBox> = {}): MapBox {
   return { ...box(minX, minY, minZ, maxX, maxY, maxZ, mat, true, true), mat, ...extra };
 }
 
 // Point reflection through the origin (180° rotation about the y axis).
-function rot(m: MapBox, mat?: MatKey, sign?: string): MapBox {
+export function rot(m: MapBox, mat?: MatKey, sign?: string): MapBox {
   const flip: Record<string, 'n' | 's' | 'e' | 'w'> = { n: 's', s: 'n', e: 'w', w: 'e' };
   return {
     ...m,
@@ -78,7 +120,7 @@ function rot(m: MapBox, mat?: MatKey, sign?: string): MapBox {
 
 // Six steps of 0.45 m rising to a 2.7 m terrace. `dir` is the direction of
 // travel going up; `at` is the coordinate of the top edge.
-function stairs(axis: 'x' | 'z', dir: 1 | -1, at: number, from: number, to: number, mat: MatKey = 'step'): MapBox[] {
+export function stairs(axis: 'x' | 'z', dir: 1 | -1, at: number, from: number, to: number, mat: MatKey = 'step'): MapBox[] {
   const out: MapBox[] = [];
   const depth = 0.55;
   for (let k = 1; k <= 6; k++) {
@@ -211,6 +253,7 @@ function build(): MapData {
   ];
 
   return {
+    id: 'patio',
     name: 'El Patio',
     bounds: { minX: -27, maxX: 27, minZ: -19, maxZ: 19 },
     boxes,
@@ -218,6 +261,15 @@ function build(): MapData {
     waypoints,
     regions,
     pickups: [{ x: -13, y: 0, z: -6.6 }, { x: 13, y: 0, z: 6.6 }],
+    decor: {
+      ground: { w: 54, d: 38 },
+      laundry: [-19, -9, 6, 18].flatMap((x) => [[x, -15, x + 1.2, -11, 4.6], [-x, 15, -x - 1.2, 11, 4.6]] as Array<[number, number, number, number, number]>),
+      papel: [-6, 0, 6].map((z) => [-17, z - 1.5, 17, z + 1.5, 6.4] as [number, number, number, number, number]),
+      lights: [[-17, -8, 17, 8, 7.2], [-17, 8, 17, -8, 7.2]],
+      banners: [-1, 1].flatMap((s) => [-8.5, -5.5, 3.5, 7.5].map((z) => ({ x: s * 21.06, z: s < 0 ? z : -z, ry: Math.PI / 2, team: (s < 0 ? 0 : 1) as Team }))),
+      emblems: [-1, 1].map((s) => ({ x: s * 16.96, y: 4.3, z: s * 2.75, ry: s < 0 ? Math.PI / 2 : -Math.PI / 2, team: (s < 0 ? 0 : 1) as Team })),
+      church: { x: 0, z: -24 },
+    },
   };
 }
 

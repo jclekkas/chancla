@@ -170,9 +170,12 @@
 
       <!-- Practice setup -->
       <section id="scr-practice" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="practice-title">
-        <div class="panel">
+        <div class="panel practice-panel">
           <h2 id="practice-title" data-t="practice.title"></h2>
           <p class="note" data-t="practice.note"></p>
+          <div class="field map-field"><span id="lbl-map" data-t="map.label"></span>
+            <div id="practice-maps" aria-labelledby="lbl-map"></div>
+          </div>
           <div class="field"><span id="lbl-diff" data-t="practice.difficulty"></span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-diff">
               <button type="button" role="radio" data-diff="easy" data-t="practice.easy"></button>
@@ -214,6 +217,13 @@
             <div class="team luna"><h3><span aria-hidden="true">☾</span> <span data-t="lobby.teamLuna"></span></h3><ul id="team-1"></ul></div>
           </div>
           <p class="rules" data-t="lobby.rules"></p>
+          <div class="field lobby-map"><span id="lbl-lmap" data-t="map.label"></span>
+            <div class="seg small" role="radiogroup" aria-labelledby="lbl-lmap">
+              <button type="button" role="radio" data-lmap="patio" data-t="map.patio"></button>
+              <button type="button" role="radio" data-lmap="plaza" data-t="map.plaza"></button>
+              <button type="button" role="radio" data-lmap="fiesta" data-t="map.fiesta"></button>
+            </div>
+          </div>
           <div class="lobby-owner" id="lobby-owner">
             <label class="field check"><input type="checkbox" id="chk-bots" /><span data-t="lobby.bots"></span></label>
             <div class="seg small" role="radiogroup" aria-labelledby="lbl-diff">

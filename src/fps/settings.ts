@@ -1,5 +1,6 @@
 import { SafeStorage } from '../persistence/storage';
 import type { Lang } from './strings';
+import { isMapId, type MapId } from '../../shared/maps';
 
 export type Quality = 'low' | 'medium' | 'high';
 
@@ -21,6 +22,7 @@ export interface FpsSettings {
   practiceDifficulty: 'easy' | 'normal' | 'hard';
   practiceAllies: number;
   practiceEnemies: number;
+  practiceMap: MapId | 'random'; // the last map chosen for practice
 }
 
 const KEY = 'chancla.mp.settings.v1';
@@ -28,7 +30,7 @@ const KEY = 'chancla.mp.settings.v1';
 export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): FpsSettings {
   return {
     lang, name: '', sensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium',
-    music: 0.45, sfx: 0.85, showStats: false, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2,
+    music: 0.45, sfx: 0.85, showStats: false, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
   };
 }
 
@@ -55,6 +57,7 @@ export class FpsSettingsStore {
       subtitles: r.subtitles === 'es' || r.subtitles === 'en' || r.subtitles === 'off' || r.subtitles === 'auto' ? r.subtitles : d.subtitles,
       campaignHints: bool(r.campaignHints, d.campaignHints),
       practiceDifficulty: r.practiceDifficulty === 'easy' || r.practiceDifficulty === 'hard' || r.practiceDifficulty === 'normal' ? r.practiceDifficulty : d.practiceDifficulty,
+      practiceMap: r.practiceMap === 'random' || isMapId(r.practiceMap) ? r.practiceMap : d.practiceMap,
       practiceAllies: num(r.practiceAllies, d.practiceAllies, 0, 1),
       practiceEnemies: num(r.practiceEnemies, d.practiceEnemies, 1, 2),
     };

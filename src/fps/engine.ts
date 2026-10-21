@@ -5,7 +5,8 @@
 // session and shows what the server confirms.
 import * as THREE from 'three';
 import { MATCH, MOVE, NET, WEAPONS, type WeaponId } from '../../shared/config';
-import { EL_PATIO, regionAt, type Team } from '../../shared/map';
+import { EL_PATIO, regionAt, type MapData, type Team } from '../../shared/map';
+import { mapEntry } from '../../shared/maps';
 import { lineOfSight } from '../../shared/collision';
 import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession } from '../net/session';
@@ -56,6 +57,9 @@ export class Engine {
   readonly proj = new ProjectileView();
   readonly vm = new ViewModel();
   private pickups: THREE.Group[] = [];
+  /** The arena being played (El Patio for menus and the campaign). */
+  private map: MapData = EL_PATIO;
+  private pinataHits = new Set<string>();
   private acc = 0;
   private last = 0;
   private raf = 0;
@@ -162,9 +166,11 @@ export class Engine {
   // ------------------------------------------------------------------
   // Mode switches
 
-  /** Rebuilds El Patio with a campaign layout and lighting (or the default). */
+  /** Rebuilds the world: a map, a campaign layout and lighting (or El Patio by default). */
   setWorld(opts: WorldOptions): void {
     this.worldOpts = opts;
+    this.map = opts.map ?? EL_PATIO;
+    this.placePickups();
     this.scene.remove(this.world.group);
     disposeTree(this.world.group);
     this.world = buildWorld(this.quality, opts);
@@ -195,14 +201,26 @@ export class Engine {
 
   enterMenu(): void {
     this.leaveController();
-    if (this.worldOpts.boxes || this.worldOpts.theme) this.setWorld({});
+    if (this.worldOpts.boxes || this.worldOpts.theme || this.worldOpts.map) this.setWorld({});
     this.mode = 'menu';
     this.session = null;
     this.clearMatch();
     for (const a of this.menuAvatars) a.root.visible = true;
   }
 
+  /**
+   * Loads the room's map if it isn't the one on screen. The previous map's
+   * meshes, geometries and textures are disposed (setWorld).
+   */
+  useMap(id: string | undefined): void {
+    const e = mapEntry(id);
+    if (this.map === e.data && (this.worldOpts.map ?? EL_PATIO) === e.data && !this.worldOpts.boxes) return;
+    this.setWorld(e.data === EL_PATIO ? {} : { map: e.data, theme: e.theme });
+  }
+
   enterMatch(session: GameSession, practice: boolean): void {
+    this.useMap(session.room?.map);
+    this.pinataHits.clear();
     this.mode = 'match';
     this.session = session;
     this.practice = practice;
@@ -297,7 +315,7 @@ export class Engine {
       case 'pickup':
         if (e.id === me) {
           audio.play('pickup');
-          const p = EL_PATIO.pickups[e.i];
+          const p = this.map.pickups[e.i];
           if (p) this.hud.floatText(t('hud.pickup', { n: MATCH.pickupHeal }), new THREE.Vector3(p.x, 1.2, p.z), 'heal');
         }
         break;
@@ -350,7 +368,22 @@ export class Engine {
     this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
   }
 
+  /** Screenshots and review only: show a map from a fixed camera instead of the menu orbit. */
+  private showcase: { pos: [number, number, number]; look: [number, number, number] } | null = null;
+  setShowcase(mapId: string | null, pos?: [number, number, number], look?: [number, number, number]): void {
+    if (!mapId) { this.showcase = null; this.enterMenu(); return; }
+    this.useMap(mapId);
+    for (const a of this.menuAvatars) a.root.visible = false;
+    this.showcase = { pos: pos ?? [0, 30, 26], look: look ?? [0, 0, 0] };
+  }
+
   private menuFrame(dt: number): void {
+    if (this.showcase) {
+      this.camera.position.set(...this.showcase.pos);
+      this.camera.lookAt(...this.showcase.look);
+      this.world.update(this.time);
+      return;
+    }
     const a = this.time * 0.05 + 0.6;
     // Stays inside the open plaza so it never clips through a house.
     const r = 9.5;
@@ -418,6 +451,16 @@ export class Engine {
 
     this.syncAvatars(s, dt, reduced);
     this.proj.sync(s.projectiles, s.renderTime(), cam, dt);
+    // La Fiesta: a chancla through the piñata makes it spin and shower confetti (just for fun).
+    const pin = this.world.pinata;
+    if (pin) {
+      for (const [id, cp] of s.projectiles) {
+        if (this.pinataHits.has(id)) continue;
+        const pr = cp.pr;
+        if (pr && Math.hypot(pr.x - pin.x, pr.y - pin.y, pr.z - pin.z) < pin.r) { this.pinataHits.add(id); pin.hit(); audio.play('ricochet'); }
+      }
+      if (this.pinataHits.size > 200) this.pinataHits.clear();
+    }
     this.syncPickups(s, dt);
 
     const speed = Math.hypot(s.body.vx, s.body.vz);
@@ -434,7 +477,7 @@ export class Engine {
       hp: s.hp, alive: s.alive, weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs,
       respawnInMs: s.respawnInMs, protectedMs: s.protectedMs, scores: snap?.sc ?? [0, 0],
       timeLeftMs: snap?.tl ?? MATCH.durationMs, phase: s.phase, countdownMs: snap?.cd ?? 0,
-      region: regionAt(EL_PATIO, s.body.x, s.body.y, s.body.z), rtt: s.rtt, quality: s.connectionQuality,
+      region: regionAt(this.map, s.body.x, s.body.y, s.body.z), rtt: s.rtt, quality: s.connectionQuality,
       fps: this.fps, showStats: settings.showStats, practice: this.practice, team: s.team,
     }, dt, this.input.yaw);
 
@@ -522,7 +565,7 @@ export class Engine {
     const handleGeo = new THREE.TorusGeometry(0.07, 0.022, 6, 12);
     const glowGeo = new THREE.RingGeometry(0.4, 0.55, 28);
     const cupMat = toon(COLORS.cream), saucerMat = toon(COLORS.turquoise), coffee = toon(COLORS.woodDark);
-    for (const p of EL_PATIO.pickups) {
+    for (const p of this.map.pickups) {
       const g = new THREE.Group();
       const spin = new THREE.Group();
       const cup = new THREE.Mesh(cupGeo, cupMat);
@@ -546,6 +589,14 @@ export class Engine {
       this.pickups.push(g);
       this.scene.add(g);
     }
+  }
+
+  private placePickups(): void {
+    this.pickups.forEach((g, i) => {
+      const p = this.map.pickups[i];
+      g.visible = !!p;
+      if (p) g.position.set(p.x, p.y, p.z);
+    });
   }
 
   private syncPickups(s: GameSession, dt: number): void {

@@ -1,0 +1,28 @@
+# Example only: nothing has been provisioned. Rename to fly.toml and run
+# `fly launch --no-deploy` to create your own app first.
+app = "chancla-server"
+primary_region = "dfw"
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+  TRUST_PROXY = "1"
+  # ALLOWED_ORIGINS is set with: fly secrets set ALLOWED_ORIGINS=https://your-site
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "off"   # rooms live in memory; stopping drops them
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    method = "GET"
+    path = "/readyz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

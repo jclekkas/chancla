@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-server
+artifacts
+.git
+tests
+public
+src
+*.html

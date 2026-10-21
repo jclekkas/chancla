@@ -43,11 +43,14 @@ let bytesOut = 0, msgsOut = 0;
 
 const server = http.createServer((req, res) => {
   const path = (req.url || '/').split('?')[0];
+  // The site checks /healthz from another origin to show server status.
+  const origin = req.headers.origin;
+  const cors: Record<string, string> = origin && (ORIGINS.includes('*') || ORIGINS.includes(origin)) ? { 'access-control-allow-origin': origin, vary: 'origin' } : {};
   if (path === '/healthz') {
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors });
     res.end(JSON.stringify({ ok: true, ...hub.stats(), uptimeS: Math.round(process.uptime()) }));
   } else if (path === '/readyz') {
-    res.writeHead(ready ? 200 : 503, { 'content-type': 'application/json' });
+    res.writeHead(ready ? 200 : 503, { 'content-type': 'application/json', ...cors });
     res.end(JSON.stringify({ ready }));
   } else {
     res.writeHead(404, { 'content-type': 'text/plain' });

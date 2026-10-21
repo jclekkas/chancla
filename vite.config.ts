@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 // Public origin used for absolute Open Graph URLs. Vercel and Netlify expose
@@ -33,6 +34,14 @@ export default defineConfig({
     outDir: 'dist',
     chunkSizeWarningLimit: 900,
     sourcemap: false,
+    rollupOptions: {
+      // index.html is the online shooter; classic.html keeps the original
+      // single-player arcade game.
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        classic: resolve(__dirname, 'classic.html'),
+      },
+    },
   },
   server: { host: true },
   preview: { host: true },

@@ -256,3 +256,16 @@ table.stats tr.me td { background: rgba(244, 230, 200, 0.1); }
   *, *::before, *::after { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
 }
 body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+
+/* Short windows (laptops at 125% zoom, small browser windows): panels start
+   at the top and scroll instead of being clipped, and the lobby tightens. */
+.screen.overlay { place-items: safe center; }
+@media (max-height: 700px) {
+  .screen.overlay { place-items: start center; }
+  .panel { gap: 10px; padding: 16px 20px; }
+  .panel h2 { font-size: 26px; }
+  .lobby .invite { padding: 4px 8px; }
+  .lobby .rules, .lobby-owner .note { font-size: 13px; }
+  .team li { padding: 4px 10px; min-height: 34px; }
+  .codebox { padding: 8px 12px; }
+}

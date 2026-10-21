@@ -5,7 +5,7 @@
 import { launch } from './browser.mjs';
 import fs from 'node:fs';
 
-const URL_ = process.env.E2E_URL || 'http://localhost:4173/';
+const URL_ = process.env.E2E_URL || 'http://localhost:4173/classic.html';
 const OUT = process.env.E2E_OUT || 'artifacts/e2e';
 fs.mkdirSync(OUT, { recursive: true });
 const results = [];

@@ -6,6 +6,15 @@
 
 `?unlock=all` works only on preview builds. It doesn't change your saved progress, and production ignores it. Without it, missions unlock one at a time as you finish them, which is how players will see it.
 
+**If the link asks you to log in to Vercel**, the project's Deployment Protection is on. It protects preview links by default. The Vercel account owner can let Brenda in either way:
+
+1. In the Vercel dashboard, open **chancla → Settings → Deployment Protection**. Under **Vercel Authentication**, either turn protection off for previews, or create a **Shareable Link** and send her that instead.
+2. Or have her log in with a Vercel account that is a member of the project's team.
+
+Either way, production is unaffected.
+
+**If `?unlock=all` still shows locked missions**, the preview was built without Vercel's system environment variables. Either play the missions in order, or add `PREVIEW_BUILD=1` for the Preview environment in Vercel and redeploy.
+
 Use a computer with a mouse or trackpad. This release does not support phones and tablets for play. Chrome or Edge on Windows, or Chrome or Safari on a Mac, are the intended browsers.
 
 ## What works in this preview and what doesn't

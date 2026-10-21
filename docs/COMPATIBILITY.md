@@ -8,11 +8,12 @@ Levels used here:
 
 | Platform | Level | Notes |
 | --- | --- | --- |
-| Linux, headless Chromium (SwiftShader, CPU rendering) | Directly tested | Playwright: two- and four-client online matches through the real UI, practice, screenshots and video. Frame rates are CPU-rendered and say nothing about real GPUs. |
+| Linux, headless Chromium (SwiftShader, CPU rendering) | Directly tested | Playwright: two- and four-client online matches through the real UI, practice, and the full four-mission campaign from a fresh save (helper bot driving) with screenshots, video and the recorded audio mix. Voice clips are verified as decoded and played. Frame rates are CPU-rendered and say nothing about real GPUs. Audio was captured as data and level-checked; nobody listened to it. |
 | Node.js 22 (server and shared sim) | Directly tested | Vitest: physics, map, sim, bots, real-server multiplayer with two and four clients, plus a 150 ms RTT jitter and interruption relay. |
 | Windows 10/11, Chrome | Indirectly tested | Same Chromium engine as the Linux runs. Pointer lock, GPU drivers, DPI scaling and Windows-specific input were not tested. |
 | Windows 10/11, Edge | Indirectly tested | Chromium-based. Same caveats as Chrome on Windows. |
 | macOS, Chrome | Indirectly tested | Chromium-based. Trackpad gestures, Retina scaling and macOS pointer lock were not tested. |
+| macOS, Safari (campaign and audio) | Unverified | Voice clips are MP3 and the score is pure Web Audio, both of which Safari supports. Audio unlock on the first click and `decodeAudioData` were not tested on Safari. |
 | macOS, Safari | Unverified | WebKit was not run, not even in an automated build. Things to check: pointer lock (Safari requires a click and shows its own banner), `requestPointerLock` without a promise, Web Audio unlock, WebGL2 availability, and fullscreen (`webkitRequestFullscreen` is wired as a fallback). |
 | Firefox (any OS) | Unverified | Not in scope. Expected to work. |
 | iOS and Android | Unsupported for combat | Menus load and the title explains that touch combat is not supported in this release. |
@@ -31,3 +32,5 @@ Run this on each target before calling a platform verified:
 8. Online: create a room. Open the invite link on a second machine, join, ready, start, play to results, rematch, leave with confirmation.
 9. Turn Wi-Fi off for 5 seconds during a match. "Reconnecting…" shows, and play resumes after Wi-Fi returns.
 10. Switch to Español. Every screen is translated.
+11. Campaign: play Mission 1 from a fresh save. You should hear music and voiced lines with subtitles, and they should stop when muted in Settings (music, effects and dialogue separately). Turn off automatic banter and check that story lines still play. Pause during a line, then resume.
+12. Campaign: retry from a checkpoint, restart a mission, leave a mission, reset campaign progress. Check that settings survive the reset.

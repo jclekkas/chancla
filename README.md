@@ -4,6 +4,8 @@
 
 ![Chancla Warfare title screen](public/og-image.jpg)
 
+**Play: https://chancla.vercel.app**
+
 A comedic first-person arcade game for the browser. You are **Doña Rosa**, neighborhood legend, and your peaceful Sunday has been hijacked by loudspeakers, influencers and leaf blowers. You have two exceptionally aerodynamic chanclas and zero patience.
 
 One golden-hour courtyard, a short interactive tutorial, three escalating waves, a boss (**EL REY DEL ESCÁNDALO** and his enormous speaker stack), results, replay. A full run takes roughly three to five minutes.

@@ -66,9 +66,9 @@ export interface Projectile {
 }
 
 export type SimEvent =
-  | { k: 'throw'; id: number; o: number; w: WeaponId; p: [number, number, number]; v: [number, number, number]; s: number }
-  | { k: 'bounce'; id: number; p: [number, number, number]; v: [number, number, number] }
-  | { k: 'pend'; id: number; p: [number, number, number]; r: 'world' | 'player' | 'expire' }
+  | { k: 'throw'; id: number; o: number; w: WeaponId; p: [number, number, number]; v: [number, number, number]; s: number; tm: number }
+  | { k: 'bounce'; id: number; p: [number, number, number]; v: [number, number, number]; tm: number }
+  | { k: 'pend'; id: number; p: [number, number, number]; r: 'world' | 'player' | 'expire'; tm: number }
   | { k: 'hit'; a: number; v: number; d: number; hp: number; head: boolean; w: WeaponId; splash: boolean; p: [number, number, number] }
   | { k: 'shielded'; a: number; v: number }
   | { k: 'elim'; a: number; v: number; w: WeaponId }
@@ -278,7 +278,8 @@ export class MatchSim {
     // Timers run on server time, so they never freeze when inputs stall.
     if (p.cooldownMs > 0) p.cooldownMs = Math.max(0, p.cooldownMs - DT_MS);
     if (p.switchMs > 0) p.switchMs = Math.max(0, p.switchMs - DT_MS);
-    p.tokens = Math.min(NET.inputBurst, p.tokens + 1);
+    // 2% headroom tolerates client clocks that run slightly fast.
+    p.tokens = Math.min(NET.inputBurst, p.tokens + 1.02);
     let budget = p.queue.length > 4 ? 1 + NET.catchUpPerTick : 1;
     while (budget-- > 0 && p.queue.length > 0 && p.tokens >= 1) {
       p.tokens -= 1;
@@ -322,7 +323,7 @@ export class MatchSim {
     p.protectedUntil = 0; // attacking cancels spawn protection
     p.stats.throws++;
     p.lastThrowAt = this.timeMs;
-    this.events.push({ k: 'throw', id: pr.id, o: p.id, w: p.weapon, p: round3(o), v: round3(v), s: seq });
+    this.events.push({ k: 'throw', id: pr.id, o: p.id, w: p.weapon, p: round3(o), v: round3(v), s: seq, tm: this.timeMs });
   }
 
   private stepProjectiles(): void {
@@ -349,17 +350,17 @@ export class MatchSim {
         const dmg = Math.round(def.damage * (head ? def.headMultiplier : 1));
         this.damage(pr, victim, dmg, head, false, hx, hy, hz);
         if (def.splashRadius > 0) this.splash(pr, hx, hy, hz, victim.id);
-        this.events.push({ k: 'pend', id: pr.id, p: round3([hx, hy, hz]), r: 'player' });
+        this.events.push({ k: 'pend', id: pr.id, p: round3([hx, hy, hz]), r: 'player', tm: this.timeMs });
         continue;
       }
       const res = stepProjectileWorld(this.world, pr, DT);
       if (res === 'bounce') {
-        this.events.push({ k: 'bounce', id: pr.id, p: round3([pr.x, pr.y, pr.z]), v: round3([pr.vx, pr.vy, pr.vz]) });
+        this.events.push({ k: 'bounce', id: pr.id, p: round3([pr.x, pr.y, pr.z]), v: round3([pr.vx, pr.vy, pr.vz]), tm: this.timeMs });
         keep.push(pr);
       } else if (res === 'end') {
         const expired = pr.ageMs > def.lifeMs || pr.traveled > def.maxRange;
         if (def.splashRadius > 0 && !expired) this.splash(pr, pr.x, pr.y, pr.z, -1);
-        this.events.push({ k: 'pend', id: pr.id, p: round3([pr.x, pr.y, pr.z]), r: expired ? 'expire' : 'world' });
+        this.events.push({ k: 'pend', id: pr.id, p: round3([pr.x, pr.y, pr.z]), r: expired ? 'expire' : 'world', tm: this.timeMs });
       } else {
         keep.push(pr);
       }

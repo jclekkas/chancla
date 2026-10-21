@@ -242,6 +242,21 @@ export class App {
     check('set-assist', (v) => this.updateSettings({ aimAssist: v }));
     check('set-motion', (v) => this.updateSettings({ reducedMotion: v }));
     check('set-fps', (v) => this.updateSettings({ showFps: v }));
+    // Keep Tab inside whichever dialog is on top.
+    this.bag.on<KeyboardEvent>(document, 'keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const open = ['modal-confirm', 'modal-settings', 'modal-howto', 'screen-results', 'screen-pause', 'screen-ctx']
+        .map((id) => $(id))
+        .find((el) => !el.hidden);
+      if (!open) return;
+      const items = Array.from(open.querySelectorAll<HTMLElement>('button, input, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter((el) => !el.hidden && el.offsetParent !== null);
+      if (items.length === 0) return;
+      const first = items[0]!, last = items[items.length - 1]!;
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && (active === first || !open.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !open.contains(active))) { e.preventDefault(); first.focus(); }
+    });
     // Escape closes dialogs.
     this.bag.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (e.key !== 'Escape') return;

@@ -53,10 +53,8 @@ const pA = new THREE.Vector3();
 const pB = new THREE.Vector3();
 const vTmp = new THREE.Vector3();
 
-let nextId = 1;
-
 export class Enemy {
-  readonly id = nextId++;
+  readonly id: number;
   readonly kind: EnemyKind;
   readonly def: KindDef;
   readonly rig: Rig;
@@ -83,7 +81,8 @@ export class Enemy {
   liftVel = 0;
   sayCd = 0;
 
-  constructor(kind: EnemyKind) {
+  constructor(kind: EnemyKind, id: number) {
+    this.id = id;
     this.kind = kind;
     this.def = ENEMY_DEFS[kind];
     this.rig = kind === 'bocinas' ? buildBocinas() : kind === 'influencer' ? buildInfluencer() : buildSoplador();
@@ -457,6 +456,8 @@ export class Enemy {
 
 export class EnemySystem {
   readonly group = new THREE.Group();
+  // IDs affect pathfinding cadence, so they must be local to this game.
+  // A process-wide counter made seeded runs depend on earlier Game instances.
   readonly pool: Enemy[] = [];
   readonly maxPerKind = 6;
 
@@ -465,7 +466,7 @@ export class EnemySystem {
     if (!e) {
       const count = this.pool.filter((p) => p.kind === kind).length;
       if (count >= this.maxPerKind) return null;
-      e = new Enemy(kind);
+      e = new Enemy(kind, this.pool.length + 1);
       this.pool.push(e);
       this.group.add(e.rig.root);
     }
@@ -477,7 +478,7 @@ export class EnemySystem {
     const kinds: EnemyKind[] = ['bocinas', 'influencer', 'soplador'];
     for (const k of kinds) {
       for (let i = 0; i < 3; i++) {
-        const e = new Enemy(k);
+        const e = new Enemy(k, this.pool.length + 1);
         this.pool.push(e);
         this.group.add(e.rig.root);
       }

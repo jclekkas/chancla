@@ -3,7 +3,7 @@
 // the tests all drive it by calling step() at NET.tickRate.
 
 import { MATCH, MOVE, NET, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from './config';
-import { lineOfSight, segmentCapsule, segmentSphere, sweepWorld, type WorldHit } from './collision';
+import { lineOfSight, segmentCapsule, segmentSphere, sweepWorld, type AABB, type WorldHit } from './collision';
 import { World, bodyHeight, eyeHeight, newBody, settle, stepMove, type Body } from './physics';
 import type { MapData, Team } from './map';
 import { Rng } from './rng';
@@ -139,7 +139,8 @@ export function launch(
 
 // Advances a projectile by dt against the world only. Shared by the server
 // and by clients that draw projectiles locally between server events.
-export function stepProjectileWorld(world: World, pr: Projectile, dt: number): 'none' | 'bounce' | 'end' {
+// `hit`, when given, receives the box the projectile touched this step.
+export function stepProjectileWorld(world: World, pr: Projectile, dt: number, hit?: { box: AABB | null }): 'none' | 'bounce' | 'end' {
   const def = WEAPONS[pr.weapon]!;
   pr.ageMs += dt * 1000;
   pr.vy -= def.gravity * dt;
@@ -149,6 +150,7 @@ export function stepProjectileWorld(world: World, pr: Projectile, dt: number): '
     pr.x += (P1.x - P0.x) * hitTmp.t + hitTmp.nx * 0.02;
     pr.y += (P1.y - P0.y) * hitTmp.t + hitTmp.ny * 0.02;
     pr.z += (P1.z - P0.z) * hitTmp.t + hitTmp.nz * 0.02;
+    if (hit) hit.box = hitTmp.box;
     if (!hitTmp.ground && pr.bounces < def.bounces) {
       pr.bounces++;
       const dot = pr.vx * hitTmp.nx + pr.vy * hitTmp.ny + pr.vz * hitTmp.nz;

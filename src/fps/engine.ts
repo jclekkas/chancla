@@ -10,7 +10,7 @@ import { lineOfSight } from '../../shared/collision';
 import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession } from '../net/session';
 import { audio } from '../audio/audio';
-import { buildWorld, type WorldView } from './render/world';
+import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
@@ -25,13 +25,22 @@ const PIXEL_CAP: Record<Quality, number> = { low: 1, medium: 1.5, high: 2 };
 
 export interface PlayerStats { k: number; d: number }
 
+// A self-contained game mode driven by the engine's frame loop (the solo
+// campaign). It owns its own simulation and uses the engine's scene,
+// camera, viewmodel, projectile view and HUD.
+export interface Controller {
+  frame(dt: number): void;
+  dispose(): void;
+}
+
 export class Engine {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly vmScene = new THREE.Scene();
   readonly vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 20);
-  mode: 'menu' | 'match' = 'menu';
+  mode: 'menu' | 'match' | 'controller' = 'menu';
+  controller: Controller | null = null;
   session: GameSession | null = null;
   practice = false;
   paused = false; // practice menu: stop ticking entirely
@@ -39,12 +48,13 @@ export class Engine {
   readonly stats = new Map<number, PlayerStats>();
   fps = 0;
   frameMs = 0;
-  private world: WorldView;
+  world: WorldView;
+  private worldOpts: WorldOptions = {};
   private quality: Quality;
   private avatars = new Map<number, Avatar>();
   private menuAvatars: Avatar[] = [];
-  private proj = new ProjectileView();
-  private vm = new ViewModel();
+  readonly proj = new ProjectileView();
+  readonly vm = new ViewModel();
   private pickups: THREE.Group[] = [];
   private acc = 0;
   private last = 0;
@@ -69,9 +79,9 @@ export class Engine {
 
   constructor(
     private stage: HTMLElement,
-    private settings: () => FpsSettings,
-    private hud: Hud,
-    private input: FpsInput,
+    readonly settings: () => FpsSettings,
+    readonly hud: Hud,
+    readonly input: FpsInput,
   ) {
     const s = settings();
     this.quality = s.quality;
@@ -141,7 +151,7 @@ export class Engine {
       this.renderer.shadowMap.enabled = s.quality !== 'low';
       this.scene.remove(this.world.group);
       disposeTree(this.world.group);
-      this.world = buildWorld(s.quality);
+      this.world = buildWorld(s.quality, this.worldOpts);
       this.scene.add(this.world.group);
       this.renderer.shadowMap.needsUpdate = true;
       this.resize();
@@ -151,7 +161,40 @@ export class Engine {
   // ------------------------------------------------------------------
   // Mode switches
 
+  /** Rebuilds El Patio with a campaign layout and lighting (or the default). */
+  setWorld(opts: WorldOptions): void {
+    this.worldOpts = opts;
+    this.scene.remove(this.world.group);
+    disposeTree(this.world.group);
+    this.world = buildWorld(this.quality, opts);
+    this.scene.add(this.world.group);
+    (this.scene.fog as THREE.Fog).color.setHex(THEMES[opts.theme ?? 'afternoon'].fog);
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  enterController(c: Controller): void {
+    this.leaveController();
+    this.mode = 'controller';
+    this.session = null;
+    this.clearMatch();
+    for (const a of this.menuAvatars) a.root.visible = false;
+    this.controller = c;
+  }
+
+  private leaveController(): void {
+    if (!this.controller) return;
+    const c = this.controller;
+    this.controller = null;
+    c.dispose();
+  }
+
+  get size(): { w: number; h: number } {
+    return { w: this.stage.clientWidth || window.innerWidth, h: this.stage.clientHeight || window.innerHeight };
+  }
+
   enterMenu(): void {
+    this.leaveController();
+    if (this.worldOpts.boxes || this.worldOpts.theme) this.setWorld({});
     this.mode = 'menu';
     this.session = null;
     this.clearMatch();
@@ -291,12 +334,13 @@ export class Engine {
     if (this.fpsT >= 0.5) { this.fps = this.fpsFrames / this.fpsT; this.fpsFrames = 0; this.fpsT = 0; }
     const t0 = performance.now();
     if (this.mode === 'match' && this.session) this.matchFrame(this.session, dt);
+    else if (this.mode === 'controller' && this.controller) this.controller.frame(dt);
     else this.menuFrame(dt);
     this.world.update(this.time);
     if (!this.contextLost) {
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
-      if (this.mode === 'match' && this.vm.root.visible) {
+      if (this.mode !== 'menu' && this.vm.root.visible) {
         this.renderer.clearDepth();
         this.renderer.render(this.vmScene, this.vmCamera);
       }

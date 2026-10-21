@@ -17,6 +17,8 @@ interface Ctx {
   master: GainNode;
   sfx: GainNode;
   music: GainNode;
+  voice: GainNode;
+  musicDuck: GainNode;
   noise: AudioBuffer;
   shaper: WaveShaperNode;
 }
@@ -55,11 +57,16 @@ export class AudioEngine {
         const master = ctx.createGain();
         const sfx = ctx.createGain();
         const music = ctx.createGain();
+        const voice = ctx.createGain();
+        // Music passes through a ducking stage so dialogue stays clear.
+        const musicDuck = ctx.createGain();
         const comp = ctx.createDynamicsCompressor();
         comp.threshold.value = -14;
         comp.ratio.value = 4;
         sfx.connect(master);
-        music.connect(master);
+        music.connect(musicDuck);
+        musicDuck.connect(master);
+        voice.connect(master);
         master.connect(comp);
         comp.connect(ctx.destination);
         music.gain.value = 0.32;
@@ -71,7 +78,8 @@ export class AudioEngine {
         for (let i = 0; i < 256; i++) { const x = (i / 128) - 1; curve[i] = Math.tanh(x * 4); }
         shaper.curve = curve;
         shaper.connect(sfx);
-        this.a = { ctx, master, sfx, music, noise, shaper };
+        this.a = { ctx, master, sfx, music, voice, musicDuck, noise, shaper };
+        voice.gain.value = this.voiceVol;
         this.applyGain();
         music.gain.value = 0.32 * this.musicVol;
         sfx.gain.value = this.sfxVol;
@@ -100,6 +108,32 @@ export class AudioEngine {
     if (!this.a) return;
     this.a.music.gain.setTargetAtTime(0.32 * music, this.a.ctx.currentTime, 0.05);
     this.a.sfx.gain.setTargetAtTime(sfx, this.a.ctx.currentTime, 0.02);
+  }
+
+  private voiceVol = 1;
+
+  setVoiceLevel(v: number): void {
+    this.voiceVol = v;
+    if (this.a) this.a.voice.gain.setTargetAtTime(v, this.a.ctx.currentTime, 0.03);
+  }
+
+  // Lowers music while a line is spoken (1 = no ducking).
+  duck(k: number): void {
+    if (this.a) this.a.musicDuck.gain.setTargetAtTime(k, this.a.ctx.currentTime, 0.12);
+  }
+
+  /** Low-level access for the music sequencer and voice playback. */
+  get nodes(): { ctx: AudioContext; music: GainNode; voice: GainNode; sfx: GainNode; master: GainNode } | null {
+    return this.a && { ctx: this.a.ctx, music: this.a.music, voice: this.a.voice, sfx: this.a.sfx, master: this.a.master };
+  }
+
+  // Test hook: records the final mix (music, effects and voice) as a stream.
+  captureStream(): MediaStream | null {
+    const a = this.a;
+    if (!a || typeof a.ctx.createMediaStreamDestination !== 'function') return null;
+    const dest = a.ctx.createMediaStreamDestination();
+    a.master.connect(dest);
+    return dest.stream;
   }
 
   private applyGain(): void {

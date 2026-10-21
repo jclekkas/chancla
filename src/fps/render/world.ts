@@ -14,6 +14,32 @@ export interface WorldView {
   sun: THREE.DirectionalLight;
   update(t: number): void;
   drawCalls: number;
+  // Campaign: lift the ambient light (the patio brightening as it is cleaned).
+  setBrightness(k: number): void;
+}
+
+export type ThemeName = 'afternoon' | 'morning' | 'noon' | 'dusk';
+
+interface Theme {
+  sky: [number, number, number]; // top, middle, horizon
+  sunDisk: number; sunDiskPos: [number, number, number];
+  hemi: [number, number, number]; // sky, ground, intensity
+  sun: [number, number]; sunPos: [number, number, number];
+  fog: number;
+  bulbsGlow: boolean;
+}
+
+export const THEMES: Record<ThemeName, Theme> = {
+  afternoon: { sky: [0x5a3a8c, 0xf4a56c, 0xffd9a0], sunDisk: 0xffe6a8, sunDiskPos: [-120, 30, 50], hemi: [0xffe4c4, 0x9a5a48, 1.35], sun: [0xffc890, 2.4], sunPos: [-28, 30, 16], fog: 0xf3b07a, bulbsGlow: false },
+  morning: { sky: [0x6fa6dc, 0xffd6b0, 0xfff0d8], sunDisk: 0xfff6dc, sunDiskPos: [120, 26, -40], hemi: [0xeaf2ff, 0xa07a62, 1.45], sun: [0xfff0d6, 2.1], sunPos: [30, 26, -12], fog: 0xf2dcc8, bulbsGlow: false },
+  noon: { sky: [0x4f9fe6, 0x9fd3f2, 0xf2f0dc], sunDisk: 0xffffff, sunDiskPos: [-20, 120, 20], hemi: [0xfff6e6, 0xb08a66, 1.6], sun: [0xfffaf0, 2.7], sunPos: [-6, 42, 10], fog: 0xe8e4d4, bulbsGlow: false },
+  dusk: { sky: [0x24104a, 0xb8467a, 0xff9a5a], sunDisk: 0xff7a4a, sunDiskPos: [-130, 10, 40], hemi: [0xa88ad8, 0x4a2a3a, 1.05], sun: [0xff9a6a, 1.25], sunPos: [-40, 12, 12], fog: 0x6a3a6a, bulbsGlow: true },
+};
+
+export interface WorldOptions {
+  boxes?: readonly MapBox[]; // a campaign layout instead of the base map
+  theme?: ThemeName;
+  teamDecor?: boolean; // Sol/Luna banners and emblems (multiplayer only)
 }
 
 const STUCCO: Record<string, number> = {
@@ -49,7 +75,8 @@ const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const LEAF = new THREE.IcosahedronGeometry(0.5, 0);
 const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
-export function buildWorld(quality: Quality): WorldView {
+export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
+  const th = THEMES[opts.theme ?? 'afternoon'];
   const group = new THREE.Group();
   group.name = 'el-patio';
   const batch = new GeoBatch();
@@ -60,7 +87,7 @@ export function buildWorld(quality: Quality): WorldView {
 
   // ---------------------------------------------------------------- sky
   const skyGeo = new THREE.SphereGeometry(160, 24, 12);
-  const top = new THREE.Color(0x5a3a8c), mid = new THREE.Color(0xf4a56c), hor = new THREE.Color(0xffd9a0);
+  const top = new THREE.Color(th.sky[0]), mid = new THREE.Color(th.sky[1]), hor = new THREE.Color(th.sky[2]);
   const pos = skyGeo.attributes.position as THREE.BufferAttribute;
   const cols: number[] = [];
   const c = new THREE.Color();
@@ -73,16 +100,16 @@ export function buildWorld(quality: Quality): WorldView {
   const sky = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
   sky.renderOrder = -10;
   group.add(sky);
-  const sunDisk = new THREE.Mesh(new THREE.CircleGeometry(10, 24), new THREE.MeshBasicMaterial({ color: 0xffe6a8, fog: false }));
-  sunDisk.position.set(-120, 30, 50);
+  const sunDisk = new THREE.Mesh(new THREE.CircleGeometry(10, 24), new THREE.MeshBasicMaterial({ color: th.sunDisk, fog: false }));
+  sunDisk.position.set(...th.sunDiskPos);
   sunDisk.lookAt(0, 0, 0);
   group.add(sunDisk);
 
   // ------------------------------------------------------------- lights
-  const hemi = new THREE.HemisphereLight(0xffe4c4, 0x9a5a48, 1.35);
+  const hemi = new THREE.HemisphereLight(th.hemi[0], th.hemi[1], th.hemi[2]);
   group.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffc890, 2.4);
-  sun.position.set(-28, 30, 16);
+  const sun = new THREE.DirectionalLight(th.sun[0], th.sun[1]);
+  sun.position.set(...th.sunPos);
   sun.target.position.set(0, 0, 0);
   const sc = sun.shadow.camera;
   sc.left = -32; sc.right = 32; sc.top = 26; sc.bottom = -26; sc.near = 1; sc.far = 100;
@@ -111,7 +138,7 @@ export function buildWorld(quality: Quality): WorldView {
 
   const signs: Array<{ text: string; x: number; y: number; z: number; ry: number; w: number; bg: string; fg: string }> = [];
 
-  for (const bx of EL_PATIO.boxes) addBox(bx);
+  for (const bx of opts.boxes ?? EL_PATIO.boxes) addBox(bx);
 
   function addBox(b: MapBox): void {
     const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
@@ -149,7 +176,13 @@ export function buildWorld(quality: Quality): WorldView {
         for (let x = b.minX + 0.4; x < b.maxX; x += 0.8) pots.add(x, b.maxY + 0.15, cz, 0.28, 0.3, 0.28, 0, COLORS.terracottaDark);
         return;
       case 'lintel':
+      case 'wood':
         batch.add(woodMat, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 1.5));
+        return;
+      case 'stall':
+        // Furniture and market tables: painted wood with a tiled top.
+        batch.add(toon(COLORS.turquoise, { map: wood }), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 1));
+        batch.add(toon(COLORS.cream), boxGeo(b.minX - 0.03, b.maxY - 0.06, b.minZ - 0.03, b.maxX + 0.03, b.maxY, b.maxZ + 0.03, 1));
         return;
       case 'planter':
         batch.add(toon(COLORS.terracottaDark, { map: stucco }), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 2));
@@ -302,7 +335,7 @@ export function buildWorld(quality: Quality): WorldView {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(1.2, 2.2, 0.04));
     batch.addMesh(toon(color), UNIT, m);
   };
-  for (const s of [-1, 1] as const) {
+  for (const s of opts.teamDecor === false ? [] : [-1, 1] as const) {
     const color = s < 0 ? COLORS.sol : COLORS.luna;
     // Banners on the spawn-side face of the separation houses.
     for (const z of [-8.5, -5.5, 3.5, 7.5]) banner(s * 21.06, s < 0 ? z : -z, Math.PI / 2, color);
@@ -365,6 +398,7 @@ export function buildWorld(quality: Quality): WorldView {
   string(-17, 8, 17, -8, 7.2);
   group.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(bulbPts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink })));
   const bulbMesh = bulbs.build(new THREE.SphereGeometry(0.5, 6, 4), flat(0xffffff));
+  if (bulbMesh && th.bulbsGlow) bulbMesh.scale.setScalar(1);
   if (bulbMesh) group.add(bulbMesh);
 
   // ---------------------------------------------- skyline landmark: church
@@ -425,6 +459,10 @@ export function buildWorld(quality: Quality): WorldView {
     group,
     sun,
     drawCalls: calls,
+    setBrightness(k: number) {
+      hemi.intensity = th.hemi[2] * k;
+      sun.intensity = th.sun[1] * (0.85 + 0.15 * k);
+    },
     update(t: number) {
       lines.children.forEach((o) => { if ((o as THREE.InstancedMesh).isInstancedMesh) o.position.y = Math.sin(t * 1.3) * 0.03; });
       if (water) (water.material as THREE.MeshToonMaterial).emissive.setHSL(0.52, 0.6, 0.08 + Math.sin(t * 2) * 0.02);

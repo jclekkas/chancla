@@ -14,6 +14,10 @@ export interface FpsSettings {
   music: number;
   sfx: number;
   showStats: boolean;
+  voice: number; // dialogue volume
+  banter: boolean; // automatic reaction lines
+  subtitles: 'auto' | 'es' | 'en' | 'off';
+  campaignHints: boolean; // objective markers and tips
   practiceDifficulty: 'easy' | 'normal' | 'hard';
   practiceAllies: number;
   practiceEnemies: number;
@@ -24,7 +28,7 @@ const KEY = 'chancla.mp.settings.v1';
 export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): FpsSettings {
   return {
     lang, name: '', sensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium',
-    music: 0.45, sfx: 0.85, showStats: false, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2,
+    music: 0.45, sfx: 0.85, showStats: false, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2,
   };
 }
 
@@ -46,6 +50,10 @@ export class FpsSettingsStore {
       music: num(r.music, d.music, 0, 1),
       sfx: num(r.sfx, d.sfx, 0, 1),
       showStats: bool(r.showStats, d.showStats),
+      voice: num(r.voice, d.voice, 0, 1),
+      banter: bool(r.banter, d.banter),
+      subtitles: r.subtitles === 'es' || r.subtitles === 'en' || r.subtitles === 'off' || r.subtitles === 'auto' ? r.subtitles : d.subtitles,
+      campaignHints: bool(r.campaignHints, d.campaignHints),
       practiceDifficulty: r.practiceDifficulty === 'easy' || r.practiceDifficulty === 'hard' || r.practiceDifficulty === 'normal' ? r.practiceDifficulty : d.practiceDifficulty,
       practiceAllies: num(r.practiceAllies, d.practiceAllies, 0, 1),
       practiceEnemies: num(r.practiceEnemies, d.practiceEnemies, 1, 2),

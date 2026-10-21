@@ -87,6 +87,26 @@
         <div class="vig hurt" id="vig-hurt" aria-hidden="true"></div>
         <div class="vig low" id="vig-low" aria-hidden="true"></div>
         <div class="names" id="names" aria-hidden="true"></div>
+        <div class="m-hud" id="m-hud" hidden>
+          <div class="m-obj" id="m-obj" role="status" aria-live="polite">
+            <div class="m-title" id="m-title"></div>
+            <div class="m-stage" id="m-stage"></div>
+            <ul class="m-goals" id="m-goals"></ul>
+          </div>
+          <div class="m-timer" id="m-timer">0:00</div>
+          <div class="m-counter" id="m-counter">
+            <span class="m-portrait" id="m-portrait" aria-hidden="true"></span>
+            <span class="m-curlers" id="m-curlers" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <b id="m-count">0/6</b>
+          </div>
+          <div class="m-boss" id="m-boss" hidden><span id="m-boss-name"></span><b id="m-boss-n"></b><span class="pips" id="m-boss-pips"><i></i><i></i><i></i></span></div>
+          <div class="m-arrow" id="m-arrow" hidden aria-hidden="true"></div>
+          <div class="m-tip" id="m-tip" hidden role="status"></div>
+          <div class="m-cp" id="m-cp" hidden data-t="m.checkpoint"></div>
+          <div class="m-ko" id="m-ko" hidden data-t="m.ko"></div>
+          <div class="m-skip" id="m-skip" hidden data-t="m.skip"></div>
+        </div>
+        <div class="subs" id="subs" hidden aria-live="polite"><b id="subs-who"></b> <span id="subs-text"></span></div>
         <div class="click-to-play" id="click-to-play" hidden><button type="button" class="btn primary" id="btn-click-play" data-t="hud.clickToPlay"></button></div>
       </div>
 
@@ -104,7 +124,8 @@
           <p class="tagline" data-t="brand.tagline"></p>
           <p class="pitch" data-t="brand.pitch"></p>
           <div class="title-actions">
-            <button type="button" class="btn primary big" id="btn-online" data-t="title.online"></button>
+            <button type="button" class="btn primary big" id="btn-campaign" data-t="title.campaign"></button>
+            <button type="button" class="btn big alt2" id="btn-online" data-t="title.online"></button>
             <button type="button" class="btn big alt" id="btn-practice" data-t="title.practice"></button>
           </div>
           <p class="server-status" id="server-status" role="status"></p>
@@ -209,6 +230,58 @@
       </section>
 
       <!-- Results -->
+      <!-- Campaign: mission select -->
+      <section id="scr-campaign" class="screen overlay campaign" hidden role="dialog" aria-modal="true" aria-labelledby="camp-title">
+        <div class="panel wide">
+          <h2 id="camp-title" data-t="camp.title"></h2>
+          <p class="camp-sub" data-t="camp.subtitle"></p>
+          <p class="note" data-t="camp.premise"></p>
+          <p class="err" id="camp-storage" hidden data-t="camp.notSaved"></p>
+          <p class="lobby-status" id="camp-all" hidden data-t="camp.allDone"></p>
+          <div class="missions" id="camp-missions"></div>
+          <div class="actions">
+            <button type="button" class="btn ghost" id="btn-camp-back" data-t="camp.back"></button>
+            <button type="button" class="btn ghost danger-text" id="btn-camp-reset" data-t="camp.reset"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Campaign: mission intro -->
+      <section id="scr-mintro" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mi-title">
+        <div class="panel wide mintro">
+          <p class="label" id="mi-num"></p>
+          <h2 id="mi-title"></h2>
+          <p id="mi-premise"></p>
+          <p class="mi-obj"><b data-t="camp.objective"></b> <span id="mi-objective"></span></p>
+          <p class="note" id="mi-est"></p>
+          <ul class="ch-list" id="mi-ch"></ul>
+          <p class="note" id="mi-status" role="status"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-mi-start" data-t="mi.start"></button>
+            <button type="button" class="btn ghost" id="btn-mi-back" data-t="camp.back"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Campaign: mission results -->
+      <section id="scr-mresults" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mr-title">
+        <div class="panel wide">
+          <h2 id="mr-title" data-t="mr.title"></h2>
+          <p class="res-sub" id="mr-name"></p>
+          <div class="mr-portrait" id="mr-portrait" role="img"></div>
+          <p class="lobby-status" id="mr-best"></p>
+          <dl class="mr-stats" id="mr-stats"></dl>
+          <h3 data-t="camp.challenges"></h3>
+          <ul class="ch-list" id="mr-ch"></ul>
+          <p class="note" id="mr-final" hidden data-t="mr.final"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-mr-next" data-t="mr.next"></button>
+            <button type="button" class="btn" id="btn-mr-retry" data-t="mr.retry"></button>
+            <button type="button" class="btn ghost" id="btn-mr-select" data-t="mr.select"></button>
+          </div>
+        </div>
+      </section>
+
       <section id="scr-results" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="res-title">
         <div class="panel wide">
           <h2 id="res-title"></h2>
@@ -233,6 +306,8 @@
           <button type="button" class="btn" id="btn-pause-settings" data-t="pause.settings"></button>
           <button type="button" class="btn" id="btn-pause-controls" data-t="pause.controls"></button>
           <button type="button" class="btn" id="btn-fullscreen" data-t="pause.fullscreen"></button>
+          <button type="button" class="btn" id="btn-pause-retrycp" data-t="pause.retryCp" hidden></button>
+          <button type="button" class="btn" id="btn-pause-restart" data-t="pause.restart" hidden></button>
           <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.leave"></button>
         </div>
       </section>
@@ -260,6 +335,18 @@
           </div>
           <label class="field"><span data-t="settings.music"></span><input type="range" id="set-music" min="0" max="100" step="1" /><output id="out-music"></output></label>
           <label class="field"><span data-t="settings.sfx"></span><input type="range" id="set-sfx" min="0" max="100" step="1" /><output id="out-sfx"></output></label>
+          <label class="field"><span data-t="settings.voice"></span><input type="range" id="set-voice" min="0" max="100" step="1" /><output id="out-voice"></output></label>
+          <label class="field check"><input type="checkbox" id="set-banter" /><span data-t="settings.banter"></span></label>
+          <div class="field"><span id="lbl-subs" data-t="settings.subtitles"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-subs">
+              <button type="button" role="radio" data-subs="auto" data-t="settings.subAuto"></button>
+              <button type="button" role="radio" data-subs="es">Español</button>
+              <button type="button" role="radio" data-subs="en">English</button>
+              <button type="button" role="radio" data-subs="off" data-t="settings.subOff"></button>
+            </div>
+          </div>
+          <label class="field check"><input type="checkbox" id="set-hints" /><span data-t="settings.hints"></span></label>
+          <p class="note" data-t="settings.voiceNote"></p>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
         </div>

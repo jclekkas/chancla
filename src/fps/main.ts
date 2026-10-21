@@ -19,11 +19,15 @@ import { FpsInput } from './input';
 import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
+import { music } from '../audio/music';
+import { Dialogue } from '../audio/dialogue';
+import { CampaignUi } from '../campaign/ui';
+import type { SimEvent } from '../../shared/sim';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
-type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'none';
-const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost'];
+type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
+const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
 const OVERLAYS = new Set<ScreenId>(['settings', 'controls', 'confirm']);
 
 // ---------------------------------------------------------------------
@@ -72,6 +76,20 @@ let retry: (() => void) | null = null;
 let pendingInviteCode = '';
 let lastCode: string | null = null;
 let lockFailures = 0;
+
+// Dialogue (campaign and multiplayer quips) with subtitles.
+const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
+const dialogue = new Dialogue(
+  () => ({ banter: store.value.banter, subtitles: store.value.subtitles, uiLang: getLang }),
+  (text, who) => {
+    const box = $('subs');
+    box.hidden = !text;
+    if (!text) return;
+    $('subs-who').textContent = SPEAKERS[who] ? `${SPEAKERS[who]}:` : '';
+    $('subs-text').textContent = text;
+  },
+);
+let campaign: CampaignUi;
 
 // ---------------------------------------------------------------------
 // Screens
@@ -123,6 +141,7 @@ function render(): void {
 }
 
 function updatePracticePause(): void {
+  if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0);
   if (!host || !engine) return;
   const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0);
   if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
@@ -165,6 +184,26 @@ function webglAvailable(): boolean {
 }
 
 async function boot(): Promise<void> {
+  campaign = new CampaignUi({
+    engine: () => engine,
+    input: () => input,
+    dialogue,
+    get base() { return base; },
+    show: (id) => show(id as ScreenId),
+    confirm: confirmBox,
+    toast,
+    setActive: (on) => {
+      inMatch = on;
+      practice = false;
+      if (!on) { input?.release(); hud.reset(); }
+      render();
+    },
+    render,
+    baseUrl: BASE,
+  }, storage);
+  const uiTick = () => { campaign.tick(); if (!campaign.active) dialogue.update(); requestAnimationFrame(uiTick); };
+  requestAnimationFrame(uiTick);
+  music.play('menu');
   document.documentElement.lang = getLang();
   document.title = t('meta.title');
   applyDom(document);
@@ -254,11 +293,50 @@ function handlers() {
     state: (s: ConnState, detail?: string) => onState(s, detail),
     room: (room: RoomView) => onRoom(room),
     error: (code: ErrorCode) => onError(code),
-    event: (e: Parameters<Engine['onEvent']>[0]) => engine?.onEvent(e),
+    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); mpDialogue(e); },
     localThrow: (w: 0 | 1) => engine?.onLocalThrow(w),
     impact: (...a: Parameters<Engine['onImpact']>) => engine?.onImpact(...a),
     left: () => endSession('title'),
   };
+}
+
+// Multiplayer voice lines, played locally from replicated game events (no
+// audio is ever sent over the network):
+//   local       your own reactions: eliminations, respawns, low health
+//   proximity   another Rosa's elimination quip if she is within 12 m,
+//               quieter with distance; the line is picked from the event so
+//               every nearby listener hears the same one
+//   match-wide  start and result lines, each client for its own team
+let mpLowHp = false;
+function mpDialogue(e: SimEvent): void {
+  const s = session;
+  if (!s) return;
+  const me = s.id;
+  switch (e.k) {
+    case 'elim': {
+      if (e.a === me) { dialogue.react('elim'); break; }
+      const r = s.remotes.get(e.a);
+      if (r && e.a !== e.v) {
+        const d = Math.hypot(r.x - s.body.x, r.z - s.body.z);
+        if (d < 12) dialogue.say(['elim1', 'elim2', 'elim3', 'elim4'][(e.a * 7 + e.v * 3) % 4]!, { volume: Math.max(0.25, 1 - d / 12) });
+      }
+      break;
+    }
+    case 'spawn':
+      if (e.id === me && s.phase === 'playing') dialogue.react('respawn');
+      break;
+    case 'hit':
+      if (e.v === me && e.hp > 0 && e.hp <= 30 && !mpLowHp) { mpLowHp = true; dialogue.react('low'); }
+      if (e.v === me && e.hp > 30) mpLowHp = false;
+      break;
+    case 'end': {
+      const team = s.team;
+      dialogue.react(e.winner === -1 ? 'start' : e.winner === team ? 'win' : 'lose');
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 function newSession(factory: TransportFactory, now?: () => number): GameSession {
@@ -315,7 +393,8 @@ function endSession(to: ScreenId | null): void {
   if (engine) engine.paused = false;
   hud.scoreboard(false, null, new Map(), -1);
   hud.connection(null);
-  audio.setMusicMode('title');
+  music.play('menu');
+  dialogue.reset();
   if (to) show(to);
 }
 
@@ -363,7 +442,8 @@ function onRoom(room: RoomView): void {
     if (!inMatch) {
       inMatch = true;
       engine?.enterMatch(session!, room.practice);
-      audio.setMusicMode('game');
+      music.play('combat');
+      dialogue.react('start');
       show('none');
       if (practice) input?.requestLock(); // the Start click is still a user gesture in most browsers
     } else if (base === 'results') {
@@ -375,6 +455,7 @@ function onRoom(room: RoomView): void {
     return;
   }
   if (room.phase === 'results') {
+    music.play('results');
     input?.exitLock();
     input?.release();
     renderResults(room);
@@ -382,7 +463,8 @@ function onRoom(room: RoomView): void {
     return;
   }
   // Lobby
-  if (inMatch) { inMatch = false; engine?.enterMenu(); audio.setMusicMode('title'); }
+  if (inMatch) { inMatch = false; engine?.enterMenu(); }
+  music.play('lobby');
   if (room.practice && room.owner === session?.id) {
     // Practice rooms start immediately with the chosen bots.
     session?.send({ t: 'start' });
@@ -506,6 +588,7 @@ function applyInputSettings(): void {
   const v = store.value;
   if (input) { input.sensitivity = v.sensitivity; input.invertY = v.invertY; }
   audio.setLevels(v.music, v.sfx);
+  audio.setVoiceLevel(v.voice);
   engine?.applySettings();
   document.documentElement.classList.toggle('reduced-motion', v.reducedMotion);
 }
@@ -519,6 +602,11 @@ function renderSettings(): void {
   });
   seg('lang', v.lang);
   seg('q', v.quality);
+  seg('subs', v.subtitles);
+  ($('set-voice') as HTMLInputElement).value = String(Math.round(v.voice * 100));
+  $('out-voice').textContent = `${Math.round(v.voice * 100)}%`;
+  ($('set-banter') as HTMLInputElement).checked = v.banter;
+  ($('set-hints') as HTMLInputElement).checked = v.campaignHints;
   ($('set-sens') as HTMLInputElement).value = String(Math.round(v.sensitivity * 100));
   $('out-sens').textContent = v.sensitivity.toFixed(2);
   ($('set-invert') as HTMLInputElement).checked = v.invertY;
@@ -572,8 +660,20 @@ function openOnline(): void {
 
 function openPause(): void {
   if (!inMatch || base !== 'none') return;
-  $('pause-note').textContent = practice ? t('pause.practiceNote') : t('pause.note');
+  if (campaign.runtime?.inVictory) return;
+  const m = campaign.active;
+  $('pause-note').textContent = m ? t('pause.missionNote') : practice ? t('pause.practiceNote') : t('pause.note');
+  ($('btn-pause-retrycp') as HTMLButtonElement).hidden = !m;
+  ($('btn-pause-restart') as HTMLButtonElement).hidden = !m;
   show('pause');
+}
+
+function confirmBox(title: string, body: string, yes: string, action: () => void): void {
+  $('confirm-title').textContent = title;
+  $('confirm-body').textContent = body;
+  $('btn-confirm-yes').textContent = yes;
+  confirmAction = action;
+  pushOverlay('confirm');
 }
 
 function resume(): void {
@@ -582,6 +682,9 @@ function resume(): void {
 }
 
 function askLeave(): void {
+  if (campaign.active) { campaign.leave(); return; }
+  $('confirm-title').textContent = t('confirm.leaveTitle');
+  $('btn-confirm-yes').textContent = t('confirm.yes');
   const body = practice ? t('confirm.leavePractice') : t('confirm.leaveBody');
   $('confirm-body').textContent = body;
   confirmAction = () => endSession('title');
@@ -618,6 +721,7 @@ function on(id: string, f: (e: Event) => void): void {
 }
 
 function bindUi(): void {
+  on('btn-campaign', () => campaign.openSelect());
   on('btn-online', openOnline);
   on('btn-practice', () => { renderPracticeSetup(); show('practice'); });
   on('btn-controls', () => pushOverlay('controls'));
@@ -698,23 +802,32 @@ function bindUi(): void {
   check('set-invert', (v) => store.update({ invertY: v }));
   check('set-motion', (v) => store.update({ reducedMotion: v }));
   check('set-stats', (v) => store.update({ showStats: v }));
+  range('set-voice', (v) => store.update({ voice: v / 100 }));
+  check('set-banter', (v) => store.update({ banter: v }));
+  check('set-hints', (v) => store.update({ campaignHints: v }));
+  document.querySelectorAll<HTMLButtonElement>('[data-subs]').forEach((b) => b.addEventListener('click', () => {
+    store.update({ subtitles: b.dataset.subs as 'auto' | 'es' | 'en' | 'off' });
+    renderSettings();
+    dialogue.refreshSubtitle();
+  }));
 
   // Esc closes the newest panel when the pointer is not locked.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || input?.locked) return;
     const cur = top();
     if (OVERLAYS.has(cur)) { e.preventDefault(); popOverlay(); return; }
-    if (cur === 'online' || cur === 'practice') { e.preventDefault(); show('title'); return; }
+    if (cur === 'online' || cur === 'practice' || cur === 'campaign') { e.preventDefault(); show('title'); music.play('menu'); return; }
+    if (cur === 'mintro' || cur === 'mresults') { e.preventDefault(); campaign.openSelect(); return; }
     if (cur === 'pause') { e.preventDefault(); resume(); }
   });
   window.addEventListener('resize', () => engine?.resize());
   document.addEventListener('fullscreenchange', () => engine?.resize());
   window.addEventListener('beforeunload', (e) => {
-    if (inMatch && !practice) { e.preventDefault(); e.returnValue = ''; }
+    if (inMatch && !practice && !campaign.active) { e.preventDefault(); e.returnValue = ''; }
   });
   window.addEventListener('pagehide', () => { session?.close(); });
   // Unlock audio on the first interaction of any kind.
-  const unlock = () => { audio.unlock(); audio.setMusicMode(inMatch ? 'game' : 'title'); };
+  const unlock = () => { audio.unlock(); audio.setLevels(store.value.music, store.value.sfx); audio.setVoiceLevel(store.value.voice); music.resume(); };
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
 }
@@ -755,6 +868,10 @@ function debugApi() {
     session: () => session,
     engine: () => engine,
     input: () => input,
+    campaign: () => campaign,
+    dialogue: () => dialogue,
+    music: () => music,
+    audio: () => audio,
   };
 }
 

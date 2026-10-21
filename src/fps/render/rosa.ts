@@ -116,8 +116,10 @@ export class Avatar {
   private wasAlive = true;
   private smooth = { lean: 0, hips: 0, crouch: 0 };
   readonly team: Team;
+  private curlers: THREE.Mesh[] = [];
 
-  constructor(team: Team) {
+  // `home`: the campaign look (no hat or hood), so her ruleros show.
+  constructor(team: Team, opts: { home?: boolean } = {}) {
     this.team = team;
     const c = TEAM[team];
     const skin = this.flashable(COLORS.skin);
@@ -202,7 +204,21 @@ export class Avatar {
     const lips = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.018, 0.02), toon(0xc0142f));
     lips.position.set(0, 0.03, -0.152);
     this.head.add(lips);
-    if (team === 0) {
+    if (opts.home) {
+      // Six curler slots around the bun, filled as ruleros are recovered.
+      const cols = [COLORS.pink, COLORS.turquoise, COLORS.marigold, COLORS.violet, COLORS.cream, COLORS.gold];
+      const cg = new THREE.CylinderGeometry(0.065, 0.065, 0.2, 12);
+      for (let i = 0; i < 6; i++) {
+        // Two rows of three across the crown, plainly visible from any side.
+        const row = i < 3 ? 0 : 1, k = (i % 3) - 1;
+        const m = new THREE.Mesh(cg, toon(cols[i]!, { emissive: 0x1a1010 }));
+        m.position.set(k * 0.12, 0.2 - row * 0.06, -0.04 + row * 0.15);
+        m.rotation.set(0, 0, Math.PI / 2);
+        m.visible = false;
+        this.head.add(outlined(m, 1.12));
+        this.curlers.push(m);
+      }
+    } else if (team === 0) {
       // Wide straw sun hat with a marigold band and a flower.
       const brim = new THREE.Mesh(geo.brim, toon(0xe8c77a));
       brim.position.y = 0.24;
@@ -279,6 +295,11 @@ export class Avatar {
     const m = toon(color).clone();
     this.flashMats.push(m);
     return m;
+  }
+
+  /** Shows the first `n` recovered ruleros on her head (campaign). */
+  setRuleros(n: number): void {
+    this.curlers.forEach((m, i) => (m.visible = i < n));
   }
 
   dispose(): void {

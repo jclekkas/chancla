@@ -1,0 +1,130 @@
+{
+  "players": 2,
+  "startedAt": "2026-10-21T13:28:23.084Z",
+  "steps": [
+    "0.6s server and site up",
+    "3.9s title shows server ready",
+    "7.3s room created; invite link format http://localhost:4173/#room=<code>",
+    "31.8s Beto joined by invite link",
+    "37.0s everyone ready; host can start",
+    "38.1s match started on every client",
+    "43.0s score [0,0] phases playing,playing | -24.6,-4.2 path=5 mv=false shots=0 remotes=1 vx=0.0 | 24.6,4.2 path=4 mv=false shots=0 remotes=1 vx=0.0",
+    "53.0s score [0,0] phases playing,playing | -14.9,-3.0 path=2 mv=true shots=0 remotes=1 vx=5.9 | 14.9,2.8 path=1 mv=true shots=0 remotes=1 vx=-6.0",
+    "64.0s combat screenshot (enemy within 12 m)",
+    "65.4s score [0,0] phases playing,playing | -6.0,3.4 path=0 mv=false shots=17 remotes=1 vx=0.0 | 4.1,6.7 path=3 mv=false shots=16 remotes=1 vx=0.0",
+    "75.4s score [1,0] phases playing,playing | -5.9,-5.1 path=1 mv=true shots=32 remotes=1 vx=4.5 | 23.5,-3.3 path=4 mv=true shots=18 remotes=1 vx=-2.9",
+    "85.5s score [1,0] phases playing,playing | -4.1,-6.7 path=0 mv=false shots=32 remotes=1 vx=0.0 | 14.4,3.0 path=2 mv=true shots=18 remotes=1 vx=-5.9",
+    "95.5s score [1,1] phases playing,playing | -24.2,-0.0 path=4 mv=true shots=33 remotes=1 vx=6.0 | 4.0,6.8 path=0 mv=false shots=41 remotes=1 vx=0.0",
+    "105.5s score [1,1] phases playing,playing | -12.3,-1.1 path=2 mv=true shots=33 remotes=1 vx=5.6 | 4.0,6.8 path=0 mv=false shots=41 remotes=1 vx=0.0",
+    "115.5s score [1,1] phases playing,playing | -1.1,-4.9 path=2 mv=true shots=36 remotes=1 vx=5.0 | 1.7,5.3 path=2 mv=true shots=44 remotes=1 vx=-5.1",
+    "125.6s score [1,1] phases playing,playing | 0.1,-4.2 path=1 mv=true shots=39 remotes=1 vx=-0.2 | 6.8,4.5 path=1 mv=true shots=47 remotes=1 vx=-4.4",
+    "135.6s score [1,1] phases playing,playing | -0.8,-3.6 path=2 mv=true shots=42 remotes=1 vx=5.0 | 3.2,6.2 path=2 mv=true shots=50 remotes=1 vx=-5.1",
+    "140.5s results on every client",
+    "145.1s rematch started; scores [0,0]",
+    "148.5s guest left with confirmation; host sees the roster shrink",
+    "150.7s invalid room code shows an error"
+  ],
+  "inviteHasOnlyCode": true,
+  "startGatedOnReady": true,
+  "resultsConsistent": true,
+  "results": {
+    "title": "It’s a tie",
+    "sol": "1",
+    "luna": "1"
+  },
+  "clientInfo": [
+    {
+      "mode": "match",
+      "fps": 10,
+      "frameMs": 2.91,
+      "drawCalls": 25,
+      "triangles": 1374,
+      "geometries": 121,
+      "textures": 12,
+      "avatars": 1,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 1,
+        "state": "online",
+        "phase": "playing",
+        "team": 0,
+        "alive": true,
+        "hp": 100,
+        "weapon": 1,
+        "rtt": 2,
+        "pos": [
+          -4.06,
+          0,
+          0.14
+        ],
+        "scores": [
+          1,
+          1
+        ],
+        "remotes": 1,
+        "projectiles": 0,
+        "corrections": 0,
+        "maxCorrection": 0,
+        "code": "set"
+      }
+    },
+    {
+      "mode": "match",
+      "fps": 10,
+      "frameMs": 2.98,
+      "drawCalls": 22,
+      "triangles": 1720,
+      "geometries": 129,
+      "textures": 12,
+      "avatars": 1,
+      "quality": "low",
+      "pixelRatio": 1,
+      "session": {
+        "id": 2,
+        "state": "online",
+        "phase": "playing",
+        "team": 1,
+        "alive": true,
+        "hp": 100,
+        "weapon": 0,
+        "rtt": 1,
+        "pos": [
+          1.45,
+          0,
+          3.83
+        ],
+        "scores": [
+          1,
+          1
+        ],
+        "remotes": 1,
+        "projectiles": 0,
+        "corrections": 1,
+        "maxCorrection": 0.025,
+        "code": "set"
+      }
+    }
+  ],
+  "rematchHostOnly": true,
+  "rematchScoresReset": true,
+  "errors": [
+    {
+      "player": "Ana",
+      "errors": []
+    },
+    {
+      "player": "Beto",
+      "errors": []
+    }
+  ],
+  "fpsPlayer1": {
+    "samples": 355,
+    "median": 10,
+    "p10": 10,
+    "note": "Headless Chromium with SwiftShader (CPU rendering), all clients on one machine. Not representative of real GPUs."
+  },
+  "video": "artifacts/mp/2p-match.webm",
+  "finishedAt": "2026-10-21T13:30:54.881Z",
+  "ok": true
+}

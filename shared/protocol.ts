@@ -20,7 +20,7 @@ export type ClientMsg =
   | { t: 'rematch' }
   | { t: 'lobby' }
   | { t: 'leave' }
-  | { t: 'ping'; c: number }
+  | { t: 'ping'; c: number; r?: number } // r: the client's measured round trip, ms
   | { t: 'i'; d: InputTuple[] };
 
 export type ErrorCode =
@@ -164,7 +164,8 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
     case 'bots':
       return isBool(m.enabled) && DIFFS.includes(m.difficulty as string) ? { t: 'bots', enabled: m.enabled, difficulty: m.difficulty as BotDifficulty } : null;
     case 'ping':
-      return isNum(m.c) ? { t: 'ping', c: m.c } : null;
+      if (!isNum(m.c)) return null;
+      return isNum(m.r) ? { t: 'ping', c: m.c, r: Math.max(0, Math.min(9999, Math.round(m.r))) } : { t: 'ping', c: m.c };
     case 'i':
       if (!Array.isArray(m.d) || m.d.length === 0 || m.d.length > 8) return null;
       return m.d.every(validInput) ? { t: 'i', d: m.d as InputTuple[] } : null;

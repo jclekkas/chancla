@@ -253,7 +253,7 @@ export class Engine {
         if (e.id === me) {
           audio.play('pickup');
           const p = EL_PATIO.pickups[e.i];
-          if (p) this.hud.floatText(t('hud.pickup', { n: e.hp }), new THREE.Vector3(p.x, 1.2, p.z), 'heal');
+          if (p) this.hud.floatText(t('hud.pickup', { n: MATCH.pickupHeal }), new THREE.Vector3(p.x, 1.2, p.z), 'heal');
         }
         break;
       case 'end': {
@@ -281,6 +281,8 @@ export class Engine {
   // Frame
 
   private frame(now: number): void {
+    // The menu backdrop does not need full rate: cap it at 30 fps.
+    if (this.mode === 'menu' && now - this.last < 1000 / 30 - 2) return;
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     this.time += dt;

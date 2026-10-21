@@ -2,118 +2,134 @@
 
 > “Se acabó la tontería.”
 
-![Chancla Warfare title screen](public/og-image.jpg)
+![Chancla Warfare title screen](docs/evidence/2p-01-title.png)
 
-**Play: https://chancla.vercel.app**
+Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browser: two teams of Rosas, one sunlit courtyard called **El Patio**, and two kinds of flying footwear.
 
-A comedic first-person arcade game for the browser. You are **Doña Rosa**, neighborhood legend, and your peaceful Sunday has been hijacked by loudspeakers, influencers and leaf blowers. You have two exceptionally aerodynamic chanclas and zero patience.
+- **Online:** private rooms for 2 to 4 players, 2v2 team deathmatch, joined with a shareable invite link.
+- **Practice:** offline against clearly labeled bots, in the same simulation as online.
+- **Languages:** English and Spanish throughout.
+- **Classic solo arcade:** the original wave-and-boss game is still at [`/classic.html`](docs/CLASSIC.md).
 
-One golden-hour courtyard, a short interactive tutorial, three escalating waves, a boss (**EL REY DEL ESCÁNDALO** and his enormous speaker stack), results, replay. A full run takes roughly three to five minutes.
+**Site:** https://chancla.vercel.app. The site deploys from `main`. Online play also needs the game server, which is not hosted anywhere yet; see [Deploying](#deploying). Until it is, the deployed site offers practice only and says so on the title screen.
 
-Everything runs client-side. No accounts, no API keys, no backend. All models, art, dialogue, sound effects and music are original; see [ATTRIBUTION.md](ATTRIBUTION.md).
+## Playing with two friends
+
+1. One person opens the site, picks **Play online → Create private room**, and clicks **Copy invite link**.
+2. They send the link (it looks like `https://chancla.vercel.app/#room=ABCD2345`). The 8-character code is the only key to the room, so share it only with the people you want in.
+3. Friends open the link, type a name and press **Join**. Teams fill automatically, and anyone can press **Switch team**.
+4. Everyone except the host presses **I'm ready**, then the host presses **Start match**. A 2-player match (1v1) is allowed. The host can fill empty seats with bots, which are labeled **BOT** everywhere.
+5. Match: 5 minutes, first team to 25 eliminations, respawn after 3 s, no friendly fire. Spawn protection lasts 2 s and ends as soon as you throw. If time runs out with equal scores, it is a tie.
+6. Results: the host picks **Rematch** (same teams, straight back in) or **Back to lobby**.
 
 ## Controls
 
-| Action | Desktop | Touch |
-| --- | --- | --- |
-| Move | WASD or arrow keys | Left virtual stick |
-| Look | Mouse or trackpad (pointer lock), or drag if pointer lock is unavailable | Drag on the right half |
-| Quick throw | Click or Space | Tap the big chancla button |
-| Charged throw | Hold, then release | Hold the button, then release (dragging on it also aims) |
-| Recall chanclas | R (or right-click) | ↩ button |
-| La Chancla Legendaria | Q (when the ★ meter is full) | ★ button |
-| Pause | Esc (also P) | ❚❚ button |
+| Action | Keys |
+| --- | --- |
+| Move | W A S D or arrow keys |
+| Look | Mouse or trackpad (click the game to lock the pointer) |
+| Throw | Left click, or F (also E) |
+| Jump / crouch | Space / C or Shift |
+| Switch chancla | 1, 2, Q, mouse wheel or right click |
+| Scoreboard | Hold Tab |
+| Menu | Esc |
 
-Mac trackpad tip: Space throws (hold to charge), so your fingers can stay on the pad. Sensitivity, invert-Y, aim assistance, reduced motion, graphics quality, volume, music and language are in Settings.
+**Trackpad:** F throws, so your fingers can stay on the pad, and two-finger scroll switches weapons at most once per gesture. If the browser refuses pointer lock, the game switches to drag-to-look automatically. Ctrl, Cmd and Alt shortcuts are never captured, so Ctrl+W and Cmd+Q behave normally. That is why crouch is C or Shift, not Ctrl.
 
-## Running it
+**Weapons:** La Chancla is fast and accurate. It lands where the crosshair points, bounces once off walls, and recovers in 0.42 s. La Pesada is a slow, arcing clog: 62 damage plus 26 splash around corners and big knockback, but a 1.15 s recovery and no bounce. A bot or player in the open is easier to tag with the chancla; someone camping behind cover is a job for La Pesada.
 
-Requires Node 22 (see `.nvmrc`).
+**Settings** (saved per browser): language, mouse sensitivity, invert Y, field of view, reduced motion, graphics quality, music and effects volume, and an FPS/ping readout.
+
+Phones and tablets can open the menus, but touch combat is not supported in this release. The title screen says so on touch devices.
+
+## Running it locally
+
+Requires Node 22.
 
 ```bash
-npm ci              # install exact, locked dependencies
-npm run dev         # development server with hot reload (not for hosting)
-npm run build       # type-check, then production build into dist/
-npm run preview     # serve dist/ locally on http://localhost:4173
-npm run typecheck   # TypeScript, strict mode
-npm test            # unit, integration and balance tests (Vitest)
-npm run e2e         # browser checks against a running preview (see below)
+npm ci
+npm run dev:server      # game server on ws://localhost:8787/ws (restarts on change)
+npm run dev             # site on http://localhost:5173 (it finds the local server automatically)
 ```
 
-`npm run e2e` drives the production build in headless Chromium. Start `npm run preview` in another terminal first. It looks for Chromium at `CHROMIUM_PATH` or Playwright's default location; set `E2E_URL` to test a deployed site.
+Open http://localhost:5173 in two browser windows (one of them private, so each gets its own player) and use the invite link from one in the other.
 
-`node scripts/make-assets.mjs` (with the preview running) regenerates the PNG icons and the social preview image from the game itself.
+Other commands:
+
+```bash
+npm run build           # type-check and build the site into dist/
+npm run build:server    # bundle the server into dist-server/
+npm run start:server    # run the bundled server
+npm test                # all unit, simulation and real-server multiplayer tests
+node --import tsx scripts/mp-e2e.ts 2    # browser e2e, 2 players (after npm run build)
+node --import tsx scripts/mp-e2e.ts 4    # browser e2e, 4 players
+node --import tsx scripts/bench-server.ts  # server CPU cost per room
+```
 
 ## How it works
 
 ```
-src/
-  main.ts            tiny entry: loading progress, WebGL check, friendly failure screens
-  bootstrap.ts       creates the renderer, game and app; precompiles every shader
-  app.ts             screens, settings, pause/visibility/context-loss handling, camera, viewmodel, wiring
-  config.ts          all gameplay tuning in one place
-  core/              fixed-timestep loop, typed emitter, tracked DOM listeners, seeded RNG, math
-  game/
-    game.ts          run orchestration: phases, input handling, aiming, hits, scoring hooks
-    chanclas.ts      the chancla projectile system and its lifecycle
-    enemies.ts       El Bocinas, El Influencer, El Soplador: state machines and animation
-    boss.ts          EL REY DEL ESCÁNDALO: three-attack cycle with vulnerable windows
-    hazards.ts       telegraphed cones, bass-drop rings and projectiles, blocked by cover
-    waves.ts         wave definitions and the spawn director
-    scoring.ts       points, combo multiplier, accuracy streak (pure, no rendering)
-    player.ts, pickups.ts, tutorial.ts
-  physics/collision.ts   swept segment vs box/capsule/sphere, circle movement, line of sight
-  world/             arena construction, palette and shared materials, grid navigation (A*)
-  models/            procedural low-poly sandal, hand and characters
-  fx/                pooled instanced particles, camera-facing trails
-  audio/audio.ts     Web Audio synthesis: every effect plus a small cumbia loop
-  input/input.ts     keyboard, mouse, pointer lock with drag fallback
-  ui/                HUD, world-space callouts, touch controls, sharing and score card, vector art
-  i18n/              every interface string in English and Spanish, applied via data attributes
-  persistence/       storage that never throws, settings and saved progress kept separate
+shared/                 runs on the server AND in the browser
+  config.ts             every balance value: match rules, movement, weapons, bots, network rates
+  map.ts                El Patio: collision boxes, spawns, regions, waypoints, pickups
+  physics.ts            deterministic movement: swept boxes, step-up, crouch headroom, grid broadphase
+  collision.ts          swept segment vs box, capsule and sphere; line of sight
+  sim.ts                MatchSim: inputs, projectiles, ricochet, splash, damage, scoring, respawn, end
+  bots.ts, navgraph.ts  bot brains on a waypoint graph built by simulating walks
+  protocol.ts           message types and strict validation of everything a client sends
+  room.ts, hub.ts       rooms, teams, lobby and match lifecycle, reconnection, owner transfer
+server/index.ts         WebSocket server: origin checks, rate and size limits, health, shutdown
+src/net/session.ts      client prediction, reconciliation, interpolation, reconnect
+src/net/local.ts        practice: the real Hub and Room running inside the page
+src/fps/                engine (three.js), HUD, input, menus and the UI state machine, EN/ES strings
+src/fps/render/         El Patio visuals, Rosa avatars and animations, first-person hand, projectiles
 ```
 
-**The chancla.** Each real chancla moves through `held → flying → returning → held`. While flying it integrates velocity and gravity at a fixed 60 Hz and tests the segment it travels each step against enemy capsules, the boss's shield sphere and every world box, taking the earliest contact, so fast throws cannot pass through walls or enemies. It damages each target at most once per throw, ricochets off at most one solid surface, and ends its flight on impact, range, time or recall. Returning chanclas ignore collisions, home in on Rosa's hand with increasing speed, and snap back after a timeout, so ammunition can never be lost. Legendaria copies are a separate pool that expires instead of returning.
+**Server authority.** The server owns membership, teams, the match lifecycle, movement, health, projectiles, cooldowns, respawns, scores and results. Clients send only their inputs (move axes, look angles, buttons, weapon) with sequence numbers, at 60 Hz. The server simulates at 60 Hz with the same code the client uses, refills each player's input allowance at 1.02 inputs per tick (so nobody can move faster by sending more), and sends snapshots at 20 Hz.
 
-**Aiming.** The throw is solved so the chancla lands where the crosshair points: a ray from the eye finds the aim point, and the launch velocity compensates for the arc. Optional aim assistance nudges toward a target within about 8°.
+**Netcode.** Your own movement is predicted immediately and reconciled by replaying unacknowledged inputs. Small corrections are blended out over about 100 ms. Other players are interpolated 110 ms in the past. Your own throws show instantly as cosmetic predictions, but damage, hit markers and eliminations appear only when the server confirms them. Projectiles are swept every tick against capsules and walls, so they cannot tunnel. There is no lag compensation: at high ping you lead your targets slightly. This trade keeps the server simple and makes "shot around a corner" complaints impossible.
 
-**Enemies and the boss.** Enemies follow A* paths on a 0.5 m grid (with string-pulling), keep their preferred range, and telegraph every attack: a purple cone that fills before it fires, a blower revving, an influencer posing (and taking double damage while posing). The boss cycles Bass Drop rings with a turquoise safe lane, a three-cone Sound Sweep and a Vinyl Volley; his shield deflects chanclas until he runs out of breath. All sound attacks are blocked by solid cover.
+**Practice** runs the real room code inside the page, behind the same message interface the server uses, with a clock that stops while the menu is open.
 
-**Performance.** Fixed timestep with a capped accumulator, pixel ratio capped by quality preset, static scenery merged per material, instancing for repeated details, pooled projectiles, particles, hazards and enemies, a bounded enemy count, and precompiled shaders so the first throw does not hitch. The initial download is about 220 KB compressed.
+**Abuse limits.** Every message is schema-validated and size-capped (4 KB). Inputs and control messages are rate-limited per connection, connections are capped per IP, and rooms are capped per server. Names are sanitized. Only listed origins can connect. Room codes are 8 random characters from a 31-symbol alphabet and are never written to logs. None of this makes the game cheat-proof: a modified client can still aim for you. It prevents speed, cooldown and damage cheats, because the server decides those.
 
 ## Verification
 
-What was actually run, in this environment (Linux container, Node 22, headless Chromium 141 with SwiftShader software rendering, no GPU):
+What was actually run, in this Linux container (Node 22, headless Chromium with SwiftShader software rendering, no GPU, 4 vCPUs). See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for what this does and does not cover.
 
-- `npm run typecheck`: clean under `strict`.
-- `npm test`: 65 tests in 9 files, all passing. Covers swept collision and tunneling, ricochet limits, one-hit-per-throw damage, recall and guaranteed return, shield deflection, Legendaria lifecycle, scoring and combo rules, the tutorial completed through real actions, wave order with capped and staggered spawns at valid distances, nav reachability, boss vulnerability rules and victory, defeat, full reset after mid-run, defeat and victory (plus 20 repeated restarts), blocked/corrupt/quota-limited storage, saved-progress reset keeping settings, English/Spanish parity including every `data-i18n` key in the page, keyboard edge latching and focus-loss clearing, and simultaneous touch move/aim/throw.
-- Balance: a bot plays the real simulation (imperfect aim, reaction delay). It wins about four runs in five, in roughly 2.5 to 3.7 minutes without the tutorial; a player who does nothing loses. Human runs should take longer; that part is an estimate.
-- `npm run build` and `npm run preview`, then `npm run e2e`: 72 browser checks, all passing, with no console errors, page errors or failed requests. They use real keyboard, mouse and multi-touch input to play the tutorial, hit an enemy, pause (Esc releasing pointer lock), resume, cancel a charge with Esc, defeat the boss with real throws during his open windows, see victory and defeat results, copy the share link, download the score card, restart 12 times while checking for leaked loops, listeners, handlers, entities and audio voices, switch languages, reset saved progress with confirmation, and survive WebGL context loss, blocked storage and missing WebGL. Mobile checks run at 844×390, 667×375 and 390×844 with touch emulation.
+- `npm test`: unit and simulation tests plus real-server multiplayer tests. They cover movement and collision (stairs, ceilings, crouch), map rules (spawn protection, no spawn-to-spawn sightlines), weapons, ricochet, splash, friendly fire off, spawn protection cancelled by attacking, score and time endings including ties, respawn, pickups, bots navigating and fighting under the same rules, room flows (full and invalid rooms, duplicate tabs, reconnection within the grace period, owner transfer, version mismatch), a 4-client match through results and rematch, and a **150 ms RTT jitter relay with a forced connection drop**.
+- **Browser end to end** (`scripts/mp-e2e.ts`): separate browser contexts play through the real UI: create, join by invite link, ready-gating, start, a full match, identical results on every client, host-only rematch, leaving mid-match with confirmation, and an invalid-code error. Movement and firing use the page's real keyboard and mouse handlers; aim is scripted.
+- Evidence: screenshots and a match clip in [docs/evidence/](docs/evidence/). There is also the JSON report (`e2e-*.json`).
 
-What was **not** verified:
+Measured performance: see [Performance](#performance).
 
-- **Frame rate on real hardware.** No GPU was available. Under SwiftShader at 1280×720 the game runs at about 7 fps (median frame 133 ms, about 170 draw calls and 26k triangles per frame); that measures the software rasterizer, not the game. The 60 fps laptop and 30 fps phone targets are unverified until someone runs it on those devices with Settings → Show frame rate.
-- **Safari and real phones.** Only Chromium was automated. Safari-specific paths (pointer lock without a promise, `webkitAudioContext`, safe areas) are implemented but untested on Safari itself.
-- **Human playtesting.** All play here was scripted automation plus screenshot review, not a person with a mouse. Feel, difficulty and humor need a human pass.
-- Sound was generated but not listened to.
+What was **not** verified: real Windows or macOS machines, Safari, real GPUs, human playtesting, and listening to the audio. These are listed in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) with a manual checklist.
+
+## Performance
+
+PERF_PLACEHOLDER
 
 ## Deploying
 
-The site is static. `npm ci && npm run build` produces everything in `dist/`. The dev server is not a hosting solution; serve `dist/`.
+The site stays on Vercel. The game server needs a host with long-lived WebSockets. Step-by-step instructions are in [docs/DEPLOY.md](docs/DEPLOY.md), covering:
 
-- **Vercel:** import the repository. `vercel.json` sets `npm ci`, `npm run build` and `dist`. The production URL is picked up automatically for Open Graph tags (`VERCEL_PROJECT_PRODUCTION_URL`).
-- **Netlify:** import the repository. `netlify.toml` sets the build command, `dist` and Node 22. Netlify's `URL` is used for Open Graph tags.
-- **GitHub Pages:** in the repository settings, set Pages → Source to **GitHub Actions**, then run **Deploy to GitHub Pages** from the Actions tab (`.github/workflows/pages.yml`). It builds with `BASE_PATH=/<repo>/` and the matching `SITE_URL`; the game will be at `https://<owner>.github.io/<repo>/`.
-- **Anywhere else:** upload `dist/`. If the site is not at the domain root, build with `BASE_PATH=/sub/path/`. Set `SITE_URL=https://your.domain` so social previews use absolute URLs.
+- the Dockerfile,
+- `server/.env.example`,
+- a Fly.io example,
+- health endpoints,
+- graceful shutdown.
 
-Share links always use the page's real origin at runtime (`location.origin` plus the base path), so they point at wherever the game is actually deployed.
+Nothing has been provisioned or paid for. Once a server exists, set `VITE_GAME_SERVER_URL=wss://…/ws` in Vercel and redeploy.
+
+## Assets
+
+Everything is generated in code: geometry, textures, animation and synthesized audio. The only third-party pieces are the Lilita One font (OFL) and the three.js and ws libraries (MIT). Full inventory: [docs/ASSETS.md](docs/ASSETS.md) and [ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## Known limitations
 
-- Performance targets are unmeasured on real devices (see Verification).
-- A browser-wide 40-restart soak showed flat GPU geometry, texture and shader counts, listeners and heap (11 MB); longer sessions were not soaked.
-- Safari and physical phones have not been tested.
-- WebGL context restoration relies on three.js re-uploading resources; if a browser fails to restore, the overlay offers a reload.
-- Personal bests are per browser and device (localStorage). In private modes or with storage blocked they last only for the session, and the game says so.
-- Music and effects are simple synthesis; there are no recorded voices. Dialogue appears as text bubbles.
-- The arena is a single courtyard and there is one run length; there is no difficulty selector.
+- **One server process.** Rooms live in memory, so a restart or deploy ends running matches. Clients see a clear message and can make a new room.
+- **No lag compensation.** At high ping, lead your targets.
+- **Bots:** they navigate, see, chase and throw with deliberate aim error, but they are simple. They don't flank, and they don't use La Pesada splash cleverly.
+- **Touch:** touch combat is not supported.
+- **Not in this release:** text or voice chat, accounts, ranked play, cosmetics, more maps.
+- **Unverified:** frame rates on real hardware, Safari, and real Windows and macOS machines (see Verification).

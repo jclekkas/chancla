@@ -24,6 +24,9 @@ const MOVE: Record<string, [number, number]> = {
 export class FpsInput {
   enabled = false;
   locked = false;
+  // Set when the browser refuses pointer lock: drag with the mouse to look,
+  // F or E to throw.
+  fallback = false;
   sensitivity = 1;
   invertY = false;
   yaw = 0;
@@ -47,7 +50,8 @@ export class FpsInput {
     this.bag.on<KeyboardEvent>(window, 'keydown', (e) => this.key(e, true));
     this.bag.on<KeyboardEvent>(window, 'keyup', (e) => this.key(e, false));
     this.bag.on<MouseEvent>(doc, 'mousemove', (e) => {
-      if (!this.locked || !this.enabled) return;
+      if (!this.enabled) return;
+      if (!this.locked && !(this.fallback && (e.buttons & 1) && e.target === this.canvas.querySelector('canvas'))) return;
       // Some browsers report a large spike when the lock engages; clamp it.
       const dx = clamp(e.movementX, -250, 250), dy = clamp(e.movementY, -250, 250);
       const k = 0.0022 * this.sensitivity;

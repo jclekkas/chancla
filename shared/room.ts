@@ -253,6 +253,14 @@ export class Room {
     }
   }
 
+  // Client-reported round trip, shown on the scoreboard. Only rebroadcast
+  // when it moves noticeably, so pings do not flood the room channel.
+  reportPing(id: number, ms: number): void {
+    const m = this.members.get(id);
+    if (!m || m.bot) return;
+    if (Math.abs(m.ping - ms) >= 15 || (m.ping === 0) !== (ms === 0)) { m.ping = ms; this.roomDirty = true; }
+  }
+
   // Everyone but the owner must be ready; at least two participants.
   canStart(skipReady = false): string | null {
     const participants = [...this.members.values()].filter((m) => m.bot || m.conn).length;

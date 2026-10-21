@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MatchSim, BTN, type PlayerInput, type SimPlayer, type SimEvent } from '../shared/sim';
 import { EL_PATIO } from '../shared/map';
 import { MATCH, NET, WEAPONS } from '../shared/config';
-import { newBody } from '../shared/physics';
+import { newBody, World } from '../shared/physics';
+import { stepProjectileWorld, type Projectile } from '../shared/sim';
+import { Room } from '../shared/room';
 
 const TICK_MS = 1000 / NET.tickRate;
 const CHEST = -0.06; // aim slightly down at 10 m: torso, not head
@@ -250,5 +252,52 @@ describe('authoritative match simulation', () => {
     expect(sim.phase).toBe('playing');
     expect(a.stats.kills).toBe(0);
     expect(a.alive && b.alive).toBe(true);
+  });
+  it('the standard chancla ricochets once off a wall; La Pesada does not bounce', () => {
+    // A corridor with walls at x = 0 and x = -6: throw toward +x.
+    const world = new World([
+      { minX: 0, minY: 0, minZ: -5, maxX: 0.4, maxY: 4, maxZ: 5, bounce: true, blocksSound: true, tag: 'wall' },
+      { minX: -6.4, minY: 0, minZ: -5, maxX: -6, maxY: 4, maxZ: 5, bounce: true, blocksSound: true, tag: 'wall' },
+    ]);
+    const fly = (weapon: 0 | 1) => {
+      const def = WEAPONS[weapon]!;
+      const pr: Projectile = { id: 1, owner: 1, team: 0, weapon, x: -3, y: 1.5, z: 0, vx: def.speed, vy: 0, vz: 0, ageMs: 0, traveled: 0, bounces: 0, fireSeq: 1 };
+      const results: string[] = [];
+      for (let i = 0; i < 400; i++) { const r = stepProjectileWorld(world, pr, 1 / 60); if (r !== 'none') results.push(r); if (r === 'end') break; }
+      return { results, pr };
+    };
+    const std = fly(0);
+    expect(std.results).toEqual(['bounce', 'end']);
+    expect(std.pr.x).toBeGreaterThan(-6.5); // ended at the far wall, never passed it
+    const heavy = fly(1);
+    expect(heavy.results).toEqual(['end']);
+    expect(heavy.pr.x).toBeLessThan(0.1);
+  });
+
+  it('a cafecito heals a hurt player once, then recharges', () => {
+    const { sim, a } = setup();
+    const spot = EL_PATIO.pickups[0]!;
+    a.hp = 40;
+    a.body = newBody(spot.x, spot.y, spot.z);
+    const ev = runTicks(sim, 2);
+    expect(ev.filter((e) => e.k === 'pickup')).toHaveLength(1);
+    expect(a.hp).toBe(40 + MATCH.pickupHeal);
+    a.hp = 40;
+    runTicks(sim, 60);
+    expect(a.hp).toBe(40); // still recharging
+    runTicks(sim, Math.ceil(MATCH.pickupRespawnMs / TICK_MS));
+    expect(a.hp).toBe(40 + MATCH.pickupHeal);
+  });
+
+  it('reported pings reach the room view and bots never get one', () => {
+    const room = new Room('TESTROOM', 0, { practice: true });
+    room.addHuman(1, 'A', 'x'.repeat(24), { send: () => {}, close: () => {} }, 0);
+    room.addBot(1);
+    room.reportPing(1, 87);
+    const botId = room.view().members.find((m) => m.bot)!.id;
+    room.reportPing(botId, 50);
+    const v = room.view();
+    expect(v.members.find((m) => m.id === 1)!.ping).toBe(87);
+    expect(v.members.find((m) => m.bot)!.ping).toBe(0);
   });
 });

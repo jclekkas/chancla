@@ -258,7 +258,7 @@ export class GameSession {
 
   private startPing(): void {
     this.stopPing();
-    const ping = () => this.transport?.send({ t: 'ping', c: this.now() });
+    const ping = () => this.transport?.send({ t: 'ping', c: this.now(), ...(this.rtt > 0 ? { r: Math.round(this.rtt) } : {}) });
     ping();
     this.pingTimer = setInterval(ping, 2000);
   }

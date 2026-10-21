@@ -71,6 +71,7 @@ let lastLostDetail = '';
 let retry: (() => void) | null = null;
 let pendingInviteCode = '';
 let lastCode: string | null = null;
+let lockFailures = 0;
 
 // ---------------------------------------------------------------------
 // Screens
@@ -106,9 +107,9 @@ function render(): void {
   $('scr-title').hidden = !(base === 'title' || ((base === 'online' || base === 'practice') && !inMatch));
   const hudOn = inMatch && base !== 'lobby';
   $('hud').hidden = !hudOn;
-  $('click-to-play').hidden = !(inMatch && base === 'none' && overlayStack.length === 0 && !(input?.locked));
+  $('click-to-play').hidden = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
   if (input) input.enabled = inMatch && base === 'none' && overlayStack.length === 0;
-  if (engine) engine.inputActive = !!input?.enabled && !!input.locked;
+  if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback);
   // Focus the first control of the newest panel for keyboard players.
   const cur = top();
   if (cur !== 'none') {
@@ -720,12 +721,21 @@ function bindUi(): void {
 
 function bindInput(inp: FpsInput): void {
   inp.onLockChange = (locked) => {
-    if (locked) { render(); return; }
+    if (locked) { lockFailures = 0; render(); return; }
     // Losing the lock mid-match (Esc, alt-tab, a browser prompt) opens the menu.
     if (inMatch && base === 'none') openPause();
     else render();
   };
-  inp.onLockError = () => { if (inMatch && base === 'none') render(); };
+  inp.onLockError = () => {
+    // Browsers also refuse a re-lock right after Esc; only fall back to
+    // drag-to-look when the lock keeps failing or does not exist at all.
+    lockFailures++;
+    if (lockFailures >= 2 || typeof $('stage').requestPointerLock !== 'function') {
+      if (!inp.fallback) toast(t('hud.dragLook'), 4000);
+      inp.fallback = true;
+    }
+    if (inMatch && base === 'none') render();
+  };
   inp.onMenu = () => { if (inMatch && base === 'none') { inp.exitLock(); openPause(); } };
   inp.onScoreboard = (open) => hud.scoreboard(open, lastRoom, engine?.stats ?? new Map(), session?.id ?? -1);
   inp.onSwitch = () => audio.play('switch');

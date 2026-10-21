@@ -126,23 +126,23 @@ function installAutopilot(page: Page) {
 
 async function newPlayer(browser: Browser, i: number, video: boolean): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const ctx = await browser.newContext({
-    viewport: { width: 960, height: 540 },
+    viewport: i < 2 ? { width: 960, height: 540 } : { width: 640, height: 360 },
     ...(video ? { recordVideo: { dir: OUT, size: { width: 960, height: 540 } } } : {}),
   });
   // tsx compiles functions passed to page.evaluate with a __name helper.
   await ctx.addInitScript({ content: 'window.__name = (f) => f;' });
   const page = await ctx.newPage();
+  page.setDefaultTimeout(150000);
   const errors: string[] = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('dialog', (d) => void d.accept());
-  void i;
   return { ctx, page, errors };
 }
 
 const fps = (p: Page) => p.evaluate(() => (window as any).__fps);
 const info = (p: Page) => p.evaluate(() => (window as any).__fps.info());
-async function waitFor(p: Page, fn: string, ms = 60000): Promise<void> {
+async function waitFor(p: Page, fn: string, ms = 150000): Promise<void> {
   await p.waitForFunction(fn, null, { timeout: ms, polling: 100 });
 }
 async function clickIfVisible(p: Page, sel: string): Promise<void> {
@@ -210,7 +210,7 @@ async function main(): Promise<void> {
   const dests = [{ x: -6, z: 3.5 }, { x: 6.5, z: 2.5 }, { x: -3, z: -6 }, { x: 3, z: 6 }];
   const fpsSamples: number[] = [];
   let combatShot = false, sbShot = false;
-  const deadline = Date.now() + 170000;
+  const deadline = Date.now() + (PLAYERS === 4 ? 300000 : 170000);
   let lastLog = 0;
   for (;;) {
     if (Date.now() > deadline) throw new Error('match did not finish in time');
@@ -219,7 +219,7 @@ async function main(): Promise<void> {
       const p = players[i]!.page;
       const st = await p.evaluate(() => {
         const f = (window as any).__fps; const s = f.session(); const ap = (window as any).__ap;
-        return { phase: s?.phase, alive: s?.alive, pos: s ? [s.body.x, s.body.y, s.body.z] : null, need: ap?.needPath, fps: f.info().fps, remotesNear: s ? [...s.remotes.values()].filter((r: any) => r.alive && Math.hypot(r.x - s.body.x, r.z - s.body.z) < 12).length : 0, screen: f.screen };
+        return { phase: s?.phase, alive: s?.alive, pos: s ? [s.body.x, s.body.y, s.body.z] : null, need: ap?.needPath, fps: f.info().fps, remotesNear: s ? [...s.remotes.values()].filter((r: any) => r.alive && s.room?.members.find((m: any) => m.id === r.id)?.team !== s.team && Math.hypot(r.x - s.body.x, r.z - s.body.z) < 12).length : 0, screen: f.screen };
       });
       phases.push(st.screen === 'results' ? 'results' : st.phase);
       if (st.alive && st.need && st.pos) {
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
           await A.waitForTimeout(250);
           await A.screenshot({ path: path.join(OUT, `${PLAYERS}p-05-combat.png`) });
           combatShot = true;
-          step('combat screenshot (enemy within 12 m)');
+          step('combat screenshot (opponent within 12 m)');
         }
         if (combatShot && !sbShot && st.phase === 'playing') {
           await A.keyboard.down('Tab');

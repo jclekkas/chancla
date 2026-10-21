@@ -30,6 +30,8 @@ export const MATCH = {
   friendlyFire: false,
   minParticipants: 2,
   maxHealth: 100,
+  pickupHeal: 35, // cafecito
+  pickupRespawnMs: 20_000,
   resultsHoldMs: 0, // results stay until the owner starts a rematch
 };
 

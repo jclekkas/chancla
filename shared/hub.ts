@@ -79,6 +79,7 @@ export class Hub {
         return;
       case 'ping':
         s.conn.send({ t: 'pong', c: msg.c, s: Math.round(now) });
+        if (msg.r !== undefined && s.room) s.room.reportPing(s.id, msg.r);
         return;
       case 'create': {
         if (s.room) this.leave(s);

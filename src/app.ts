@@ -117,6 +117,9 @@ export class App {
     this.bindGame();
     this.bindSystem();
     this.applySettings(this.settings.value, true);
+    // Title music starts on the first eligible click or key press anywhere,
+    // and resumes after the tab is hidden or the page returns via Back.
+    audio.armLifecycle();
     this.detectTouch(matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0);
     this.resize();
     this.showTitle();
@@ -840,6 +843,8 @@ export class App {
       audioVoices: audio.voices,
       audioContexts: audio.contextCount,
       musicTimer: audio.musicTimerRunning,
+      audioState: audio.state,
+      musicMode: audio.musicMode,
       callouts: this.callouts.activeCount,
       heldInputs: this.input.heldKeys,
       lock: this.input.lock,

@@ -60,6 +60,21 @@ Five instrumental tracks made with Suno and chosen by the project owner. The ass
 - **Stingers** (objective, setback, phase, complete, fail) stay synthesized. They are pitched to the playing recording's key: A minor for Rosa's theme, ruleros and fricas; D minor for guerra and bounce.
 - **Intensity** shapes only the synthesized score. The recordings have no stems to thin out or build up.
 
+### Lifecycle (autoplay, tabs, navigation, retries)
+
+One audio context and one music controller serve the whole page. The controller always holds the intended cue for the current scene (`want`), and late downloads, retries and resumes act only on that cue.
+
+- **Starting.** Browsers allow audio to start only from a user gesture. `audio.armLifecycle()` (main page and Arcade) retries on every click, tap or key press until the context is running, not just the first. When audio becomes available, the controller starts the intended cue itself.
+- **Tabs and Back.** Audio pauses while the tab is hidden and resumes on return, including pages restored from the back/forward cache. If the browser refuses a resume without a gesture, the next click or key press resumes it. Nothing needs a reload.
+- **Downloads.** A failed download plays the synthesized fallback and is retried after 4 s and then 15 s, or at once when the browser reports it is back online. That makes three attempts, then it stops. A successful retry crossfades from the fallback to the recording, and only if the player is still in that scene. A file that downloads but won't decode is not retried.
+- **Mute.** Music at zero is a bus level that navigation, unlocks and retries never touch.
+- **Arcade.** Its title music starts on the first gesture anywhere on the page. Its title screen now has a Main menu link back to the shooter.
+
+Regression coverage:
+
+- `tests/music-lifecycle.test.ts`: 8 tests with a fake audio context.
+- `npm run e2e:music-lifecycle`: 27 browser checks. Headless Chromium doesn't enforce the gesture rule, so the script enforces it from trusted input events, in a Chrome-like mode and a strict Safari-like mode.
+
 ### Verified, and not
 
 Run in this Linux container with headless Chromium. `npm run e2e:music` makes 32 checks, all passing; the report is in [evidence/music/music-e2e.json](evidence/music/music-e2e.json). It checks:

@@ -27,6 +27,7 @@ const en = {
   'title.play': 'Play',
   'title.playAria': 'Play Chancla Warfare',
   'title.howto': 'How to play',
+  'title.mainMenu': 'Main menu',
   'title.settings': 'Settings',
   'title.pitch':
     'You are Doña Rosa. It was a peaceful Sunday until the neighborhood got loud. You have two chanclas and zero patience.',
@@ -196,6 +197,7 @@ const es: Record<StringKey, string> = {
   'title.play': 'Jugar',
   'title.playAria': 'Jugar Chancla Warfare',
   'title.howto': 'Cómo jugar',
+  'title.mainMenu': 'Menú principal',
   'title.settings': 'Ajustes',
   'title.pitch':
     'Eres Doña Rosa. Era un domingo tranquilo hasta que el barrio se puso ruidoso. Tienes dos chanclas y cero paciencia.',

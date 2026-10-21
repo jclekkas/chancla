@@ -51,6 +51,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .btn-ghost:hover { background: rgba(75, 42, 107, 0.85); }
 .btn-ghost.wide { width: 100%; }
+a.btn-ghost { display: inline-block; color: inherit; text-decoration: none; }
 .btn-ghost.small { padding: 4px 10px; font-size: 13px; }
 .btn-ghost.icon { min-width: 46px; }
 .btn-danger { padding: 10px 16px; border-radius: 12px; border: 2px solid #ff9b8a; background: #7a2416; font-weight: 700; }

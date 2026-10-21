@@ -1,0 +1,307 @@
+{
+  "at": "2026-10-21T18:15:48.620Z",
+  "passed": 27,
+  "total": 27,
+  "checks": [
+    {
+      "name": "before any interaction, nothing plays and the menu theme is the intended cue",
+      "ok": true,
+      "detail": {
+        "cue": "off",
+        "layer": "off",
+        "recording": null,
+        "context": "locked",
+        "sounding": 0,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "a non-activating first event leaves audio waiting (not started, not given up)",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "suspended",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "the next real click starts the menu theme, no reload needed",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "flow 1: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Arcade: a click anywhere on its title starts its title music",
+      "ok": true,
+      "detail": {
+        "audioState": "running",
+        "musicMode": "title",
+        "timer": true
+      }
+    },
+    {
+      "name": "Arcade: its title has a Main menu link",
+      "ok": true
+    },
+    {
+      "name": "back on the main menu, the first click starts the menu theme",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "after the browser Back button, the menu theme plays on the next click",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "flow 2: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "campaign select keeps the menu theme going",
+      "ok": true,
+      "detail": {
+        "cue": "select",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "the mission plays its track",
+      "ok": true,
+      "detail": {
+        "cue": "ruleros",
+        "layer": "recorded",
+        "recording": "ruleros",
+        "context": "running",
+        "sounding": 2,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "back on the main menu: the menu theme, one track sounding",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "flow 3: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "rapid navigation while loading: the late mission track does not start on the main menu",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "tab hidden: audio pauses",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "suspended",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "tab shown again: the menu theme resumes on its own",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "after an outside suspension, the next click resumes the music",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "strict policy: back on the tab, audio waits for a gesture (no error, intended cue kept)",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "suspended",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "strict policy: the first key press after returning resumes the menu theme",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "failed download: the synthesized menu music plays instead",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "synth",
+        "recording": null,
+        "context": "running",
+        "sounding": 0,
+        "retrying": [
+          "rosa-theme"
+        ],
+        "failed": []
+      }
+    },
+    {
+      "name": "when the network recovers, a retry brings the menu theme back without a reload",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": [],
+        "requests": 2
+      }
+    },
+    {
+      "name": "after the hand-over, only one music source is sounding",
+      "ok": true
+    },
+    {
+      "name": "flow 6a: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "failed for good: three attempts in total, then it stops trying",
+      "ok": true,
+      "detail": {
+        "requests": 3,
+        "cue": "menu",
+        "layer": "synth",
+        "recording": null,
+        "context": "running",
+        "sounding": 0,
+        "retrying": [],
+        "failed": [
+          "rosa-theme"
+        ]
+      }
+    },
+    {
+      "name": "failed for good: the synthesized menu music keeps playing",
+      "ok": true,
+      "detail": {
+        "cue": "menu",
+        "layer": "synth",
+        "recording": null,
+        "context": "running",
+        "sounding": 0,
+        "retrying": [],
+        "failed": [
+          "rosa-theme"
+        ]
+      }
+    },
+    {
+      "name": "music at zero stays silent through navigation, unlock and the retry",
+      "ok": true,
+      "detail": {
+        "gain": 0,
+        "cue": "menu",
+        "layer": "recorded",
+        "recording": "rosa-theme",
+        "context": "running",
+        "sounding": 1,
+        "retrying": [],
+        "failed": []
+      }
+    },
+    {
+      "name": "music at zero is still zero after a reload and the first click",
+      "ok": true,
+      "detail": {
+        "gain": 0
+      }
+    }
+  ]
+}

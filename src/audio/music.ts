@@ -84,6 +84,10 @@ const IN_GAME_EQ_DB: Partial<Record<TrackId, number>> = { combat: -4, ruleros: -
 // Dialogue ducks a dense recording further than the sparse synthesized score.
 const DUCK_SYNTH = 0.55;
 const DUCK_RECORDED = 0.42;
+// A failed download is retried twice, after 4 s and then 15 s (sooner if the
+// browser reports it is back online). The synthesized score plays meanwhile.
+// A file that downloads but won't decode is not retried.
+const RETRY_MS = [4000, 15000];
 const BASE = (() => { try { return import.meta.env.BASE_URL || '/'; } catch { return '/'; } })();
 
 interface RecLane { rec: RecordedTrack; src: AudioBufferSourceNode; eq: BiquadFilterNode; gain: GainNode; startedAt: number; offset: number }
@@ -127,8 +131,25 @@ export class Music {
   private bytes = new Map<string, Promise<ArrayBuffer | null>>();
   private decoding = new Map<string, Promise<AudioBuffer | null>>();
   private buffers = new Map<string, AudioBuffer>(); // insertion order = least recently used first
-  private failed = new Set<string>();
+  private failed = new Map<string, { attempts: number; retryAt: number; permanent: boolean }>();
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private recLive = 0; // recording sources still sounding (including ones fading out)
   private grace: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    // Start the intended cue as soon as audio can play, and pick up again
+    // after the context is replaced. A resume after a suspension needs
+    // nothing: everything is scheduled on the audio clock, which stopped too.
+    audio.onRunning((fresh) => { if (fresh) this.resume(); else this.sync(); });
+    if (typeof window !== 'undefined') window.addEventListener('online', () => this.retryNow());
+  }
+
+  /** Brings playback in line with the intended cue (idempotent). */
+  sync(): void {
+    if (!audio.nodes) return;
+    if (this.current !== this.want) this.play(this.want);
+    else if (this.synthId !== 'off') this.ensureTimer();
+  }
   /** Set false to hear only the synthesized score (tests, comparisons). */
   recordings = true;
   current: TrackId = 'off';
@@ -158,7 +179,7 @@ export class Music {
       const ready = this.decode(recId);
       this.grace = setTimeout(() => { this.grace = null; if (this.current === id && !this.rec) this.synth(id); }, REC_GRACE_MS);
       void ready.then((b) => {
-        if (!b || this.current !== id || this.rec?.rec.id === recId) {
+        if (!b || this.current !== id || this.want !== id || this.rec?.rec.id === recId) {
           if (!b && this.current === id && !this.rec) { if (this.grace) { clearTimeout(this.grace); this.grace = null; } this.synth(id); }
           return;
         }
@@ -182,7 +203,47 @@ export class Music {
   private recordingFor(id: TrackId): string | null {
     if (!this.recordings || id === 'off') return null;
     const r = ASSIGN[id];
-    return r && !this.failed.has(r) && RECORDED.some((t) => t.id === r) ? r : null;
+    if (!r || !RECORDED.some((t) => t.id === r)) return null;
+    const f = this.failed.get(r);
+    // Waiting for a retry, or given up: the synthesized score plays.
+    if (f && (f.permanent || Date.now() < f.retryAt)) return null;
+    return r;
+  }
+
+  private noteFailure(recId: string, permanent: boolean): void {
+    const f = this.failed.get(recId) ?? { attempts: 0, retryAt: 0, permanent: false };
+    f.attempts++;
+    f.permanent = permanent || f.attempts > RETRY_MS.length;
+    f.retryAt = f.permanent ? Infinity : Date.now() + RETRY_MS[f.attempts - 1]!;
+    this.failed.set(recId, f);
+    if (!f.permanent) this.scheduleRetry();
+  }
+
+  private scheduleRetry(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    // Only future retries: one that is already due waits for its cue to play.
+    const now = Date.now();
+    let next = Infinity;
+    for (const f of this.failed.values()) if (!f.permanent && f.retryAt > now) next = Math.min(next, f.retryAt);
+    if (next === Infinity) { this.retryTimer = null; return; }
+    this.retryTimer = setTimeout(() => { this.retryTimer = null; this.retryDue(); }, next - now + 50);
+  }
+
+  private retryNow(): void {
+    for (const f of this.failed.values()) if (!f.permanent) f.retryAt = 0;
+    this.retryDue();
+  }
+
+  /** Retries the intended cue's recording if it is due; hands over from the fallback when it arrives. */
+  private retryDue(): void {
+    const cue = this.want;
+    const recId = this.recordingFor(cue);
+    if (recId && this.failed.has(recId) && audio.nodes) {
+      void this.decode(recId).then((b) => {
+        if (b && this.want === cue && this.current === cue && this.rec?.rec.id !== recId) this.startRecorded(recId, b, cue);
+      });
+    }
+    this.scheduleRetry(); // others still waiting
   }
 
   private fetchBytes(recId: string): Promise<ArrayBuffer | null> {
@@ -192,7 +253,10 @@ export class Music {
       p = fetch(`${BASE}${rec.file}`)
         .then((r) => (r.ok ? r.arrayBuffer() : null))
         .catch(() => null)
-        .then((b) => { if (!b) { this.failed.add(recId); this.bytes.delete(recId); } return b; });
+        .then((b) => {
+          if (!b) { this.bytes.delete(recId); this.noteFailure(recId, false); } else if (this.failed.has(recId)) this.failed.delete(recId);
+          return b;
+        });
       this.bytes.set(recId, p);
     }
     return p;
@@ -205,7 +269,7 @@ export class Music {
     if (!p) {
       p = this.fetchBytes(recId).then(async (bytes) => {
         const n = audio.nodes;
-        if (!bytes || !n) return null;
+        if (!bytes || !n) { this.decoding.delete(recId); return null; } // a later retry starts afresh
         try {
           // decodeAudioData detaches its input, so keep the download for a later re-decode.
           const buf = await n.ctx.decodeAudioData(bytes.slice(0));
@@ -213,7 +277,7 @@ export class Music {
           this.evict();
           return buf;
         } catch {
-          this.failed.add(recId);
+          this.noteFailure(recId, true); // it downloaded but this browser can't decode it
           return null;
         } finally {
           this.decoding.delete(recId);
@@ -253,6 +317,8 @@ export class Music {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.setValueCurveAtTime(equalPower(0, level), now + 0.02, REC_XFADE);
     src.start(now + 0.02);
+    this.recLive++;
+    src.onended = () => { this.recLive--; };
     // LRU: the playing recording becomes the most recent.
     this.buffers.delete(recId); this.buffers.set(recId, buf);
     this.rec = { rec, src, eq, gain, startedAt: now + 0.02, offset: 0 };
@@ -277,7 +343,8 @@ export class Music {
     g.setValueAtTime(from, now);
     g.setValueCurveAtTime(equalPower(from, 0), now, dur);
     try { r.src.stop(now + dur + 0.05); } catch { /* already stopped */ }
-    r.src.onended = () => { for (const node of [r.src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
+    const src = r.src;
+    src.onended = () => { this.recLive--; for (const node of [src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
   }
 
   private fadeSynth(now: number, dur: number): void {
@@ -330,7 +397,7 @@ export class Music {
   }
 
   /** What is playing, for tests and the debug API. */
-  state(): { cue: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[] } {
+  state(): { cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number } {
     const r = this.rec;
     let position: number | null = null;
     if (r && audio.nodes) {
@@ -340,12 +407,16 @@ export class Music {
     }
     return {
       cue: this.current,
+      want: this.want,
       layer: r ? 'recorded' : this.synthId !== 'off' ? 'synth' : 'off',
       recording: r?.rec.id ?? null,
       position,
       loop: r ? [r.rec.loopStart, r.rec.loopEnd] : null,
       loaded: [...this.buffers.keys()],
-      failed: [...this.failed],
+      failed: [...this.failed].filter(([, f]) => f.permanent).map(([k]) => k),
+      retrying: [...this.failed].filter(([, f]) => !f.permanent).map(([k]) => k),
+      context: audio.state,
+      sounding: this.recLive,
     };
   }
 
@@ -361,6 +432,8 @@ export class Music {
     const now = n.ctx.currentTime;
     try { r.src.stop(now); } catch { /* gone */ }
     src.start(now, sec);
+    this.recLive++;
+    src.onended = () => { this.recLive--; };
     r.src = src; r.startedAt = now; r.offset = sec;
   }
 

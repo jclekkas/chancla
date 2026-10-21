@@ -827,14 +827,16 @@ function bindUi(): void {
     if (inMatch && !practice && !campaign.active) { e.preventDefault(); e.returnValue = ''; }
   });
   window.addEventListener('pagehide', () => { session?.close(); });
-  // Unlock audio on the first interaction of any kind.
-  const unlock = () => {
-    audio.unlock(); audio.setLevels(store.value.music, store.value.sfx); audio.setVoiceLevel(store.value.voice); music.resume();
-    // Shared reaction lines (used online and offline) load in the background.
-    void dialogue.loadManifest(BASE).then(() => dialogue.preload(LINES.filter((l) => !/^m\d_/.test(l.id)).map((l) => l.id)));
-  };
-  window.addEventListener('pointerdown', unlock, { once: true });
-  window.addEventListener('keydown', unlock, { once: true });
+  // Audio starts on the first eligible gesture, and resumes after the tab is
+  // hidden or the page comes back from the back/forward cache. The music
+  // controller starts the intended cue itself when audio becomes available.
+  audio.setLevels(store.value.music, store.value.sfx);
+  audio.setVoiceLevel(store.value.voice);
+  audio.armLifecycle();
+  // Shared reaction lines (used online and offline) load after the first interaction.
+  const warm = () => { void dialogue.loadManifest(BASE).then(() => dialogue.preload(LINES.filter((l) => !/^m\d_/.test(l.id)).map((l) => l.id))); };
+  window.addEventListener('pointerdown', warm, { once: true });
+  window.addEventListener('keydown', warm, { once: true });
 }
 
 function bindInput(inp: FpsInput): void {

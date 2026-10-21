@@ -47,10 +47,55 @@ export class AudioEngine {
     return this.a ? 1 : 0;
   }
 
-  // Must be called from a user gesture. Safe to call repeatedly.
+  private runHooks: Array<(fresh: boolean) => void> = [];
+  private armed = false;
+
+  /**
+   * Runs `fn` whenever audio becomes able to play: on the first unlock
+   * (fresh = true, new nodes) and every time the context resumes after a
+   * suspension (tab hidden, back/forward cache, an OS interruption).
+   */
+  onRunning(fn: (fresh: boolean) => void): void { this.runHooks.push(fn); }
+
+  private ran(fresh: boolean): void { for (const f of this.runHooks) { try { f(fresh); } catch { /* keep the others */ } } }
+
+  /**
+   * Keeps audio alive for the life of the page. Browsers only let audio start
+   * from a user gesture, and a gesture that doesn't qualify (Escape, a
+   * modifier key, a pointerdown in some browsers) fails silently. So every
+   * gesture retries until the context is running, not only the first one.
+   * Audio also pauses while the tab is hidden and resumes on return,
+   * including pages restored from the back/forward cache. Call once per page.
+   */
+  armLifecycle(): void {
+    if (this.armed || typeof window === 'undefined') return;
+    this.armed = true;
+    const gesture = () => { if (!this.a || this.a.ctx.state !== 'running') this.unlock(); };
+    for (const ev of ['pointerdown', 'pointerup', 'mousedown', 'click', 'keydown', 'touchend']) window.addEventListener(ev, gesture, { capture: true, passive: true });
+    const hide = () => {
+      const a = this.a;
+      if (a && a.ctx.state === 'running') void a.ctx.suspend().catch(() => undefined);
+    };
+    const show = () => {
+      const a = this.a;
+      if (!a) return;
+      // Without a recent gesture this may stay pending; the next gesture retries.
+      if (a.ctx.state !== 'running' && a.ctx.state !== 'closed') void a.ctx.resume().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', () => (document.hidden ? hide() : show()));
+    window.addEventListener('pagehide', hide);
+    window.addEventListener('pageshow', show);
+  }
+
+  /** The context's state, for tests and the debug API. */
+  get state(): string { return this.a ? this.a.ctx.state : this.failed ? 'unsupported' : 'locked'; }
+
+  // Call from a user gesture. Safe to call repeatedly: creates the context
+  // once, and resumes it whenever it isn't running.
   unlock(): void {
     if (this.failed) return;
     try {
+      if (this.a && this.a.ctx.state === 'closed') this.a = null; // start over with a new context
       if (!this.a) {
         const AC: typeof AudioContext | undefined = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (!AC) { this.failed = true; return; }
@@ -91,8 +136,13 @@ export class AudioEngine {
         this.applyGain();
         music.gain.value = 0.32 * this.musicVol;
         sfx.gain.value = this.sfxVol;
+        ctx.addEventListener('statechange', () => { if (ctx.state === 'running' && this.a?.ctx === ctx) this.ran(false); });
+        // The Arcade picks its music mode before audio exists (its title
+        // screen shows at load); start that music now, unless it is paused.
+        if (this.mode !== 'off' && !this.musicHeld) this.startMusicTimer();
+        this.ran(true);
       }
-      if (this.a.ctx.state === 'suspended') void this.a.ctx.resume().catch(() => undefined);
+      if (this.a.ctx.state !== 'running' && !(typeof document !== 'undefined' && document.hidden)) void this.a.ctx.resume().catch(() => undefined);
     } catch {
       this.failed = true;
     }
@@ -156,11 +206,16 @@ export class AudioEngine {
     this.a.master.gain.setTargetAtTime(g, this.a.ctx.currentTime, 0.02);
   }
 
+  // The Arcade's own music: held while paused or hidden, released on resume.
+  private musicHeld = false;
+
   suspend(): void {
+    this.musicHeld = true;
     this.stopMusicTimer();
   }
 
   resume(): void {
+    this.musicHeld = false;
     if (this.mode !== 'off') this.startMusicTimer();
   }
 

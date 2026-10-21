@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-21T17:26:24.825Z",
+  "startedAt": "2026-10-21T18:16:26.824Z",
   "decode": {
     "rosa-theme": {
       "decodedSamples": 4276320,
@@ -44,11 +44,12 @@
   },
   "switches": {
     "ruleros": {
-      "ms": 3,
+      "ms": 1,
       "cue": "ruleros",
+      "want": "ruleros",
       "layer": "recorded",
       "recording": "ruleros",
-      "position": 0.06997732426303882,
+      "position": 0.04965986394557831,
       "loop": [
         26.6,
         98.446
@@ -57,14 +58,18 @@
         "rosa-theme",
         "ruleros"
       ],
-      "failed": []
+      "failed": [],
+      "retrying": [],
+      "context": "running",
+      "sounding": 2
     },
     "cocina": {
-      "ms": 3,
+      "ms": 2,
       "cue": "cocina",
+      "want": "cocina",
       "layer": "recorded",
       "recording": "fricas-y-fricas",
-      "position": 0.02063492063492056,
+      "position": 0.00031746031746138215,
       "loop": [
         58.11,
         133.886
@@ -73,14 +78,18 @@
         "rosa-theme",
         "fricas-y-fricas"
       ],
-      "failed": []
+      "failed": [],
+      "retrying": [],
+      "context": "running",
+      "sounding": 2
     },
     "patio": {
       "ms": 1,
       "cue": "patio",
+      "want": "patio",
       "layer": "recorded",
       "recording": "fricas-y-fricas",
-      "position": 0.00902494331065995,
+      "position": 0.020634920634922338,
       "loop": [
         58.11,
         133.886
@@ -89,11 +98,15 @@
         "rosa-theme",
         "fricas-y-fricas"
       ],
-      "failed": []
+      "failed": [],
+      "retrying": [],
+      "context": "running",
+      "sounding": 2
     },
     "pinata": {
-      "ms": 2,
+      "ms": 1,
       "cue": "pinata",
+      "want": "pinata",
       "layer": "recorded",
       "recording": "guerra-de-vecinos",
       "position": 0.009024943310656397,
@@ -105,39 +118,12 @@
         "rosa-theme",
         "guerra-de-vecinos"
       ],
-      "failed": []
+      "failed": [],
+      "retrying": [],
+      "context": "running",
+      "sounding": 2
     }
   },
-  "transitionMarks": [
-    [
-      0,
-      "menu (Rosa theme)"
-    ],
-    [
-      8.3,
-      "mission select (same recording continues)"
-    ],
-    [
-      15.4,
-      "Mission 1 starts: crossfade to Ruleros"
-    ],
-    [
-      24.4,
-      "a line of dialogue: music ducks"
-    ],
-    [
-      30.4,
-      "jump to 6 s before the loop seam"
-    ],
-    [
-      40.6,
-      "leave: back to Rosa theme"
-    ],
-    [
-      48.9,
-      "Mission 4 starts: crossfade to Guerra de Vecinos"
-    ]
-  ],
   "checks": [
     {
       "name": "decode rosa-theme: length matches the prepared file",
@@ -224,9 +210,10 @@
       "ok": true,
       "detail": {
         "cue": "menu",
+        "want": "menu",
         "layer": "recorded",
         "recording": "rosa-theme",
-        "position": 1.0074829931972789,
+        "position": 0.04095238095238096,
         "loop": [
           43.23,
           88.59
@@ -234,22 +221,25 @@
         "loaded": [
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 1
       }
     },
     {
       "name": "mission select continues the same recording without restarting",
       "ok": true,
       "detail": {
-        "before": 2.5283900226757368,
-        "after": 3.329478458049887
+        "before": 1.5386394557823129,
+        "after": 2.4413151927437644
       }
     },
     {
       "name": "mission ruleros plays ruleros",
       "ok": true,
       "detail": {
-        "ms": 3,
+        "ms": 1,
         "layer": "recorded"
       }
     },
@@ -261,7 +251,7 @@
           26.6,
           98.446
         ],
-        "position": 28.10911564625851
+        "position": 28.100408163265307
       }
     },
     {
@@ -270,7 +260,7 @@
       "detail": {
         "depth": 0.42,
         "before": 1,
-        "during": 0.4203141927719116,
+        "during": 0.42032182216644287,
         "eqDuring": -4,
         "voiced": true
       }
@@ -292,9 +282,10 @@
       "ok": true,
       "detail": {
         "cue": "select",
+        "want": "select",
         "layer": "recorded",
         "recording": "rosa-theme",
-        "position": 0.4008616780045351,
+        "position": 0.5285714285714285,
         "loop": [
           43.23,
           88.59
@@ -303,14 +294,17 @@
           "ruleros",
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 2
       }
     },
     {
       "name": "mission cocina plays fricas-y-fricas",
       "ok": true,
       "detail": {
-        "ms": 3,
+        "ms": 2,
         "layer": "recorded"
       }
     },
@@ -319,6 +313,7 @@
       "ok": true,
       "detail": {
         "cue": "select",
+        "want": "select",
         "layer": "recorded",
         "recording": "rosa-theme",
         "position": 0.2876643990929715,
@@ -330,7 +325,10 @@
           "fricas-y-fricas",
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 2
       }
     },
     {
@@ -346,9 +344,10 @@
       "ok": true,
       "detail": {
         "cue": "select",
+        "want": "select",
         "layer": "recorded",
         "recording": "rosa-theme",
-        "position": 0.3515192743764146,
+        "position": 0.5604988662131518,
         "loop": [
           43.23,
           88.59
@@ -357,14 +356,17 @@
           "fricas-y-fricas",
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 2
       }
     },
     {
       "name": "mission pinata plays guerra-de-vecinos",
       "ok": true,
       "detail": {
-        "ms": 2,
+        "ms": 1,
         "layer": "recorded"
       }
     },
@@ -373,9 +375,10 @@
       "ok": true,
       "detail": {
         "cue": "select",
+        "want": "select",
         "layer": "recorded",
         "recording": "rosa-theme",
-        "position": 0.40956916099773366,
+        "position": 0.3805442176870777,
         "loop": [
           43.23,
           88.59
@@ -384,7 +387,10 @@
           "guerra-de-vecinos",
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 2
       }
     },
     {
@@ -400,9 +406,10 @@
       "ok": true,
       "detail": {
         "cue": "combat",
+        "want": "combat",
         "layer": "recorded",
         "recording": "bounce-y-joke",
-        "position": 0.07868480725623783,
+        "position": 0.09029478458050022,
         "loop": [
           18.35,
           60.432
@@ -411,7 +418,10 @@
           "rosa-theme",
           "bounce-y-joke"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 2
       }
     },
     {
@@ -424,14 +434,18 @@
       "ok": true,
       "detail": {
         "cue": "menu",
+        "want": "menu",
         "layer": "synth",
         "recording": null,
         "position": null,
         "loop": null,
         "loaded": [],
-        "failed": [
+        "failed": [],
+        "retrying": [
           "rosa-theme"
-        ]
+        ],
+        "context": "running",
+        "sounding": 0
       }
     },
     {
@@ -439,15 +453,19 @@
       "ok": true,
       "detail": {
         "cue": "ruleros",
+        "want": "ruleros",
         "layer": "synth",
         "recording": null,
         "position": null,
         "loop": null,
         "loaded": [],
-        "failed": [
+        "failed": [],
+        "retrying": [
           "rosa-theme",
           "ruleros"
-        ]
+        ],
+        "context": "running",
+        "sounding": 0
       }
     },
     {
@@ -460,12 +478,16 @@
       "ok": true,
       "detail": {
         "cue": "menu",
+        "want": "menu",
         "layer": "synth",
         "recording": null,
         "position": null,
         "loop": null,
         "loaded": [],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 0
       }
     },
     {
@@ -473,9 +495,10 @@
       "ok": true,
       "detail": {
         "cue": "menu",
+        "want": "menu",
         "layer": "recorded",
         "recording": "rosa-theme",
-        "position": 0.02934240362811824,
+        "position": -0.020000000000000018,
         "loop": [
           43.23,
           88.59
@@ -483,7 +506,10 @@
         "loaded": [
           "rosa-theme"
         ],
-        "failed": []
+        "failed": [],
+        "retrying": [],
+        "context": "running",
+        "sounding": 1
       }
     }
   ],

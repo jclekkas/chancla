@@ -79,6 +79,14 @@ async function main(): Promise<void> {
     await page.goto(SITE);
     await page.waitForFunction(() => (window as any).__fps?.screen === 'title');
     await page.evaluate(() => localStorage.removeItem('chancla.campaign.v1'));
+    // Running a subset: mark the missions before it as done so it is unlocked.
+    const first = MISSIONS.findIndex((m) => only.includes(m.id));
+    if (first > 0) {
+      const done = Object.fromEntries(MISSIONS.slice(0, first).map((m) => [m.id, { completed: true, bestMs: null, challenges: { complete: true, time: false, skill: false }, plays: 1 }]));
+      await page.evaluate((d) => localStorage.setItem('chancla.campaign.v1', JSON.stringify({ v: 1, missions: d })), done);
+      await page.reload();
+      await page.waitForFunction(() => (window as any).__fps?.screen === 'title');
+    }
     // Start audio capture on the first click (user gesture unlocks audio).
     await page.click('#btn-campaign');
     await page.waitForFunction(() => (window as any).__fps.screen === 'campaign');

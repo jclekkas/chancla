@@ -35,12 +35,12 @@ function cyl(rt: number, rb: number, h: number, color: number, seg = 12): THREE.
 }
 
 // Converts a classic (Lambert) rig to toon shading with outlines.
-function toonify(root: THREE.Object3D): void {
+export function toonify(root: THREE.Object3D): void {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const src = m.material as THREE.MeshLambertMaterial;
-    if (src.transparent) return;
+    if (src.transparent || !src.isMeshLambertMaterial) return; // leave toon and outline materials alone
     m.material = toon(src.color.getHex(), { emissive: src.emissive?.getHex() || undefined });
     m.castShadow = true;
   });
@@ -294,7 +294,7 @@ function buildMosaicTexture(): THREE.CanvasTexture | null {
 function buildPinata(): { root: THREE.Group; star: THREE.Group; tips: THREE.Mesh[]; core: THREE.Mesh; panels: THREE.Group; rope: THREE.Mesh } {
   const root = new THREE.Group();
   const star = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(PINATA.bodyRadius, 1), toon(COLORS.violet));
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(PINATA.bodyRadius, 1), toon(COLORS.marigold, { emissive: 0x3a1a00 }));
   star.add(outline(body, 1.04));
   // Paper fringe rings.
   for (let i = 0; i < 3; i++) {
@@ -322,8 +322,10 @@ function buildPinata(): { root: THREE.Group; star: THREE.Group; tips: THREE.Mesh
   root.add(star);
   const panels = new THREE.Group();
   for (let i = 0; i < 4; i++) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.12), toon(0x9aa0b0, { emissive: 0x101018 }));
+    // Shield panels: striped party boards on the motor ring.
+    const p = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.12), toon(i % 2 ? COLORS.turquoise : COLORS.pink, { emissive: 0x101018 }));
     outline(p, 1.04);
+    for (let k = -1; k <= 1; k++) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.12, 0.14), toon(COLORS.gold)); st.position.y = k * 0.5; p.add(st); }
     panels.add(p);
   }
   panels.visible = false;
@@ -728,7 +730,10 @@ export class MissionView {
       g.visible = tp.hp > 0;
       const cone = g.userData.cone as THREE.Mesh;
       cone.visible = tp.hp > 0;
-      g.scale.setScalar(tp.hp < 2 ? 0.75 : 1 + Math.sin(this.time * 5 + i) * 0.08);
+      // Only the lit point glows (it is the one that takes damage).
+      const lit = i === s.lit && s.phase < 3;
+      g.visible = tp.hp > 0 && lit;
+      g.scale.setScalar((0.7 + 0.3 * (tp.hp / PINATA.tipHp)) * (1 + Math.sin(this.time * 6 + i) * 0.1));
     });
     const open = pin.coreOpen(s);
     const warn = s.phase === 3 && s.coreT < 1300;

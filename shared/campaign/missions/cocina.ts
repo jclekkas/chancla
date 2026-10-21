@@ -98,7 +98,9 @@ export const COCINA: MissionDef = {
       onDone: [{ do: 'say', line: 'm2_done' }],
     },
   ],
-  timeTargetMs: 0,
+  // Time target: 2.5x the helper bot's median over 8 seeds (120.4 s, scripts/campaign-sim.ts),
+  // rounded up to 15 s. The bot plays near-perfectly; human playtesting has not tuned this yet.
+  timeTargetMs: 315000,
   challenges: [
     { id: 'complete', label: 'ch.complete' },
     { id: 'time', label: 'ch.time' },

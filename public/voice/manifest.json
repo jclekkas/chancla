@@ -1,0 +1,403 @@
+{
+ "version": 1,
+ "quality": "placeholder-tts",
+ "note": "Synthetic placeholder voices (SVOX Pico es-ES, eSpeak NG es-419). Replace with recorded performances; see docs/VOICE_SCRIPT.md.",
+ "generated": "2026-10-21",
+ "lines": {
+  "miss1": {
+   "file": "miss1.m4a",
+   "ms": 1284,
+   "who": "rosa"
+  },
+  "miss2": {
+   "file": "miss2.m4a",
+   "ms": 2667,
+   "who": "rosa"
+  },
+  "miss3": {
+   "file": "miss3.m4a",
+   "ms": 2094,
+   "who": "rosa"
+  },
+  "miss4": {
+   "file": "miss4.m4a",
+   "ms": 1403,
+   "who": "rosa"
+  },
+  "ricochet1": {
+   "file": "ricochet1.m4a",
+   "ms": 1976,
+   "who": "rosa"
+  },
+  "ricochet2": {
+   "file": "ricochet2.m4a",
+   "ms": 1515,
+   "who": "rosa"
+  },
+  "ricochet3": {
+   "file": "ricochet3.m4a",
+   "ms": 2299,
+   "who": "rosa"
+  },
+  "elim1": {
+   "file": "elim1.m4a",
+   "ms": 1335,
+   "who": "rosa"
+  },
+  "elim2": {
+   "file": "elim2.m4a",
+   "ms": 1451,
+   "who": "rosa"
+  },
+  "elim3": {
+   "file": "elim3.m4a",
+   "ms": 671,
+   "who": "rosa"
+  },
+  "elim4": {
+   "file": "elim4.m4a",
+   "ms": 1759,
+   "who": "rosa"
+  },
+  "hurt1": {
+   "file": "hurt1.m4a",
+   "ms": 2137,
+   "who": "rosa"
+  },
+  "hurt2": {
+   "file": "hurt2.m4a",
+   "ms": 1300,
+   "who": "rosa"
+  },
+  "hurt3": {
+   "file": "hurt3.m4a",
+   "ms": 923,
+   "who": "rosa"
+  },
+  "low1": {
+   "file": "low1.m4a",
+   "ms": 2876,
+   "who": "rosa"
+  },
+  "respawn1": {
+   "file": "respawn1.m4a",
+   "ms": 2156,
+   "who": "rosa"
+  },
+  "respawn2": {
+   "file": "respawn2.m4a",
+   "ms": 982,
+   "who": "rosa"
+  },
+  "respawn3": {
+   "file": "respawn3.m4a",
+   "ms": 1058,
+   "who": "rosa"
+  },
+  "start1": {
+   "file": "start1.m4a",
+   "ms": 1253,
+   "who": "rosa"
+  },
+  "start2": {
+   "file": "start2.m4a",
+   "ms": 1926,
+   "who": "rosa"
+  },
+  "win1": {
+   "file": "win1.m4a",
+   "ms": 2882,
+   "who": "rosa"
+  },
+  "win2": {
+   "file": "win2.m4a",
+   "ms": 964,
+   "who": "rosa"
+  },
+  "lose1": {
+   "file": "lose1.m4a",
+   "ms": 2684,
+   "who": "rosa"
+  },
+  "lose2": {
+   "file": "lose2.m4a",
+   "ms": 2697,
+   "who": "rosa"
+  },
+  "cafecito": {
+   "file": "cafecito.m4a",
+   "ms": 1225,
+   "who": "rosa"
+  },
+  "ko1": {
+   "file": "ko1.m4a",
+   "ms": 2033,
+   "who": "rosa"
+  },
+  "heavy_hint": {
+   "file": "heavy_hint.m4a",
+   "ms": 1665,
+   "who": "rosa"
+  },
+  "bank_hint": {
+   "file": "bank_hint.m4a",
+   "ms": 2871,
+   "who": "rosa"
+  },
+  "timing_hint": {
+   "file": "timing_hint.m4a",
+   "ms": 2337,
+   "who": "rosa"
+  },
+  "checkpoint1": {
+   "file": "checkpoint1.m4a",
+   "ms": 2329,
+   "who": "rosa"
+  },
+  "m1_start": {
+   "file": "m1_start.m4a",
+   "ms": 3100,
+   "who": "rosa"
+  },
+  "m1_first": {
+   "file": "m1_first.m4a",
+   "ms": 2732,
+   "who": "rosa"
+  },
+  "m1_courtyard": {
+   "file": "m1_courtyard.m4a",
+   "ms": 2467,
+   "who": "rosa"
+  },
+  "m1_latch": {
+   "file": "m1_latch.m4a",
+   "ms": 3500,
+   "who": "rosa"
+  },
+  "m1_bank": {
+   "file": "m1_bank.m4a",
+   "ms": 2489,
+   "who": "rosa"
+  },
+  "m1_tower": {
+   "file": "m1_tower.m4a",
+   "ms": 3500,
+   "who": "rosa"
+  },
+  "m1_poser": {
+   "file": "m1_poser.m4a",
+   "ms": 2890,
+   "who": "rosa"
+  },
+  "m1_cart": {
+   "file": "m1_cart.m4a",
+   "ms": 3900,
+   "who": "rosa"
+  },
+  "m1_final": {
+   "file": "m1_final.m4a",
+   "ms": 2667,
+   "who": "rosa"
+  },
+  "m2_start": {
+   "file": "m2_start.m4a",
+   "ms": 3300,
+   "who": "rosa"
+  },
+  "m2_baskets": {
+   "file": "m2_baskets.m4a",
+   "ms": 3900,
+   "who": "rosa"
+  },
+  "m2_cook": {
+   "file": "m2_cook.m4a",
+   "ms": 2162,
+   "who": "rosa"
+  },
+  "m2_influ": {
+   "file": "m2_influ.m4a",
+   "ms": 2930,
+   "who": "rosa"
+  },
+  "m2_recover": {
+   "file": "m2_recover.m4a",
+   "ms": 3400,
+   "who": "rosa"
+  },
+  "m2_tray": {
+   "file": "m2_tray.m4a",
+   "ms": 2937,
+   "who": "rosa"
+  },
+  "m2_spill": {
+   "file": "m2_spill.m4a",
+   "ms": 3700,
+   "who": "rosa"
+  },
+  "m2_done": {
+   "file": "m2_done.m4a",
+   "ms": 4100,
+   "who": "rosa"
+  },
+  "timer_haywire": {
+   "file": "timer_haywire.m4a",
+   "ms": 4300,
+   "who": "rosa"
+  },
+  "m2_segment": {
+   "file": "m2_segment.m4a",
+   "ms": 2458,
+   "who": "rosa"
+  },
+  "m2_setback": {
+   "file": "m2_setback.m4a",
+   "ms": 4000,
+   "who": "rosa"
+  },
+  "m3_start": {
+   "file": "m3_start.m4a",
+   "ms": 3100,
+   "who": "rosa"
+  },
+  "m3_switch": {
+   "file": "m3_switch.m4a",
+   "ms": 1919,
+   "who": "rosa"
+  },
+  "m3_blower": {
+   "file": "m3_blower.m4a",
+   "ms": 2249,
+   "who": "rosa"
+  },
+  "m3_bank": {
+   "file": "m3_bank.m4a",
+   "ms": 1335,
+   "who": "rosa"
+  },
+  "m3_scatter": {
+   "file": "m3_scatter.m4a",
+   "ms": 1444,
+   "who": "rosa"
+  },
+  "m3_blower_off": {
+   "file": "m3_blower_off.m4a",
+   "ms": 1533,
+   "who": "rosa"
+  },
+  "m3_zone": {
+   "file": "m3_zone.m4a",
+   "ms": 3800,
+   "who": "rosa"
+  },
+  "m3_chairs": {
+   "file": "m3_chairs.m4a",
+   "ms": 3500,
+   "who": "rosa"
+  },
+  "m3_done": {
+   "file": "m3_done.m4a",
+   "ms": 2380,
+   "who": "rosa"
+  },
+  "m4_start": {
+   "file": "m4_start.m4a",
+   "ms": 2525,
+   "who": "rosa"
+  },
+  "m4_phase2": {
+   "file": "m4_phase2.m4a",
+   "ms": 2680,
+   "who": "rosa"
+  },
+  "m4_phase3": {
+   "file": "m4_phase3.m4a",
+   "ms": 2743,
+   "who": "rosa"
+  },
+  "pinata_tip": {
+   "file": "pinata_tip.m4a",
+   "ms": 1398,
+   "who": "rosa"
+  },
+  "pinata_decoys": {
+   "file": "pinata_decoys.m4a",
+   "ms": 2557,
+   "who": "rosa"
+  },
+  "pinata_decoys2": {
+   "file": "pinata_decoys2.m4a",
+   "ms": 4000,
+   "who": "rosa"
+  },
+  "m4_final": {
+   "file": "m4_final.m4a",
+   "ms": 2991,
+   "who": "rosa"
+  },
+  "influ_hit": {
+   "file": "influ_hit.m4a",
+   "ms": 2078,
+   "who": "influ"
+  },
+  "influ_hit2": {
+   "file": "influ_hit2.m4a",
+   "ms": 1397,
+   "who": "influ"
+  },
+  "influ_dodge": {
+   "file": "influ_dodge.m4a",
+   "ms": 1643,
+   "who": "influ"
+  },
+  "bocinas_warn": {
+   "file": "bocinas_warn.m4a",
+   "ms": 1320,
+   "who": "bocinas"
+  },
+  "bocinas_hit": {
+   "file": "bocinas_hit.m4a",
+   "ms": 2294,
+   "who": "bocinas"
+  },
+  "soplador_warn": {
+   "file": "soplador_warn.m4a",
+   "ms": 1851,
+   "who": "soplador"
+  },
+  "soplador_hit": {
+   "file": "soplador_hit.m4a",
+   "ms": 2181,
+   "who": "soplador"
+  },
+  "cart_hit": {
+   "file": "cart_hit.m4a",
+   "ms": 2421,
+   "who": "cart"
+  },
+  "rollcart_hit": {
+   "file": "rollcart_hit.m4a",
+   "ms": 1524,
+   "who": "rollcart"
+  },
+  "pinata_intro": {
+   "file": "pinata_intro.m4a",
+   "ms": 5200,
+   "who": "pinata"
+  },
+  "pinata_phase2": {
+   "file": "pinata_phase2.m4a",
+   "ms": 4200,
+   "who": "pinata"
+  },
+  "pinata_phase3": {
+   "file": "pinata_phase3.m4a",
+   "ms": 3400,
+   "who": "pinata"
+  },
+  "pinata_hit": {
+   "file": "pinata_hit.m4a",
+   "ms": 1886,
+   "who": "pinata"
+  }
+ }
+}

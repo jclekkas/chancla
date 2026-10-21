@@ -105,11 +105,15 @@ export const RULEROS: MissionDef = {
       onDone: [{ do: 'say', line: 'm1_final' }],
     },
   ],
-  timeTargetMs: 0, // set from simulation runs below (see tests/campaign-bot.test.ts)
+  // Time target: 2.5x the helper bot's median over 8 seeds (47.2 s, scripts/campaign-sim.ts),
+  // rounded up to 15 s. The bot plays near-perfectly; human playtesting has not tuned this yet.
+  timeTargetMs: 120000,
   challenges: [
     { id: 'complete', label: 'ch.complete' },
     { id: 'time', label: 'ch.time' },
-    { id: 'skill', label: 'm1.skill', skill: 'cartThrows', limit: 7 },
+    // Limit measured, not guessed: the cart needs 5 hits, and a near-perfect
+    // bot (0.002 rad aim error) needed 8 throws at best over 4 seeds.
+    { id: 'skill', label: 'm1.skill', skill: 'cartThrows', limit: 8 },
   ],
   config: { counter: 'rulero', total: 6 },
 };

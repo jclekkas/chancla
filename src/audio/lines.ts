@@ -89,7 +89,6 @@ export const LINES: Line[] = [
   L('pinata_decoys', 'rosa', '¿Piñatitas? ¿En serio?', 'Mini piñatas? Seriously?', 'story', 2),
   L('pinata_decoys2', 'rosa', 'Traen refuerzos. Yo también: la otra chancla.', "They brought backup. So did I: the other chancla.", 'story', 2),
   L('m4_final', 'rosa', 'Se acabó la fiesta. Bueno… ahora empieza.', 'The party is over. Well… now it starts.', 'story', 3),
-  L('m4_miss', 'rosa', 'Era para ver si estabas prestando atención.', 'Just checking you were paying attention.'),
 
   // ---- Opponents: a smaller, distinct set ---------------------------------
   L('influ_hit', 'influ', '¡Oye! ¡Estaba en vivo!', 'Hey! I was live!', 'banter', 2),

@@ -19,15 +19,16 @@ import type { MEvent, ProjS, Stats } from './mission';
 
 export const PINATA = {
   swingAmp: 0.62, swingPeriodMs: 4200, spinRadPerSec: 0.45,
-  tipRadius: 1.55, tipHit: 0.6, tipHp: 2, phase1Tips: 3,
+  tipRadius: 1.55, tipHit: 0.6, tipHp: 3, phase1Tips: 3, litMs: 5200, // one glowing point at a time
   bodyRadius: 1.0,
   panelRing: 2.1, panelRadius: 0.85, panelSpin: 0.95,
   decoysPerWave: 3, decoyWaves: 2, decoyRadius: 0.55, decoyThrowMs: 3600, decoyWindupMs: 700, confettiSpeed: 15,
-  coreRadius: 0.75, coreHp: 3, coreCycleMs: 5600, coreOpenMs: 2700, coreWarnMs: 1300,
+  tantrumMs: 3600, decoyHp: 2,
+  coreRadius: 0.75, coreHp: 4, coreCycleMs: 6400, coreOpenMs: 2700, coreWarnMs: 1300, // the core shuts after every hit
   bombEveryMs: [5200, 6000, 4600] as const, bombWarnMs: 1300, bombRadius: 2.1, bombDmg: 14,
 };
 
-export interface DecoyS { alive: boolean; a: number; r: number; y: number; nextThrowMs: number; windup: boolean }
+export interface DecoyS { alive: boolean; hp: number; a: number; r: number; y: number; nextThrowMs: number; windup: boolean }
 
 export interface PinataState {
   phase: 1 | 2 | 3;
@@ -44,6 +45,9 @@ export interface PinataState {
   panelAngle: number;
   swingT: number;
   hitFlashMs: number;
+  lit: number; // the one glowing (vulnerable) point
+  litT: number;
+  tantrumMs: number; // after a point breaks: spins, untouchable, bombs
 }
 
 export interface PinataCtx {
@@ -65,7 +69,7 @@ export class PinataSim {
     return {
       phase: 1, defeated: false, t: 0, x, y: y - this.spec.rope, z, spin: 0,
       tips: Array.from({ length: 5 }, () => ({ hp: PINATA.tipHp })),
-      decoys: [], wave: 0, coreHp: PINATA.coreHp, coreT: 0, nextBombMs: 4000, panelAngle: 0, swingT: 0, hitFlashMs: 0,
+      decoys: [], wave: 0, coreHp: PINATA.coreHp, coreT: 0, nextBombMs: 4000, panelAngle: 0, swingT: 0, hitFlashMs: 0, lit: 0, litT: 0, tantrumMs: 0,
     };
   }
 
@@ -106,7 +110,11 @@ export class PinataSim {
     s.x = px + Math.sin(th) * this.spec.rope;
     s.y = py - Math.cos(th) * this.spec.rope;
     s.z = pz;
-    if (s.phase < 3) s.spin += (PINATA.spinRadPerSec * dt) / 1000;
+    if (s.tantrumMs > 0) {
+      s.tantrumMs -= dt;
+      s.spin += (PINATA.spinRadPerSec * 9 * dt) / 1000;
+      if (s.tantrumMs <= 0) { this.nextLit(s, c); }
+    } else if (s.phase < 3) s.spin += (PINATA.spinRadPerSec * dt) / 1000;
     else {
       // Phase 3: turn to face Rosa so the core opening is readable.
       const want = Math.atan2(-(c.player.z - s.z), c.player.x - s.x) + Math.PI / 2;
@@ -116,6 +124,9 @@ export class PinataSim {
       s.spin += d * Math.min(1, dt / 400);
     }
     if (s.phase === 2) s.panelAngle += (PINATA.panelSpin * dt) / 1000;
+    // The glowing point moves on every few seconds (or when it breaks).
+    s.litT += dt;
+    if (s.phase < 3 && s.tantrumMs <= 0 && (s.litT > PINATA.litMs || (s.tips[s.lit]?.hp ?? 0) <= 0)) this.nextLit(s, c);
 
     // Candy bombs: a marked circle where Rosa is standing, then a burst.
     s.nextBombMs -= dt;
@@ -159,10 +170,17 @@ export class PinataSim {
     }
   }
 
+  private nextLit(s: PinataState, c: PinataCtx): void {
+    const alive = s.tips.map((t, i) => (t.hp > 0 ? i : -1)).filter((i) => i >= 0 && i !== s.lit);
+    if (!alive.length) { if ((s.tips[s.lit]?.hp ?? 0) <= 0) s.lit = -1; s.litT = 0; return; }
+    s.lit = alive[Math.floor(c.rng() * alive.length)]!;
+    s.litT = 0;
+  }
+
   private spawnWave(s: PinataState, c: PinataCtx): void {
     s.wave++;
     s.decoys = Array.from({ length: PINATA.decoysPerWave }, (_, i) => ({
-      alive: true, a: (i / PINATA.decoysPerWave) * Math.PI * 2 + s.wave, r: 6.5 + (i % 2) * 1.5, y: 2.6 + (i % 3) * 0.6,
+      alive: true, hp: PINATA.decoyHp, a: (i / PINATA.decoysPerWave) * Math.PI * 2 + s.wave, r: 6.5 + (i % 2) * 1.5, y: 2.6 + (i % 3) * 0.6,
       nextThrowMs: 1800 + i * 900, windup: false,
     }));
     c.emit({ k: 'say', line: s.wave === 1 ? 'pinata_decoys' : 'pinata_decoys2' });
@@ -197,16 +215,27 @@ export class PinataSim {
     const ok = () => { c.stats.hits++; if (pr.bounces > 0) c.stats.banks++; s.hitFlashMs = 150; c.emit({ k: 'hit', what: 'pinata', id: 'pinata', part, bank: pr.bounces > 0, heavy: pr.weapon === 1, p }); };
     if (part.startsWith('decoy:')) {
       const d = s.decoys[Number(part.slice(6))];
-      if (d && d.alive) { d.alive = false; ok(); }
+      if (d && d.alive) { d.hp -= pr.weapon === 1 ? 2 : 1; ok(); if (d.hp <= 0) d.alive = false; }
       return true;
     }
     if (part === 'panel' || part === 'body') { c.emit({ k: 'reject', id: 'pinata', why: 'armor' }); return true; }
     if (part.startsWith('tip:')) {
-      const tp = s.tips[Number(part.slice(4))]!;
+      const i = Number(part.slice(4));
+      const tp = s.tips[i]!;
       if (tp.hp <= 0) return true;
+      if (i !== s.lit || s.tantrumMs > 0) { c.emit({ k: 'reject', id: 'pinata', why: 'armor' }); return true; }
       tp.hp -= pr.weapon === 1 ? 2 : 1;
       ok();
-      if (tp.hp <= 0) c.emit({ k: 'say', line: 'pinata_tip' });
+      if (tp.hp <= 0) {
+        c.emit({ k: 'say', line: 'pinata_tip' });
+        // Tantrum: it spins, nothing gets through, and candy rains around Rosa.
+        s.tantrumMs = PINATA.tantrumMs;
+        s.lit = -1;
+        for (let k = 0; k < 3; k++) {
+          const a = c.rng() * Math.PI * 2, r = 1.5 + c.rng() * 3;
+          c.hazard(c.player.x + Math.cos(a) * r, c.player.z + Math.sin(a) * r, PINATA.bombWarnMs + k * 250, PINATA.bombRadius * 0.85, PINATA.bombDmg);
+        }
+      }
       if (s.phase === 1 && this.tipsBroken(s) >= PINATA.phase1Tips) this.toPhase(s, 2, c);
       return true;
     }
@@ -214,6 +243,7 @@ export class PinataSim {
       if (!this.coreOpen(s)) { c.emit({ k: 'reject', id: 'pinata', why: 'armor' }); return true; }
       s.coreHp -= 1;
       ok();
+      s.coreT = PINATA.coreWarnMs + PINATA.coreOpenMs; // snaps shut: one hit per opening
       if (s.coreHp <= 0) {
         s.defeated = true;
         c.stats.finishRicochet = pr.bounces > 0;

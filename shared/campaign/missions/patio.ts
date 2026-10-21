@@ -36,7 +36,7 @@ export const PATIO: MissionDef = {
       bx(16.92, 1.6, -7.4, 17.0, 4.6, -4.2, 'stone', 'bank:tiles1'),
       bx(16.92, 1.6, 4.6, 17.0, 4.6, 7.6, 'stone', 'bank:tiles2'),
     ],
-    waypoints: [[-6.5, 0, 3.2], [15.5, 0, 12.8], [22.6, 0, -12.6], [23.5, 0, -7.6], [23.5, 0, 9.5], [23.5, 0, -4.2], [23.5, 0, 4.2], [25.0, 0, 0.6], [24.6, 0, -1.0], [11.5, 0, -4.0], [10.5, 0, 4.5], [11.3, 0, -13.2], [19.3, 0, -12.9], [15, 0, -13.0], [23.5, 0, -10.0]],
+    waypoints: [[-6.5, 0, 3.2], [15.5, 0, 12.8], [22.6, 0, -12.6], [23.5, 0, -7.6], [4.25, 0, -12.3], [8.2, 0, -13.4], [13.5, 0, -11.7], [16.5, 0, -11.7], [21.6, 0, -11.8], [23.5, 0, 9.5], [23.5, 0, -4.2], [23.5, 0, 4.2], [25.0, 0, 0.6], [24.6, 0, -1.0], [11.5, 0, -4.0], [10.5, 0, 4.5], [11.3, 0, -13.2], [19.3, 0, -12.9], [15, 0, -13.0], [23.5, 0, -10.0]],
   },
   entities: [
     // --- Courtyard ---------------------------------------------------------
@@ -114,7 +114,9 @@ export const PATIO: MissionDef = {
       onDone: [{ do: 'say', line: 'm3_done' }],
     },
   ],
-  timeTargetMs: 0,
+  // Time target: 2.5x the helper bot's median over 8 seeds (136.9 s, scripts/campaign-sim.ts),
+  // rounded up to 15 s. The bot plays near-perfectly; human playtesting has not tuned this yet.
+  timeTargetMs: 345000,
   challenges: [
     { id: 'complete', label: 'ch.complete' },
     { id: 'time', label: 'ch.time' },

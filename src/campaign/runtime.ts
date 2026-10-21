@@ -13,7 +13,9 @@ import { audio } from '../audio/audio';
 import type { Dialogue } from '../audio/dialogue';
 import { music } from '../audio/music';
 import { Avatar } from '../fps/render/rosa';
-import { MissionView } from './view';
+import { buildBocinas, buildInfluencer, buildSoplador } from '../models/characters';
+import { COLORS, toon } from '../fps/render/materials';
+import { MissionView, toonify } from './view';
 import { MissionHud } from './mhud';
 
 export interface RuntimeHooks {
@@ -55,6 +57,14 @@ export class MissionRuntime implements Controller {
     engine.input.weapon = 0;
     music.play(def.music);
     this.handle(this.sim.drainEvents());
+    // Dusk party lighting for the finale (skipped on low quality).
+    if (def.theme === 'dusk' && engine.settings().quality !== 'low') {
+      for (const [c, x, z] of [[COLORS.pink, -8, -6], [COLORS.turquoise, 8, 6], [COLORS.gold, -8, 6], [0x9a6ad0, 8, -6]] as const) {
+        const l = new THREE.PointLight(c, 18, 18, 1.6);
+        l.position.set(x, 6.2, z);
+        this.view.group.add(l);
+      }
+    }
     // Compile every material now so the first throw or reveal never hitches.
     try { engine.renderer.compile(engine.scene, engine.camera); } catch { /* compiled lazily */ }
   }
@@ -310,6 +320,25 @@ export class MissionRuntime implements Controller {
     avatar.root.rotation.y = v?.yaw ?? p.yaw;
     e.scene.add(avatar.root);
     const extras: THREE.Object3D[] = [];
+    if (this.def.config?.finale) {
+      // The gathering: neighbors and the reformed helpers at the party tables,
+      // and a capped, short-lived scatter of wrapped candy.
+      const guests: Array<[THREE.Object3D, number, number, number]> = [
+        [buildInfluencer().root, -7.0, 3.4, Math.PI], [buildBocinas().root, 7.0, -3.4, 0], [buildSoplador().root, -1.0, -5.8, 0],
+        [new Avatar(1).root, 1.0, 5.8, Math.PI], [new Avatar(0).root, -3.2, 1.8, 2.2],
+      ];
+      for (const [obj, x, z, ry] of guests) { toonify(obj); obj.position.set(x, 0, z); obj.rotation.y = ry; e.scene.add(obj); extras.push(obj); }
+      const candyCols = [COLORS.pink, COLORS.turquoise, COLORS.gold, COLORS.marigold, 0x9a6ad0];
+      for (let i = 0; i < 24; i++) {
+        const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.12, 3, 6), toon(candyCols[i % candyCols.length]!));
+        const a = (i / 24) * Math.PI * 2;
+        c.position.set(Math.cos(a) * 0.4, 5.3, Math.sin(a) * 0.4);
+        c.userData.v = new THREE.Vector3(Math.cos(a) * (2 + (i % 5)), 3 + (i % 3), Math.sin(a) * (2 + (i % 5)));
+        e.scene.add(c);
+        extras.push(c);
+      }
+      e.world.setBrightness(1.15);
+    }
     music.stinger('complete');
     audio.play('victory');
     this.victory = { t: 0, avatar, center: new THREE.Vector3(at[0], at[1] + 1.1, at[2]), result: this.sim.result(), extras };
@@ -323,9 +352,17 @@ export class MissionRuntime implements Controller {
     v.t += dt;
     const reduced = e.settings().reducedMotion;
     const a = (reduced ? 0.6 : 0.6 + v.t * 0.45);
-    const r = 3.6;
+    const r = this.def.config?.finale ? 8.5 : 3.6;
     e.camera.position.set(v.center.x + Math.sin(a + v.avatar.root.rotation.y) * r, v.center.y + 0.5, v.center.z + Math.cos(a + v.avatar.root.rotation.y) * r);
     e.camera.lookAt(v.center);
+    // Candy falls and settles, then is cleared (never something to collect).
+    for (const o of v.extras) {
+      const vel = o.userData.v as THREE.Vector3 | undefined;
+      if (!vel) continue;
+      if (o.position.y > 0.06) { vel.y -= 9.8 * dt; o.position.addScaledVector(vel, dt); o.rotation.x += dt * 6; }
+      else { o.position.y = 0.06; vel.set(0, 0, 0); }
+      o.visible = v.t < 5.8;
+    }
     const cycle = (v.t * 1000) % 1600;
     v.avatar.update({ speed: 0, strafe: 0, back: 0, onGround: true, crouched: false, alive: true, protected: false, pitch: 0.2, weapon: 0, msSinceThrow: cycle < 420 ? cycle : 1e6, msSinceHit: 1e6, connected: true }, dt, reduced);
     this.view.update(dt, e.camera, null);
@@ -339,7 +376,10 @@ export class MissionRuntime implements Controller {
   }
 
   dispose(): void {
-    if (this.victory) { this.victory.avatar.root.removeFromParent(); this.victory.avatar.dispose(); }
+    if (this.victory) {
+      this.victory.avatar.root.removeFromParent(); this.victory.avatar.dispose();
+      for (const o of this.victory.extras) o.removeFromParent();
+    }
     this.view.dispose();
     this.hud.show(false);
     this.dialogue.reset();

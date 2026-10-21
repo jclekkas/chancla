@@ -152,7 +152,9 @@ function bossHints(sim: MissionSim, goal: string, out: MHint[]): void {
   const vel: [number, number, number] = [s.phase === 1 ? Math.cos((s.swingT / PINATA.swingPeriodMs) * Math.PI * 2) * PINATA.swingAmp * pin.spec.rope * (Math.PI * 2 / (PINATA.swingPeriodMs / 1000)) : 0, 0, 0];
   s.decoys.forEach((d, i) => { if (d.alive) out.push({ kind: 'shoot', id: `decoy:${i}`, pos: pin.decoyPos(s, d), goal }); });
   if (s.phase < 3) {
-    s.tips.forEach((t, i) => { if (t.hp > 0) out.push({ kind: 'shoot', id: `tip:${i}`, pos: pin.tipPos(s, i), vel, goal }); });
+    s.tips.forEach((t, i) => { if (t.hp > 0 && i === s.lit) out.push({ kind: 'shoot', id: `tip:${i}`, pos: pin.tipPos(s, i), vel, goal }); });
+    // Tantrum (or between points): keep moving and wait for the next glow.
+    if (s.lit < 0 || s.tantrumMs > 0) out.push({ kind: 'wait', id: 'pinata', pos: [s.x, s.y, s.z], goal });
   } else {
     out.push({ kind: pin.coreOpen(s) ? 'shoot' : 'wait', id: 'core', pos: [s.x, s.y, s.z], goal, open: pin.coreOpen(s) });
   }

@@ -21,6 +21,7 @@ import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
 import { music } from '../audio/music';
 import { Dialogue } from '../audio/dialogue';
+import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
 import type { SimEvent } from '../../shared/sim';
 
@@ -827,7 +828,11 @@ function bindUi(): void {
   });
   window.addEventListener('pagehide', () => { session?.close(); });
   // Unlock audio on the first interaction of any kind.
-  const unlock = () => { audio.unlock(); audio.setLevels(store.value.music, store.value.sfx); audio.setVoiceLevel(store.value.voice); music.resume(); };
+  const unlock = () => {
+    audio.unlock(); audio.setLevels(store.value.music, store.value.sfx); audio.setVoiceLevel(store.value.voice); music.resume();
+    // Shared reaction lines (used online and offline) load in the background.
+    void dialogue.loadManifest(BASE).then(() => dialogue.preload(LINES.filter((l) => !/^m\d_/.test(l.id)).map((l) => l.id)));
+  };
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
 }

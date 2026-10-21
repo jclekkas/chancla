@@ -156,6 +156,16 @@ const browser = await launch();
   await wait(page, 300);
   ok('resume continues the run', (await snap(page)).state === 'playing');
 
+  // Esc in the middle of a charge must cancel it, not fire on Resume.
+  const throwsBefore = await page.evaluate(() => window.__chancla.app.game.scoring.throws);
+  await page.mouse.down();
+  await waitFor(page, () => window.__chancla.app.game.charging, null, 4000);
+  await pressEscape(page);
+  await page.mouse.up();
+  await page.click('#btn-resume');
+  await wait(page, 800);
+  ok('Esc during a charge cancels the throw', (await page.evaluate(() => window.__chancla.app.game.scoring.throws)) === throwsBefore);
+
   // Visibility loss pauses.
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
@@ -224,6 +234,7 @@ const browser = await launch();
   await page.click('#btn-again');
   await wait(page, 400);
   s = await snap(page);
+  ok('play again shows the wave 1 banner', await page.isVisible('#banner'));
   ok('play again resets the run after victory', s.state === 'playing' && s.score === 0 && s.hp === 100 && s.wave === 0 && s.enemiesActive === 0 && s.bossVisible === 0 && s.chanclasHeld === 2);
 
   // Defeat flow.

@@ -297,6 +297,8 @@ export class Game {
       d.group.visible = false;
     }
     this.chanclas.recallAll();
+    // Practice throws do not count toward the run's accuracy.
+    this.scoring.reset();
     this.beginWave(0);
   }
 
@@ -643,7 +645,7 @@ export class Game {
       // Golden barrages are rapid-fire, so each one stings the boss less.
       const out = this.boss.takeHit(c.golden ? LEGEND.bossDamage : c.damage);
       if (!out.valid) return false;
-      if (!c.hitAny) this.scoring.noteThrowConnected();
+      if (!c.hitAny && !c.golden) this.scoring.noteThrowConnected();
       const res = this.scoring.hit({ ricochet: c.ricocheted, charged, interrupt: false, posing: false, legendary: c.golden, boss: true, kill: out.killed });
       this.addMeter(LEGEND.perHit * 0.6);
       this.particles.burst('thwap', p.x, p.y, p.z, 14);
@@ -670,7 +672,8 @@ export class Game {
     if (!e) return false;
     const out = e.takeHit(c.damage, c.vel.x, c.vel.z, c.knock, charged, this.hazards);
     if (!out.valid) return false;
-    if (!c.hitAny) this.scoring.noteThrowConnected();
+    // Only real throws count toward the accuracy streak.
+    if (!c.hitAny && !c.golden) this.scoring.noteThrowConnected();
     this.scoreEnemyHit(c, e, p, out.killed, out.interrupted, out.posing, charged);
     return true;
   }
@@ -747,7 +750,10 @@ export class Game {
       reached: this.reached,
     };
     this.charging = false;
-    this.legendaryT = 0;
+    if (this.legendaryT > 0) {
+      this.legendaryT = 0;
+      this.events.emit('legendary', { active: false });
+    }
     this.setPhase(victory ? 'victory' : 'defeat');
     this.events.emit('runEnd', result);
   }

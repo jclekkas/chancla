@@ -258,4 +258,48 @@ describe('game flow', () => {
     expect(vel.length()).toBeGreaterThan(29);
     expect(vel.z).toBeLessThan(0);
   });
+
+  it('regressions: Legendaria hits do not inflate the throw streak', () => {
+    const g = new Game(12);
+    g.startRun(true);
+    for (const [x, z] of [[-1.5, 8], [0, 8], [1.5, 8]] as const) {
+      const e = g.enemies.acquire('soplador')!;
+      e.spawn({ x, z, entryX: x, entryZ: z }, g.rng);
+      e.state = 'move';
+      e.attackCd = 99;
+    }
+    face(g, 0, 1.2, 8);
+    g.debugFillMeter();
+    step(g, SIM_DT, { ...emptyInput(), special: true });
+    step(g, 2, { ...emptyInput(), throwDown: true, throwHeld: true });
+    expect(g.scoring.hits).toBeGreaterThan(0);
+    expect(g.scoring.streak).toBe(0);
+  });
+
+  it('regressions: ending a run during Legendaria turns it off, and the boss resets his pose', () => {
+    const g = new Game(13);
+    const legend: boolean[] = [];
+    g.events.on('legendary', (e) => legend.push(e.active));
+    g.debugJumpToWave(3);
+    g.debugFillMeter();
+    step(g, SIM_DT, { ...emptyInput(), special: true });
+    g.boss.rig.armL.rotation.z = -2.5;
+    g.player.damage(1000);
+    step(g, 4);
+    expect(g.phase).toBe('defeat');
+    expect(legend).toEqual([true, false]);
+    g.startRun(true);
+    expect(g.boss.rig.armL.rotation.z).toBe(0);
+  });
+
+  it('regressions: tutorial practice throws do not count toward accuracy', () => {
+    const g = new Game(14);
+    g.startRun(false);
+    face(g, 0, 3, -20);
+    step(g, SIM_DT, tap());
+    step(g, 3);
+    expect(g.scoring.throws).toBe(1);
+    g.skipTutorial();
+    expect(g.scoring.throws).toBe(0);
+  });
 });

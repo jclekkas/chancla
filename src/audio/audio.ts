@@ -326,7 +326,10 @@ export class AudioEngine {
   // ----- music: a light cumbia groove, darker and faster for the boss -----
 
   setMusicMode(mode: MusicMode): void {
-    if (mode === this.mode) return;
+    if (mode === this.mode) {
+      if (mode !== 'off') this.startMusicTimer();
+      return;
+    }
     this.mode = mode;
     if (mode === 'off') {
       this.stopMusicTimer();

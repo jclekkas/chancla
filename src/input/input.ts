@@ -39,6 +39,8 @@ export class InputManager {
   onLockError: (() => void) | null = null;
   onTutorialSkip: (() => void) | null = null;
   lastKeyboardAt = 0;
+  private deniedAt = 0;
+  private lockRetried = false;
 
   constructor(canvas: HTMLElement) {
     this.canvas = canvas;
@@ -60,12 +62,17 @@ export class InputManager {
     this.bag.on(doc, 'pointerlockchange', () => {
       const locked = doc.pointerLockElement === this.canvas;
       this.lock = locked ? 'locked' : this.lock === 'denied' ? 'denied' : 'unlocked';
-      if (!locked) this.release('mouse');
+      if (!locked && this.throwSources.has('mouse')) {
+        // Losing the lock mid-charge cancels the throw instead of firing it.
+        this.throwSources.delete('mouse');
+        if (this.throwSources.size === 0) this.cancel = true;
+      }
       this.onLockChange?.(locked);
     });
     this.bag.on(doc, 'pointerlockerror', () => {
       if (this.lock === 'denied') return;
       this.lock = 'denied';
+      this.deniedAt = performance.now();
       this.onLockError?.();
     });
     this.bag.on(canvas, 'contextmenu', (e) => e.preventDefault());
@@ -73,6 +80,13 @@ export class InputManager {
     this.bag.on<PointerEvent>(canvas, 'pointerdown', (e) => {
       if (!this.enabled || this.lock === 'locked' || e.pointerType === 'touch') return;
       if (e.button !== 0) return;
+      // After a denial (Chrome refuses re-locking within ~1s of Esc), the
+      // next click on the game tries once more instead of staying in drag mode.
+      if (this.lock === 'denied' && !this.lockRetried && performance.now() - this.deniedAt > 1200) {
+        this.lockRetried = true;
+        this.requestLock();
+        return;
+      }
       this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, t: performance.now(), charging: false };
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     });
@@ -232,6 +246,7 @@ export class InputManager {
 
   requestLock(): void {
     if (this.usingTouch) return;
+    if (this.lock !== 'denied') this.lockRetried = false;
     const el = this.canvas as HTMLElement & { requestPointerLock?: () => Promise<void> | void };
     if (typeof el.requestPointerLock !== 'function') {
       this.lock = 'denied';
@@ -242,6 +257,7 @@ export class InputManager {
     const fail = (): void => {
       if (document.pointerLockElement === this.canvas || this.lock === 'denied') return;
       this.lock = 'denied';
+      this.deniedAt = performance.now();
       this.onLockError?.();
     };
     try {

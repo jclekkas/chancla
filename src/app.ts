@@ -284,6 +284,11 @@ export class App {
     };
     this.input.onTutorialSkip = () => this.game.skipTutorial();
     this.input.onLockChange = (locked) => {
+      // A lock granted after the player already paused would trap the cursor.
+      if (locked && this.state !== 'playing') {
+        this.input.exitLock();
+        return;
+      }
       if (!locked && this.state === 'playing' && !this.usingTouch) {
         this.pause();
         this.toast(t('toast.lockLost'));
@@ -468,11 +473,20 @@ export class App {
   play(skipTutorial: boolean): void {
     audio.unlock();
     this.clearTimers();
+    this.resetRunUi();
     this.game.startRun(skipTutorial);
     this.enterPlaying();
     audio.setMusicMode(skipTutorial ? 'game' : 'title');
+    audio.resume();
     this.runCount++;
     if (!this.storage.persistent && this.runCount === 1) this.toast(t('toast.storageOff'));
+  }
+
+  // Clears HUD and callouts before a run starts, so the run's opening
+  // banner and quip (emitted by startRun) stay visible.
+  private resetRunUi(): void {
+    this.hud.reset();
+    this.callouts.clear();
   }
 
   private enterPlaying(): void {
@@ -480,9 +494,7 @@ export class App {
     (document.activeElement as HTMLElement | null)?.blur?.();
     this.renderer.domElement.focus({ preventScroll: true });
     $('hud').hidden = false;
-    this.hud.reset();
     this.hud.tutorialStep = this.game.phase === 'tutorial' ? this.game.tutorial.step : null;
-    this.callouts.clear();
     this.state = 'playing';
     this.input.clear();
     this.input.consume(this.frame);
@@ -498,6 +510,9 @@ export class App {
   pause(): void {
     if (this.state !== 'playing') return;
     this.state = 'paused';
+    // Drop any charge in progress so Resume never fires a stale throw.
+    this.game.charging = false;
+    this.game.chargeT = 0;
     this.input.enabled = false;
     this.input.clear();
     this.touch.reset();
@@ -525,9 +540,11 @@ export class App {
   restart(): void {
     audio.unlock();
     this.clearTimers();
+    this.resetRunUi();
     this.game.startRun(true);
     this.enterPlaying();
     audio.setMusicMode('game');
+    audio.resume();
   }
 
   toTitle(): void {
@@ -536,6 +553,7 @@ export class App {
     this.callouts.clear();
     this.hud.reset();
     this.showTitle();
+    audio.resume();
     this.focusFirst('screen-title');
   }
 

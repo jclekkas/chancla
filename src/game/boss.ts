@@ -107,7 +107,8 @@ export class Boss {
     this.group.visible = false;
     this.rig.root.position.copy(this.pos);
     this.rig.root.rotation.set(0, Math.PI, 0);
-    this.rig.body.rotation.set(0, 0, 0);
+    // Undo the pratfall pose from a previous run.
+    for (const o of [this.rig.body, this.rig.armL, this.rig.armR, this.rig.head]) o.rotation.set(0, 0, 0);
     this.rig.stars.visible = false;
   }
 

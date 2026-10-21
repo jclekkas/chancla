@@ -27,7 +27,7 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | **Phones and tablets** | **Touch Beta (experimental).** The Arcade plays by touch, on all three maps. Story, Practice and Online are marked computer only. Checked only in mobile emulation, never on a real phone. Please try it on yours and use the device checklist in [MOBILE.md](MOBILE.md). |
 | **Online multiplayer** | **Not available.** No game server is hosted yet. The title screen says "Online play is not set up on this deployment yet." Hosting one is a separate step that may cost money; it is waiting on your approval. |
 | **Voices** | **Temporary.** Every line is spoken by a clearly synthetic placeholder voice (offline text-to-speech, Castilian Spanish). They show when and how lines play, not how the final performance should sound. Please judge the writing and timing, not the voices. |
-| Music | **The five Suno tracks**: Rosa's theme on the menus, Ruleros in Mission 1, Fricas y Fricas in Missions 2 and 3, Guerra de Vecinos in the piñata finale, and Bounce y Joke in practice. Each one loops. The loop points were chosen by analysis and nobody has listened to them yet, so you will be the first. If a track is slow to download, the old synthesized music plays until it arrives. |
+| Music | **All 11 Suno playlist songs.** By default, each part of the game draws from its own songs (menus, exploration, chores, action, the finale), plays them whole, and crossfades at the end. **Settings → Soundtrack** can switch to Shuffle all or One song, skip with Next, and show what's playing. Nobody has listened to the rotation or the crossfades yet, so you'll be the first. Please note any song that feels wrong for its scene. If a song is slow to download, the old synthesized music plays until it arrives. |
 | Effects | Synthesized in the browser. |
 
 ## How to play
@@ -39,7 +39,7 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | Throw | Left click or F |
 | Weapons | 1 / 2: La Chancla / La Pesada |
 | Jump / crouch | Space / C |
-| Menu | Esc: pause, retry from checkpoint, restart, settings, leave |
+| Menu | **Esc or P** (shown on screen while you aim): opens the menu and frees the mouse in one press. Solo play pauses; an online match keeps going, and the menu says so. To get back in, click Resume. |
 
 Settings include music, effects and dialogue volume, subtitles (menu language, Spanish, English, off), automatic banter on or off, objective markers, mouse sensitivity and invert Y.
 

@@ -20,6 +20,8 @@ import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
 import { music } from '../audio/music';
+import { loadMusicPrefs } from '../audio/prefs';
+import { SoundtrackPanel } from '../ui/soundtrackPanel';
 import { SoundGate } from '../ui/soundGate';
 import { renderMapCards, type MapChoice } from '../ui/mapSelect';
 import { copyLink, inputProfile, watchInputProfile, type InputProfile } from '../ui/device';
@@ -30,6 +32,7 @@ import { CampaignUi } from '../campaign/ui';
 import type { SimEvent } from '../../shared/sim';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+let soundtrack: SoundtrackPanel | null = null;
 
 type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
 const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
@@ -140,7 +143,9 @@ function render(): void {
   $('scr-title').hidden = !(base === 'title' || ((base === 'online' || base === 'practice') && !inMatch));
   const hudOn = inMatch && base !== 'lobby';
   $('hud').hidden = !hudOn;
-  $('click-to-play').hidden = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
+  const ctp = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
+  $('click-to-play').hidden = ctp;
+  if (!ctp) $('ctp-note').textContent = t(practice || campaign?.active ? 'hud.waitingSolo' : 'hud.waitingOnline');
   if (input) input.enabled = inMatch && base === 'none' && overlayStack.length === 0;
   if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback);
   // Focus the first control of the newest panel for keyboard players.
@@ -155,10 +160,15 @@ function render(): void {
   updatePracticePause();
 }
 
+/** Solo play waits while the mouse isn't captured: the menu, or the "click to aim" prompt after a refused or lost lock. */
+function waitingForAim(): boolean {
+  return inMatch && base === 'none' && overlayStack.length === 0 && !!input && !input.locked && !input.fallback;
+}
+
 function updatePracticePause(): void {
-  if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0);
+  if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
-  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0);
+  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
@@ -218,6 +228,8 @@ async function boot(): Promise<void> {
   }, storage);
   const uiTick = () => { campaign.tick(); if (!campaign.active) dialogue.update(); requestAnimationFrame(uiTick); };
   requestAnimationFrame(uiTick);
+  music.setPrefs(loadMusicPrefs());
+  soundtrack = new SoundtrackPanel($('soundtrack'), { lang: getLang, musicSilenced: () => store.value.music <= 0.001, onUi: () => audio.play('ui') });
   music.play('menu');
   document.documentElement.lang = getLang();
   document.title = t('meta.title');
@@ -655,6 +667,7 @@ function applyInputSettings(): void {
 
 function renderSettings(): void {
   renderSoundStatus();
+  soundtrack?.render();
   const v = store.value;
   const seg = (attr: string, val: string) => document.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) => {
     const on = b.dataset[attr] === val;
@@ -706,6 +719,7 @@ function changeLang(lang: 'en' | 'es'): void {
   applyDom(document);
   hud.invalidate();
   soundGate?.render();
+  soundtrack?.render();
   if (lastProfile) applyInputProfile(lastProfile); // relabel, keeping a detected mouse or keyboard
   if (serverOk !== null || !serverUrl()) checkServer();
   if (lastRoom && base === 'lobby') renderLobby(lastRoom);
@@ -991,6 +1005,7 @@ function debugApi() {
     get code() { return lastRoom?.code ?? null; },
     info: () => engine?.debugInfo() ?? { mode: 'no-webgl' },
     session: () => session,
+    host: () => host,
     engine: () => engine,
     input: () => input,
     campaign: () => campaign,

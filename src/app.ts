@@ -7,7 +7,10 @@ import { InputManager } from './input/input';
 import { TouchControls } from './ui/touch';
 import { Hud } from './ui/hud';
 import { Callouts } from './ui/callouts';
-import { audio } from './audio/audio';
+import { audio, type MusicMode } from './audio/audio';
+import { music, type TrackId } from './audio/music';
+import { loadMusicPrefs } from './audio/prefs';
+import { SoundtrackPanel } from './ui/soundtrackPanel';
 import { applyDom, formatNumber, getLang, onLangChange, quip, setLang, t } from './i18n/i18n';
 import type { Lang, StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, type Settings, type Quality } from './persistence/storage';
@@ -89,6 +92,12 @@ export class App {
     this.storage = storage;
     this.settings = settings;
     this.progress = progress;
+    // The Arcade's music modes drive the shared soundtrack: its title shares
+    // the menus' songs, a run shuffles the whole playlist, the boss gets the
+    // intense pool. Pausing lowers the song instead of stopping it.
+    const cue: Record<MusicMode, TrackId> = { title: 'menu', game: 'arcade', boss: 'boss', off: 'off' };
+    audio.musicDriver = (mode, held) => { music.play(cue[mode]); music.setHeld(held && mode !== 'off'); };
+    music.setPrefs(loadMusicPrefs());
     const stage = $('stage');
     stage.appendChild(renderer.domElement);
     renderer.domElement.tabIndex = -1;
@@ -132,6 +141,7 @@ export class App {
     // Title music starts on the first eligible click or key press anywhere,
     // and resumes after the tab is hidden or the page returns via Back.
     audio.armLifecycle();
+    this.soundtrack = new SoundtrackPanel($('soundtrack'), { lang: getLang, musicSilenced: () => this.settings.value.muted || this.settings.value.volume <= 0.001 || !this.settings.value.music, onUi: () => audio.play('ui') });
     this.soundGate = new SoundGate({
       text: (k) => t(`sound.${k}` as StringKey),
       inGame: () => this.state === 'playing',
@@ -178,7 +188,10 @@ export class App {
     this.applySettings(s);
   }
 
+  private soundtrack: SoundtrackPanel | null = null;
+
   private syncSettingsUi(): void {
+    this.soundtrack?.render();
     if (this.soundGate) $('sound-status').textContent = this.soundGate.describe((k) => t(`sound.status.${k}` as StringKey));
     const s = this.settings.value;
     ($('set-volume') as HTMLInputElement).value = String(Math.round(s.volume * 100));
@@ -305,6 +318,7 @@ export class App {
       applyDom(document);
       this.hud.invalidate();
       this.soundGate?.render();
+      this.soundtrack?.render();
       this.showModeChip();
       if (!$('modal-maps').hidden) this.renderMaps();
       this.refreshBest();
@@ -1013,7 +1027,8 @@ export class App {
       listeners: liveListenerCount(),
       audioVoices: audio.voices,
       audioContexts: audio.contextCount,
-      musicTimer: audio.musicTimerRunning,
+      musicTimer: audio.musicTimerRunning || music.state().layer !== 'off',
+      music: music.state(),
       audioState: audio.state,
       musicMode: audio.musicMode,
       callouts: this.callouts.activeCount,

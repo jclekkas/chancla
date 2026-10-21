@@ -4,6 +4,8 @@ import { Game } from './game/game';
 import type { SafeStorage, SettingsStore, ProgressStore } from './persistence/storage';
 import type { StringKey } from './i18n/strings';
 import { applyDom } from './i18n/i18n';
+import { audio } from './audio/audio';
+import { music } from './audio/music';
 
 export interface StartOptions {
   storage: SafeStorage;
@@ -17,6 +19,8 @@ declare global {
     __chancla?: {
       app: App;
       snapshot(): Record<string, unknown>;
+      audio: typeof audio;
+      music: typeof music;
     };
   }
 }
@@ -63,7 +67,7 @@ export async function start(o: StartOptions): Promise<App> {
   document.getElementById('boot')?.remove();
   applyDom(document);
   app.resize();
-  window.__chancla = { app, snapshot: () => app.debugSnapshot() };
+  window.__chancla = { app, snapshot: () => app.debugSnapshot(), audio, music };
   (document.getElementById('btn-play') as HTMLElement | null)?.focus({ preventScroll: true });
   return app;
 }

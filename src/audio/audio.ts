@@ -10,7 +10,7 @@ export type Sfx =
   | 'throwHeavy' | 'hitConfirm' | 'headshot' | 'hurtFps' | 'elimConfirm' | 'died' | 'heartbeat' | 'countdown' | 'go'
   | 'win' | 'lose' | 'switch' | 'jump' | 'landSoft' | 'step' | 'spawn' | 'shielded' | 'heavyImpact';
 
-type MusicMode = 'off' | 'title' | 'game' | 'boss';
+export type MusicMode = 'off' | 'title' | 'game' | 'boss';
 
 interface Ctx {
   ctx: AudioContext;
@@ -196,7 +196,7 @@ export class AudioEngine {
         ctx.addEventListener('statechange', () => { if (ctx.state === 'running' && this.a?.ctx === ctx) this.ran(false); });
         // The Arcade picks its music mode before audio exists (its title
         // screen shows at load); start that music now, unless it is paused.
-        if (this.mode !== 'off' && !this.musicHeld) this.startMusicTimer();
+        if (this.mode !== 'off' && !this.musicHeld && !this.musicDriver) this.startMusicTimer();
         this.ran(true);
       }
       if (this.a.ctx.state !== 'running' && !(typeof document !== 'undefined' && document.hidden)) void this.a.ctx.resume().catch(() => undefined);
@@ -269,12 +269,21 @@ export class AudioEngine {
   suspend(): void {
     this.musicHeld = true;
     this.stopMusicTimer();
+    this.musicDriver?.(this.mode, true);
   }
 
   resume(): void {
     this.musicHeld = false;
-    if (this.mode !== 'off') this.startMusicTimer();
+    if (this.musicDriver) this.musicDriver(this.mode, false);
+    else if (this.mode !== 'off') this.startMusicTimer();
   }
+
+  /**
+   * When set (the Arcade), the music modes drive the shared soundtrack
+   * controller (music.ts) instead of the built-in groove below, so one player
+   * serves every page. `held`: a paused run.
+   */
+  musicDriver: ((mode: MusicMode, held: boolean) => void) | null = null;
 
   // ----- voice helpers -----
 
@@ -568,6 +577,7 @@ export class AudioEngine {
   // ----- music: a light cumbia groove, darker and faster for the boss -----
 
   setMusicMode(mode: MusicMode): void {
+    if (this.musicDriver) { this.mode = mode; this.musicDriver(mode, this.musicHeld); return; }
     if (mode === this.mode) {
       if (mode !== 'off') this.startMusicTimer();
       return;

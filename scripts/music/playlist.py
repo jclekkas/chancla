@@ -1,0 +1,116 @@
+# Adds the full Suno playlist (11 recordings) to the game, without re-encoding.
+#
+#   python3 scripts/music/playlist.py <unzipped playlist folder>
+#
+# The folder is the size-limited playlist download: tracks.json plus audio/*.mp3
+# (128 kbps derivatives, cover art removed). It stays outside the repository:
+# only the runtime copies and a manifest are committed.
+#
+# For each track in tracks.json:
+#   1. checks the file against its SHA-256 and that it holds one audio stream
+#      and nothing else (no embedded art)
+#   2. decodes it fully with ffmpeg and fails on any decode error
+#   3. measures integrated loudness and true peak (EBU R128), and works out the
+#      playback gain that brings it to the same -16 LUFS as the prepared loops,
+#      held back if needed so the true peak stays at or below -1.5 dBTP.
+#      The gain is applied by the player, so the audio is never re-encoded.
+#   4. estimates tempo and key (scripts/music/features.py), used to pitch the
+#      synthesized stingers to the song
+#   5. copies the file byte for byte to public/music/playlist/
+# Then writes assets/music/playlist.json (provenance and measurements) and
+# src/audio/playlist-data.ts (what the game reads).
+#
+# Needs ffmpeg and numpy.
+import json, subprocess, sys, hashlib, shutil, re
+from pathlib import Path
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import features as F  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / 'public/music/playlist'
+TARGET_LUFS = -16.0
+MAX_TP = -1.5
+
+
+def slug(title):
+    s = title.lower()
+    for a, b in (('á', 'a'), ('é', 'e'), ('í', 'i'), ('ó', 'o'), ('ú', 'u'), ('ñ', 'n')):
+        s = s.replace(a, b)
+    return re.sub(r'[^a-z0-9]+', '-', s).strip('-')
+
+
+def loudness(path):
+    out = subprocess.run(['ffmpeg', '-v', 'info', '-nostats', '-i', str(path), '-af', 'ebur128=peak=true', '-f', 'null', '-'],
+                         capture_output=True, text=True).stderr
+    tail = out[out.rfind('Summary:'):]
+    i = float(tail.split('I:')[1].split('LUFS')[0])
+    lra = float(tail.split('LRA:')[1].split('LU')[0])
+    tp = float(tail.split('Peak:')[1].split('dBFS')[0])
+    return i, lra, tp
+
+
+def main(folder):
+    src = Path(folder)
+    meta = json.loads((src / 'tracks.json').read_text())
+    OUT.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for n, t in enumerate(meta, 1):
+        f = src / t['file']
+        data = f.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        if sha != t['sha256']:
+            sys.exit(f"checksum mismatch: {t['file']}")
+        streams = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type,codec_name,sample_rate,channels,bit_rate', '-of', 'json', str(f)],
+                                 capture_output=True, text=True, check=True).stdout
+        st = json.loads(streams)['streams']
+        if len(st) != 1 or st[0]['codec_type'] != 'audio' or st[0]['codec_name'] != 'mp3':
+            sys.exit(f"unexpected streams in {t['file']}: {st}")
+        dec = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(f), '-ac', '2', '-ar', str(F.SR), '-f', 'f32le', '-'], capture_output=True)
+        if dec.returncode or dec.stderr.strip():
+            sys.exit(f"decode errors in {t['file']}: {dec.stderr[:300]}")
+        x = np.frombuffer(dec.stdout, np.float32).reshape(-1, 2)
+        seconds = len(x) / F.SR
+        i, lra, tp = loudness(f)
+        gain = min(TARGET_LUFS - i, MAX_TP - tp)
+        mono = x.mean(1)
+        m, hop = F.stft_mag(mono)
+        chroma, _ = F.features(m)
+        bpm = F.tempo(F.onset_env(m), hop)
+        key = F.key(chroma)
+        sid = t['suno_id']
+        name = f"{n:02d}-{slug(t['title'])}-{sid[:8]}.mp3"
+        shutil.copyfile(f, OUT / name)
+        rows.append({
+            'id': sid[:8], 'sunoId': sid, 'title': t['title'], 'sourceUrl': t['source_url'],
+            'file': f'music/playlist/{name}', 'bytes': len(data), 'sha256': sha, 'originalSha256': t['original_sha256'],
+            'encoding': t['encoding'], 'stream': {'codec': 'mp3', 'sampleRate': int(st[0]['sample_rate']), 'channels': st[0]['channels'], 'bitRate': int(st[0].get('bit_rate', 0))},
+            'durationListed': t['duration_seconds'], 'durationDecoded': round(seconds, 3),
+            'lufs': i, 'lra': lra, 'truePeak': tp, 'gainDb': round(gain, 2),
+            'bpm': round(float(bpm), 1), 'key': {'name': key['name'], 'root': key['root'], 'minor': key['minor'], 'confidence': round(key['conf'], 3)},
+        })
+        print(json.dumps({k: rows[-1][k] for k in ('id', 'title', 'durationDecoded', 'lufs', 'truePeak', 'gainDb', 'bpm')}, ensure_ascii=False), rows[-1]['key']['name'])
+    readme = (src / 'README.txt').read_text().strip() if (src / 'README.txt').exists() else ''
+    readme = readme.replace(' \u2014 ', ': ')  # house style: no dash characters (the only edit to the quote)
+    manifest = {
+        'note': 'Runtime copies are byte-identical to the supplied files (sha256 below). Generated by scripts/music/playlist.py; provenance is quoted from the supplier\'s README, not added to (one dash replaced by a colon, nothing else changed).',
+        'playlist': 'https://suno.com/playlist/fee136f7-4971-42f7-a5ad-368f1b1ba7d6',
+        'supplierReadme': readme,
+        'loudnessTarget': {'lufs': TARGET_LUFS, 'maxTruePeak': MAX_TP, 'appliedBy': 'player gain (no re-encode)'},
+        'tracks': rows,
+    }
+    (ROOT / 'assets/music/playlist.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n')
+    lean = [{'id': r['id'], 'sunoId': r['sunoId'], 'title': r['title'], 'file': r['file'], 'duration': r['durationDecoded'],
+             'gainDb': r['gainDb'], 'bpm': r['bpm'], 'key': {'root': r['key']['root'], 'minor': r['key']['minor']}} for r in rows]
+    ts = ['// Generated by scripts/music/playlist.py from the supplied playlist. Do not edit by hand.',
+          '// The full Suno playlist, played whole (no loop points). Provenance: assets/music/playlist.json.',
+          'export interface PlaylistTrack { id: string; sunoId: string; title: string; file: string; duration: number; gainDb: number; bpm: number; key: { root: number; minor: boolean } }',
+          f'export const PLAYLIST: readonly PlaylistTrack[] = {json.dumps(lean, indent=2, ensure_ascii=False)};', '']
+    (ROOT / 'src/audio/playlist-data.ts').write_text('\n'.join(ts))
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        sys.exit('usage: playlist.py <unzipped playlist folder>')
+    main(sys.argv[1])

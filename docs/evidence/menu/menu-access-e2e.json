@@ -1,0 +1,301 @@
+{
+  "at": "2026-10-21T23:19:46.709Z",
+  "browser": "Chromium 141 headed under Xvfb (Linux), real pointer lock",
+  "passed": 28,
+  "total": 28,
+  "checks": [
+    {
+      "name": "Start captures the mouse right away (its click counts), or practice waits paused behind \"click to aim\"",
+      "ok": true,
+      "detail": {
+        "locked": true,
+        "ctp": false,
+        "paused": false
+      }
+    },
+    {
+      "name": "a click captures the mouse; play runs",
+      "ok": true,
+      "detail": {
+        "screen": "none",
+        "locked": true,
+        "held": 0,
+        "fallback": false,
+        "tl": 300000,
+        "shots": 0,
+        "x": 0,
+        "z": 0,
+        "focus": "",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": false
+      }
+    },
+    {
+      "name": "while aiming, the HUD shows \"Esc or P: Menu\"",
+      "ok": true,
+      "detail": "Esc or P: Menu"
+    },
+    {
+      "name": "reproduced: clicking where the menu icon is, while aiming, does not reach it (the click goes to the game)",
+      "ok": true,
+      "detail": {
+        "locked": true,
+        "screen": "none"
+      }
+    },
+    {
+      "name": "overlapping events from one Escape press (repeat keydown, lock change) leave the menu open",
+      "ok": true,
+      "detail": "pause"
+    },
+    {
+      "name": "Escape while moving and throwing: mouse freed, menu open, held input dropped",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0,
+        "fallback": false,
+        "tl": 298617,
+        "shots": 1,
+        "x": 0,
+        "z": 0,
+        "focus": "btn-resume",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": true
+      }
+    },
+    {
+      "name": "the menu takes keyboard focus on Resume",
+      "ok": true,
+      "detail": "btn-resume"
+    },
+    {
+      "name": "releasing the mouse button over the menu throws nothing",
+      "ok": true,
+      "detail": {
+        "shots0": 1,
+        "shotsAtMenu": 1
+      }
+    },
+    {
+      "name": "while the menu is open, practice is paused (clock frozen)",
+      "ok": true,
+      "detail": {
+        "t0": 298617,
+        "t1": 298617
+      }
+    },
+    {
+      "name": "Resume (an explicit click) captures the mouse again and play continues",
+      "ok": true,
+      "detail": {
+        "screen": "none",
+        "locked": true,
+        "held": 0,
+        "fallback": false,
+        "tl": 298167,
+        "shots": 1,
+        "x": 0,
+        "z": 0,
+        "focus": "",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": false
+      }
+    },
+    {
+      "name": "the resuming click throws nothing",
+      "ok": true,
+      "detail": {
+        "shotsAtMenu": 1,
+        "shotsAfterResume": 1
+      }
+    },
+    {
+      "name": "when the browser itself releases the mouse, the menu opens",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0,
+        "fallback": false,
+        "tl": 296967,
+        "shots": 1,
+        "x": 0,
+        "z": 0,
+        "focus": "btn-resume",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": true
+      }
+    },
+    {
+      "name": "no automatic re-capture (focus return, a click beside the menu)",
+      "ok": true
+    },
+    {
+      "name": "10 Escape / P cycles while moving and throwing: the menu opened every time",
+      "ok": true,
+      "detail": {
+        "opened": 10
+      }
+    },
+    {
+      "name": "no stuck input after any cycle, and nothing thrown from the menu",
+      "ok": true,
+      "detail": {
+        "stuck": 0,
+        "thrown": 0
+      }
+    },
+    {
+      "name": "after the last resume, no movement without keys pressed",
+      "ok": true,
+      "detail": {
+        "moved": 0
+      }
+    },
+    {
+      "name": "a refused re-capture: practice stays paused (clock frozen) behind the \"click to aim\" recovery button",
+      "ok": true,
+      "detail": {
+        "locked": false,
+        "ctp": true,
+        "paused": true,
+        "tr0": 290617,
+        "tr1": 290617
+      }
+    },
+    {
+      "name": "the recovery button captures the mouse and play continues",
+      "ok": true,
+      "detail": {
+        "screen": "none",
+        "locked": true,
+        "held": 0,
+        "fallback": false,
+        "tl": 290167,
+        "shots": 2,
+        "x": 0,
+        "z": 0,
+        "focus": "",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": false
+      }
+    },
+    {
+      "name": "while dead, Escape still opens the menu and frees the mouse",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0,
+        "fallback": false,
+        "tl": 289917,
+        "shots": 2,
+        "x": 0,
+        "z": 0,
+        "focus": "btn-resume",
+        "hint": "Esc or P: Menu",
+        "ctp": false,
+        "ctpNote": "Paused until you click. Esc or P opens the menu.",
+        "paused": true
+      }
+    },
+    {
+      "name": "results: the mouse is free and the screen offers its way out",
+      "ok": true,
+      "detail": {
+        "screen": "results",
+        "locked": false,
+        "btns": [
+          "btn-rematch",
+          "btn-res-maps",
+          "btn-res-leave"
+        ]
+      }
+    },
+    {
+      "name": "Arcade: aiming with the mouse captured, the hint says \"Esc or P: Menu\"",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "locked": true,
+        "throws": 0,
+        "held": 2,
+        "hint": "Esc or P: Menu",
+        "run": 0.2
+      }
+    },
+    {
+      "name": "Arcade: Escape frees the mouse and pauses the run in one press",
+      "ok": true,
+      "detail": {
+        "state": "paused",
+        "locked": false,
+        "throws": 0,
+        "held": 2,
+        "hint": "Esc or P: Menu",
+        "run": 0.33
+      }
+    },
+    {
+      "name": "Arcade: paused run stays frozen (Escape)",
+      "ok": true
+    },
+    {
+      "name": "Arcade: Resume by click re-captures, nothing thrown by it (Escape)",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "locked": true,
+        "throws": 0,
+        "held": 2,
+        "hint": "Esc or P: Menu",
+        "run": 0.43
+      }
+    },
+    {
+      "name": "Arcade: P frees the mouse and pauses the run in one press",
+      "ok": true,
+      "detail": {
+        "state": "paused",
+        "locked": false,
+        "throws": 0,
+        "held": 2,
+        "hint": "Esc or P: Menu",
+        "run": 0.43
+      }
+    },
+    {
+      "name": "Arcade: paused run stays frozen (KeyP)",
+      "ok": true
+    },
+    {
+      "name": "Arcade: Resume by click re-captures, nothing thrown by it (KeyP)",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "locked": true,
+        "throws": 0,
+        "held": 2,
+        "hint": "Esc or P: Menu",
+        "run": 0.53
+      }
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

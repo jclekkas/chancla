@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-21T18:16:26.824Z",
+  "startedAt": "2026-10-21T23:22:39.430Z",
   "decode": {
     "rosa-theme": {
       "decodedSamples": 4276320,
@@ -42,86 +42,229 @@
       "p999": 0.19439697265625
     }
   },
+  "playlistDecode": {
+    "72898684": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 166.48,
+      "rate": 48000,
+      "channels": 2
+    },
+    "36b2c7ad": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 182.76,
+      "rate": 48000,
+      "channels": 2
+    },
+    "d4b3fb6f": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 130.76,
+      "rate": 48000,
+      "channels": 2
+    },
+    "b5a37a72": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 131.2,
+      "rate": 48000,
+      "channels": 2
+    },
+    "d5ece162": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 68,
+      "rate": 48000,
+      "channels": 2
+    },
+    "4c389fba": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 71.2,
+      "rate": 48000,
+      "channels": 2
+    },
+    "66be822e": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 146.92,
+      "rate": 48000,
+      "channels": 2
+    },
+    "91dee4c5": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 143.08,
+      "rate": 48000,
+      "channels": 2
+    },
+    "a5773b78": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 78,
+      "rate": 48000,
+      "channels": 2
+    },
+    "6265def8": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 63.48,
+      "rate": 48000,
+      "channels": 2
+    },
+    "036c0292": {
+      "status": 200,
+      "type": "audio/mpeg",
+      "duration": 121.88,
+      "rate": 48000,
+      "channels": 2
+    }
+  },
   "switches": {
     "ruleros": {
       "ms": 1,
       "cue": "ruleros",
       "want": "ruleros",
       "layer": "recorded",
-      "recording": "ruleros",
-      "position": 0.04965986394557831,
-      "loop": [
-        26.6,
-        98.446
+      "mode": "auto",
+      "program": "pool:explore",
+      "recording": "66be822e",
+      "title": "Ruleros",
+      "file": "music/playlist/07-ruleros-66be822e.mp3",
+      "position": 0.029342403628117797,
+      "duration": 146.91997732426304,
+      "loop": null,
+      "upNext": null,
+      "bagLeft": [
+        "6265def8",
+        "91dee4c5",
+        "a5773b78"
       ],
       "loaded": [
-        "rosa-theme",
-        "ruleros"
+        "music/playlist/07-ruleros-66be822e.mp3"
       ],
       "failed": [],
       "retrying": [],
       "context": "running",
-      "sounding": 2
+      "sounding": 2,
+      "sources": [
+        {
+          "id": "036c0292",
+          "gain": 0.5926
+        },
+        {
+          "id": "66be822e",
+          "gain": 0.0169
+        }
+      ]
     },
     "cocina": {
       "ms": 2,
       "cue": "cocina",
       "want": "cocina",
       "layer": "recorded",
-      "recording": "fricas-y-fricas",
-      "position": 0.00031746031746138215,
-      "loop": [
-        58.11,
-        133.886
+      "mode": "auto",
+      "program": "pool:chores",
+      "recording": "72898684",
+      "title": "Fricas y Fricas",
+      "file": "music/playlist/04-fricas-y-fricas-72898684.mp3",
+      "position": 0.017732426303854965,
+      "duration": 166.47997732426305,
+      "loop": null,
+      "upNext": null,
+      "bagLeft": [
+        "4c389fba",
+        "d5ece162"
       ],
       "loaded": [
-        "rosa-theme",
-        "fricas-y-fricas"
+        "music/playlist/04-fricas-y-fricas-72898684.mp3"
       ],
       "failed": [],
       "retrying": [],
       "context": "running",
-      "sounding": 2
+      "sounding": 2,
+      "sources": [
+        {
+          "id": "91dee4c5",
+          "gain": 0.5405
+        },
+        {
+          "id": "72898684",
+          "gain": 0.0105
+        }
+      ]
     },
     "patio": {
-      "ms": 1,
+      "ms": 2,
       "cue": "patio",
       "want": "patio",
       "layer": "recorded",
-      "recording": "fricas-y-fricas",
+      "mode": "auto",
+      "program": "pool:chores",
+      "recording": "4c389fba",
+      "title": "Juego de Barrio",
+      "file": "music/playlist/06-juego-de-barrio-4c389fba.mp3",
       "position": 0.020634920634922338,
-      "loop": [
-        58.11,
-        133.886
+      "duration": 71.19997732426305,
+      "loop": null,
+      "upNext": null,
+      "bagLeft": [
+        "d5ece162"
       ],
       "loaded": [
-        "rosa-theme",
-        "fricas-y-fricas"
+        "music/playlist/06-juego-de-barrio-4c389fba.mp3"
       ],
       "failed": [],
       "retrying": [],
       "context": "running",
-      "sounding": 2
+      "sounding": 2,
+      "sources": [
+        {
+          "id": "6265def8",
+          "gain": 0.563
+        },
+        {
+          "id": "4c389fba",
+          "gain": 0.0121
+        }
+      ]
     },
     "pinata": {
-      "ms": 1,
+      "ms": 2,
       "cue": "pinata",
       "want": "pinata",
       "layer": "recorded",
-      "recording": "guerra-de-vecinos",
-      "position": 0.009024943310656397,
-      "loop": [
-        45.5,
-        109.772
+      "mode": "auto",
+      "program": "pool:intense",
+      "recording": "36b2c7ad",
+      "title": "Guerra de Vecinos",
+      "file": "music/playlist/01-guerra-de-vecinos-36b2c7ad.mp3",
+      "position": 0.00031746031745782943,
+      "duration": 182.75997732426305,
+      "loop": null,
+      "upNext": null,
+      "bagLeft": [
+        "d4b3fb6f",
+        "b5a37a72"
       ],
       "loaded": [
-        "rosa-theme",
-        "guerra-de-vecinos"
+        "music/playlist/01-guerra-de-vecinos-36b2c7ad.mp3"
       ],
       "failed": [],
       "retrying": [],
       "context": "running",
-      "sounding": 2
+      "sounding": 2,
+      "sources": [
+        {
+          "id": "91dee4c5",
+          "gain": 0.5268
+        },
+        {
+          "id": "36b2c7ad",
+          "gain": 0.0003
+        }
+      ]
     }
   },
   "checks": [
@@ -206,52 +349,191 @@
       }
     },
     {
-      "name": "menu plays Rosa's theme recording",
+      "name": "playlist 36b2c7ad (Guerra de Vecinos): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 182.76,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist d4b3fb6f (Festive Boss Battle): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 130.76,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist b5a37a72 (No Manches): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 131.2,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 72898684 (Fricas y Fricas): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 166.48,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist d5ece162 (Bounce y Joke): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 68,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 4c389fba (Juego de Barrio): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 71.2,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 66be822e (Ruleros): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 146.92,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 91dee4c5 (Sueño de Cumbia): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 143.08,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist a5773b78 (Sobrescuro): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 78,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 6265def8 (Grojo Curioso): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 63.48,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "playlist 036c0292 (Groquo de diversión): served and decoded in the browser, length as measured",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "type": "audio/mpeg",
+        "duration": 121.88,
+        "rate": 48000,
+        "channels": 2
+      }
+    },
+    {
+      "name": "the menu opens with Groquo de diversión (036c0292)",
       "ok": true,
       "detail": {
         "cue": "menu",
         "want": "menu",
         "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": 0.04095238095238096,
-        "loop": [
-          43.23,
-          88.59
+        "mode": "auto",
+        "program": "pool:menu",
+        "recording": "036c0292",
+        "title": "Groquo de diversión",
+        "file": "music/playlist/11-groquo-de-diversion-036c0292.mp3",
+        "position": -0.020000000000000018,
+        "duration": 121.87997732426304,
+        "loop": null,
+        "upNext": null,
+        "bagLeft": [
+          "91dee4c5",
+          "6265def8"
         ],
         "loaded": [
-          "rosa-theme"
+          "music/playlist/11-groquo-de-diversion-036c0292.mp3"
         ],
         "failed": [],
         "retrying": [],
         "context": "running",
-        "sounding": 1
+        "sounding": 1,
+        "sources": [
+          {
+            "id": "036c0292",
+            "gain": 1
+          }
+        ]
       }
     },
     {
-      "name": "mission select continues the same recording without restarting",
+      "name": "mission select continues the same song without restarting",
       "ok": true,
       "detail": {
-        "before": 1.5386394557823129,
-        "after": 2.4413151927437644
+        "before": 1.4921995464852609,
+        "after": 2.3513378684807256
       }
     },
     {
-      "name": "mission ruleros plays ruleros",
+      "name": "mission ruleros plays a song from its pool (explore)",
       "ok": true,
       "detail": {
         "ms": 1,
+        "recording": "66be822e",
         "layer": "recorded"
       }
     },
     {
-      "name": "a playing recording wraps from loopEnd to loopStart",
+      "name": "Operación Ruleros opens with Ruleros (66be822e)",
+      "ok": true,
+      "detail": "66be822e"
+    },
+    {
+      "name": "at a song's natural end the next song of the pool takes over, two sounding only in the crossfade",
       "ok": true,
       "detail": {
-        "loop": [
-          26.6,
-          98.446
-        ],
-        "position": 28.100408163265307
+        "from": "66be822e",
+        "to": "6265def8",
+        "peak": 2,
+        "now": 1
       }
     },
     {
@@ -278,151 +560,63 @@
       }
     },
     {
-      "name": "leaving ruleros returns to Rosa's theme",
+      "name": "leaving ruleros returns to a menu song",
       "ok": true,
-      "detail": {
-        "cue": "select",
-        "want": "select",
-        "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": 0.5285714285714285,
-        "loop": [
-          43.23,
-          88.59
-        ],
-        "loaded": [
-          "ruleros",
-          "rosa-theme"
-        ],
-        "failed": [],
-        "retrying": [],
-        "context": "running",
-        "sounding": 2
-      }
+      "detail": "91dee4c5"
     },
     {
-      "name": "mission cocina plays fricas-y-fricas",
+      "name": "mission cocina plays a song from its pool (chores)",
       "ok": true,
       "detail": {
         "ms": 2,
+        "recording": "72898684",
         "layer": "recorded"
       }
     },
     {
-      "name": "leaving cocina returns to Rosa's theme",
+      "name": "leaving cocina returns to a menu song",
       "ok": true,
-      "detail": {
-        "cue": "select",
-        "want": "select",
-        "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": 0.2876643990929715,
-        "loop": [
-          43.23,
-          88.59
-        ],
-        "loaded": [
-          "fricas-y-fricas",
-          "rosa-theme"
-        ],
-        "failed": [],
-        "retrying": [],
-        "context": "running",
-        "sounding": 2
-      }
+      "detail": "6265def8"
     },
     {
-      "name": "mission patio plays fricas-y-fricas",
+      "name": "mission patio plays a song from its pool (chores)",
       "ok": true,
       "detail": {
-        "ms": 1,
+        "ms": 2,
+        "recording": "4c389fba",
         "layer": "recorded"
       }
     },
     {
-      "name": "leaving patio returns to Rosa's theme",
+      "name": "leaving patio returns to a menu song",
       "ok": true,
-      "detail": {
-        "cue": "select",
-        "want": "select",
-        "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": 0.5604988662131518,
-        "loop": [
-          43.23,
-          88.59
-        ],
-        "loaded": [
-          "fricas-y-fricas",
-          "rosa-theme"
-        ],
-        "failed": [],
-        "retrying": [],
-        "context": "running",
-        "sounding": 2
-      }
+      "detail": "91dee4c5"
     },
     {
-      "name": "mission pinata plays guerra-de-vecinos",
+      "name": "mission pinata plays a song from its pool (intense)",
       "ok": true,
       "detail": {
-        "ms": 1,
+        "ms": 2,
+        "recording": "36b2c7ad",
         "layer": "recorded"
       }
     },
     {
-      "name": "leaving pinata returns to Rosa's theme",
+      "name": "leaving pinata returns to a menu song",
       "ok": true,
-      "detail": {
-        "cue": "select",
-        "want": "select",
-        "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": 0.3805442176870777,
-        "loop": [
-          43.23,
-          88.59
-        ],
-        "loaded": [
-          "guerra-de-vecinos",
-          "rosa-theme"
-        ],
-        "failed": [],
-        "retrying": [],
-        "context": "running",
-        "sounding": 2
-      }
+      "detail": "036c0292"
     },
     {
-      "name": "only two recordings stay decoded",
+      "name": "at most two songs stay decoded (the current one and the next)",
       "ok": true,
       "detail": [
-        "guerra-de-vecinos",
-        "rosa-theme"
+        "music/playlist/11-groquo-de-diversion-036c0292.mp3"
       ]
     },
     {
-      "name": "practice match plays the action cue (bounce-y-joke)",
+      "name": "practice plays a song from the whole playlist",
       "ok": true,
-      "detail": {
-        "cue": "combat",
-        "want": "combat",
-        "layer": "recorded",
-        "recording": "bounce-y-joke",
-        "position": 0.09029478458050022,
-        "loop": [
-          18.35,
-          60.432
-        ],
-        "loaded": [
-          "rosa-theme",
-          "bounce-y-joke"
-        ],
-        "failed": [],
-        "retrying": [],
-        "context": "running",
-        "sounding": 2
-      }
+      "detail": "a5773b78"
     },
     {
       "name": "no page errors during the run",
@@ -436,16 +630,29 @@
         "cue": "menu",
         "want": "menu",
         "layer": "synth",
+        "mode": "auto",
+        "program": "pool:menu",
         "recording": null,
+        "title": null,
+        "file": null,
         "position": null,
+        "duration": null,
         "loop": null,
+        "upNext": null,
+        "bagLeft": [
+          "6265def8",
+          "91dee4c5"
+        ],
         "loaded": [],
         "failed": [],
         "retrying": [
-          "rosa-theme"
+          "music/playlist/11-groquo-de-diversion-036c0292.mp3",
+          "music/playlist/08-sueno-de-cumbia-91dee4c5.mp3",
+          "music/playlist/10-grojo-curioso-6265def8.mp3"
         ],
         "context": "running",
-        "sounding": 0
+        "sounding": 0,
+        "sources": []
       }
     },
     {
@@ -455,17 +662,31 @@
         "cue": "ruleros",
         "want": "ruleros",
         "layer": "synth",
+        "mode": "auto",
+        "program": "pool:explore",
         "recording": null,
+        "title": null,
+        "file": null,
         "position": null,
+        "duration": null,
         "loop": null,
+        "upNext": null,
+        "bagLeft": [
+          "6265def8",
+          "91dee4c5",
+          "a5773b78"
+        ],
         "loaded": [],
         "failed": [],
         "retrying": [
-          "rosa-theme",
-          "ruleros"
+          "music/playlist/11-groquo-de-diversion-036c0292.mp3",
+          "music/playlist/08-sueno-de-cumbia-91dee4c5.mp3",
+          "music/playlist/10-grojo-curioso-6265def8.mp3",
+          "music/playlist/07-ruleros-66be822e.mp3"
         ],
         "context": "running",
-        "sounding": 0
+        "sounding": 0,
+        "sources": []
       }
     },
     {
@@ -480,14 +701,25 @@
         "cue": "menu",
         "want": "menu",
         "layer": "synth",
+        "mode": "auto",
+        "program": "pool:menu",
         "recording": null,
+        "title": null,
+        "file": null,
         "position": null,
+        "duration": null,
         "loop": null,
+        "upNext": null,
+        "bagLeft": [
+          "91dee4c5",
+          "6265def8"
+        ],
         "loaded": [],
         "failed": [],
         "retrying": [],
         "context": "running",
-        "sounding": 0
+        "sounding": 0,
+        "sources": []
       }
     },
     {
@@ -497,22 +729,35 @@
         "cue": "menu",
         "want": "menu",
         "layer": "recorded",
-        "recording": "rosa-theme",
-        "position": -0.020000000000000018,
-        "loop": [
-          43.23,
-          88.59
+        "mode": "auto",
+        "program": "pool:menu",
+        "recording": "036c0292",
+        "title": "Groquo de diversión",
+        "file": "music/playlist/11-groquo-de-diversion-036c0292.mp3",
+        "position": 0.009024943310658173,
+        "duration": 121.87997732426304,
+        "loop": null,
+        "upNext": null,
+        "bagLeft": [
+          "91dee4c5",
+          "6265def8"
         ],
         "loaded": [
-          "rosa-theme"
+          "music/playlist/11-groquo-de-diversion-036c0292.mp3"
         ],
         "failed": [],
         "retrying": [],
         "context": "running",
-        "sounding": 1
+        "sounding": 1,
+        "sources": [
+          {
+            "id": "036c0292",
+            "gain": 0.0058
+          }
+        ]
       }
     }
   ],
-  "passed": 32,
-  "total": 32
+  "passed": 44,
+  "total": 44
 }

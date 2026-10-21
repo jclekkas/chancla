@@ -113,7 +113,7 @@
           <div class="m-skip" id="m-skip" hidden data-t="m.skip"></div>
         </div>
         <div class="subs" id="subs" hidden aria-live="polite"><b id="subs-who"></b> <span id="subs-text"></span></div>
-        <div class="click-to-play" id="click-to-play" hidden><button type="button" class="btn primary" id="btn-click-play" data-t="hud.clickToPlay"></button></div>
+        <div class="click-to-play" id="click-to-play" hidden><div class="ctp-box"><button type="button" class="btn primary" id="btn-click-play" data-t="hud.clickToPlay"></button><p class="ctp-note" id="ctp-note"></p></div></div>
       </div>
 
       <!-- Scoreboard (hold Tab) -->
@@ -370,6 +370,7 @@
             </div>
           </div>
           <label class="field"><span data-t="settings.music"></span><input type="range" id="set-music" min="0" max="100" step="1" /><output id="out-music"></output></label>
+          <div class="field" id="soundtrack"></div>
           <label class="field"><span data-t="settings.sfx"></span><input type="range" id="set-sfx" min="0" max="100" step="1" /><output id="out-sfx"></output></label>
           <label class="field"><span data-t="settings.voice"></span><input type="range" id="set-voice" min="0" max="100" step="1" /><output id="out-voice"></output></label>
           <label class="field check"><input type="checkbox" id="set-banter" /><span data-t="settings.banter"></span></label>

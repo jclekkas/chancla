@@ -364,3 +364,13 @@ body.touch-mode #stage, body.touch-mode #touch, body.touch-mode .hud { -webkit-u
 @media (max-height: 520px) {
   #btn-settings-close { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -10px 14px -6px rgba(0, 0, 0, 0.45); }
 }
+
+/* Settings: soundtrack (mode, song, Next, now playing) */
+.field.soundtrack, .settings .field.soundtrack { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.soundtrack .st-heading { font-weight: 800; }
+.soundtrack .st-help, .soundtrack .st-now { margin: 0; }
+.soundtrack .st-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.soundtrack .st-song { display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px; min-width: 0; }
+.soundtrack select { min-height: 44px; max-width: 100%; border-radius: 10px; border: 2px solid var(--cream); background: rgba(20, 10, 30, 0.6); color: var(--cream); font: inherit; font-weight: 700; padding: 6px 10px; }
+.soundtrack .st-next { min-height: 44px; border-radius: 10px; border: 2px solid var(--cream); background: transparent; color: var(--cream); font: inherit; font-weight: 800; padding: 6px 14px; cursor: pointer; }
+.soundtrack .st-next:focus-visible, .soundtrack select:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }

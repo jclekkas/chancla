@@ -310,7 +310,7 @@ async function main(): Promise<void> {
       const a = await fps(page);
       await sleep(2200);
       const b = await fps(page);
-      check('online: Escape opens the menu, which says the match continues online', a.screen === 'pause' && /continues online|continúa/i.test(a.note), a.note);
+      check('online: Escape opens the menu, which says the match continues online', a.screen === 'pause' && /online match: it keeps going|en línea: sigue/i.test(a.note), a.note);
       check('online: the match clock keeps running while the menu is open (not paused)', a.tl !== null && b.tl !== null && b.tl < a.tl, { a: a.tl, b: b.tl });
       check('online: the host plays on the chosen map with a team label', a.map === 'fiesta' && /YOUR TEAM/.test(a.chip), { map: a.map, chip: a.chip });
       await page.click('#btn-pause-leave'); await page.click('#btn-confirm-yes'); await sleep(500);

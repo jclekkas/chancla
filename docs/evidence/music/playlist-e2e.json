@@ -1,0 +1,268 @@
+{
+  "at": "2026-10-21T22:46:04.791Z",
+  "browser": "Chromium 141 headed under Xvfb (Linux)",
+  "passed": 23,
+  "total": 23,
+  "checks": [
+    {
+      "name": "fresh visit: no audio before a gesture; at most the opening song is fetched ahead",
+      "ok": true,
+      "detail": {
+        "layer": "off",
+        "fetched": [
+          "/music/playlist/11-groquo-de-diversion-036c0292.mp3"
+        ]
+      }
+    },
+    {
+      "name": "first gesture: Groquo de diversión opens the menus",
+      "ok": true,
+      "detail": {
+        "recording": "036c0292",
+        "mode": "auto"
+      }
+    },
+    {
+      "name": "Settings has a soundtrack section: Automatic / Shuffle all / One song, a song list, Next and what is playing",
+      "ok": true,
+      "detail": {
+        "modes": [
+          "Automatic",
+          "Shuffle all",
+          "One song"
+        ],
+        "checked": "auto",
+        "options": [
+          "36b2c7ad",
+          "d4b3fb6f",
+          "b5a37a72",
+          "72898684",
+          "d5ece162",
+          "4c389fba",
+          "66be822e",
+          "91dee4c5",
+          "a5773b78",
+          "6265def8",
+          "036c0292",
+          "guerra-de-vecinos",
+          "fricas-y-fricas"
+        ],
+        "now": "Now playing: Groquo de diversión"
+      }
+    },
+    {
+      "name": "the song list offers all 13 recordings (11 playlist songs + 2 earlier versions)",
+      "ok": true,
+      "detail": 13
+    },
+    {
+      "name": "in Spanish too",
+      "ok": true,
+      "detail": {
+        "modes": "Automática|Todas al azar|Una canción",
+        "next": "Siguiente canción",
+        "now": "Suena: Groquo de diversión"
+      }
+    },
+    {
+      "name": "Next: another menu song, at once, and the Settings line follows",
+      "ok": true,
+      "detail": {
+        "from": "036c0292",
+        "to": "91dee4c5",
+        "line": "Now playing: Sueño de Cumbia"
+      }
+    },
+    {
+      "name": "Shuffle all: at the end of a song the next one takes over by itself, crossfading",
+      "ok": true,
+      "detail": {
+        "from": "d5ece162",
+        "to": "d4b3fb6f"
+      }
+    },
+    {
+      "name": "two songs sound only during the crossfade; at most two are decoded",
+      "ok": true,
+      "detail": {
+        "peak": 2,
+        "now": 1,
+        "peakLoaded": 2
+      }
+    },
+    {
+      "name": "choosing a song switches to One song and plays it",
+      "ok": true,
+      "detail": "d4b3fb6f"
+    },
+    {
+      "name": "One song without a curated loop repeats from the top",
+      "ok": true,
+      "detail": {
+        "position": 8.080861678004538
+      }
+    },
+    {
+      "name": "One song with a curated loop uses the seamless loop file",
+      "ok": true,
+      "detail": [
+        26.6,
+        98.446
+      ]
+    },
+    {
+      "name": "after a reload: One song (Ruleros) is still chosen, and music stays muted",
+      "ok": true,
+      "detail": {
+        "prefs": {
+          "mode": "one",
+          "song": "66be822e"
+        },
+        "bus": 0
+      }
+    },
+    {
+      "name": "tab hidden: audio suspends; back: it resumes on the same song",
+      "ok": true,
+      "detail": {
+        "hiddenState": "suspended",
+        "recording": "036c0292"
+      }
+    },
+    {
+      "name": "rapid mission / menu switching: never more than two songs at once, and the menu wins at the end",
+      "ok": true,
+      "detail": {
+        "peakRapid": 2,
+        "recording": "6265def8",
+        "sounding": 1
+      }
+    },
+    {
+      "name": "fetched only what was played or queued next (no bulk download)",
+      "ok": true,
+      "detail": {
+        "distinct": 9
+      }
+    },
+    {
+      "name": "main page: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Arcade title: the menus' songs (shared controller)",
+      "ok": true,
+      "detail": "036c0292"
+    },
+    {
+      "name": "Arcade run: a song from the whole playlist",
+      "ok": true,
+      "detail": "d5ece162"
+    },
+    {
+      "name": "Arcade pause and resume keep the same song (no restart)",
+      "ok": true,
+      "detail": "d5ece162"
+    },
+    {
+      "name": "back on the main menu: a menu song (a new page, after a gesture)",
+      "ok": true,
+      "detail": "036c0292"
+    },
+    {
+      "name": "Arcade: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "opening song missing (404): another menu song plays instead",
+      "ok": true,
+      "detail": "91dee4c5"
+    },
+    {
+      "name": "a missing song causes no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "report": {
+    "nextClip": "docs/evidence/music/transitions/next-button.webm",
+    "endingClip": "docs/evidence/music/transitions/natural-ending-shuffle.webm",
+    "memory": {
+      "decodedPeakMB": 66.9,
+      "decodedNowMB": 49.4,
+      "jsHeapGrowthMB": 12.8
+    },
+    "repeatClip": "docs/evidence/music/transitions/one-song-repeat.webm",
+    "sceneClip": "docs/evidence/music/transitions/scene-change-menu-to-mission.webm",
+    "requests": [
+      "/music/playlist/11-groquo-de-diversion-036c0292.mp3",
+      "/music/playlist/08-sueno-de-cumbia-91dee4c5.mp3",
+      "/music/playlist/05-bounce-y-joke-d5ece162.mp3",
+      "/music/playlist/02-festive-boss-battle-d4b3fb6f.mp3",
+      "/music/ruleros.mp3",
+      "/music/playlist/01-guerra-de-vecinos-36b2c7ad.mp3",
+      "/music/playlist/10-grojo-curioso-6265def8.mp3",
+      "/music/playlist/03-no-manches-b5a37a72.mp3",
+      "/music/playlist/07-ruleros-66be822e.mp3"
+    ],
+    "arcadePauseClip": "docs/evidence/music/transitions/arcade-pause-resume.webm",
+    "marks": {
+      "next": [
+        [
+          0,
+          "Groquo de diversión (menu)"
+        ],
+        [
+          5.7,
+          "Next pressed: 1 s crossfade"
+        ]
+      ],
+      "ending": [
+        [
+          0,
+          "Bounce y Joke, 10 s before its end"
+        ],
+        [
+          7,
+          "crossfade into the next song (3 s)"
+        ]
+      ],
+      "repeat": [
+        [
+          0,
+          "Festive Boss Battle, 7 s before its end"
+        ],
+        [
+          4,
+          "repeats from the top (3 s crossfade)"
+        ]
+      ],
+      "scene": [
+        [
+          0,
+          "Grojo Curioso (menu)"
+        ],
+        [
+          5.2,
+          "Mission 1 starts: 1.5 s crossfade to the exploration pool"
+        ]
+      ],
+      "arcadePause": [
+        [
+          0,
+          "Bounce y Joke (Arcade run)"
+        ],
+        [
+          4,
+          "paused: the song carries on, lower"
+        ],
+        [
+          9,
+          "resumed"
+        ]
+      ]
+    }
+  }
+}

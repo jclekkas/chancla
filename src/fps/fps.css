@@ -417,3 +417,16 @@ body.small-screen .title .logo-main { font-size: clamp(44px, 14vw, 72px); }
 body.small-screen .title .pitch { display: none; }
 @media (max-height: 520px) { body.touch-only .title .subtitle, body.touch-only .title .tagline { display: none; } }
 body.modes-collapsed .title .server-status, body.modes-collapsed .title .title-row { display: none; }
+
+/* Settings: soundtrack (mode, song, Next, now playing) */
+.field.soundtrack, .settings .field.soundtrack { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.soundtrack .st-heading { font-weight: 800; }
+.soundtrack .st-help, .soundtrack .st-now { margin: 0; }
+.soundtrack .st-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.soundtrack .st-song { display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px; min-width: 0; }
+.soundtrack select { min-height: 40px; max-width: 100%; border-radius: 10px; border: 2px solid var(--cream); background: rgba(20, 10, 30, 0.6); color: var(--cream); font: inherit; font-weight: 700; padding: 6px 10px; }
+.soundtrack .st-next { min-height: 40px; border-radius: 10px; border: 2px solid var(--cream); background: transparent; color: var(--cream); font: inherit; font-weight: 800; padding: 6px 14px; cursor: pointer; }
+.soundtrack .st-next:focus-visible, .soundtrack select:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.click-to-play .ctp-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.click-to-play .ctp-note { margin: 0; padding: 4px 12px; border-radius: 8px; background: rgba(20, 10, 30, 0.75); font-weight: 700; text-align: center; max-width: min(90vw, 460px); }

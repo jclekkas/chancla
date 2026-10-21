@@ -11,6 +11,7 @@ import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chromium, type Browser, type Page } from 'playwright-core';
 
+const MENU = ['036c0292', '91dee4c5', '6265def8']; // the menus' songs
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const OUT = path.join(ROOT, 'artifacts/sound');
 const SITE = process.argv[2] || process.env.E2E_URL || 'http://localhost:4173/';
@@ -63,12 +64,12 @@ async function main(): Promise<void> {
       check('fresh visit: "Enable sound" is offered before any interaction', g0.shown && g0.state === 'enable', g0);
       await page.click('#sound-gate');
       const s = await until(() => fps(page), (v) => v.ctx === 'running' && v.layer === 'recorded');
-      check('clicking it starts audio and the menu theme', s.ctx === 'running' && s.rec === 'rosa-theme', s);
+      check('clicking it starts audio and the menu theme', s.ctx === 'running' && MENU.includes(s.rec ?? ''), s);
       check('the control hides once audio is really running', !(await gate(page)).shown, await gate(page));
       await page.click('#btn-practice');
       await page.click('#btn-practice-start');
-      const pr = await until(() => fps(page), (v) => v.rec === 'bounce-y-joke');
-      check('Practice: its track plays and the control stays hidden', pr.rec === 'bounce-y-joke' && !(await gate(page)).shown, pr);
+      const pr = await until(() => fps(page), (v) => v.want === 'combat' && v.layer === 'recorded');
+      check('Practice: a playlist song plays and the control stays hidden', pr.want === 'combat' && pr.layer === 'recorded' && !(await gate(page)).shown, pr);
       check('no music or voice request failed, no page errors', bad.length === 0 && errors.length === 0, { bad, errors });
       await page.screenshot({ path: path.join(OUT, 'practice-after-enable.png') });
       await close();
@@ -83,14 +84,14 @@ async function main(): Promise<void> {
       await page.click('.mcard[data-mission="ruleros"] button');
       await page.click('#btn-mi-start');
       await page.waitForFunction(() => (window as any).__fps.campaign().active);
-      const m = await until(() => fps(page), (v) => v.rec === 'ruleros');
-      check('campaign mission: its track plays', m.rec === 'ruleros', m);
+      const m = await until(() => fps(page), (v) => v.rec === '66be822e');
+      check('campaign mission: its pool\'s opening song plays (Ruleros, 66be822e)', m.rec === '66be822e', m);
       await page.evaluate(() => (window as any).__fps.campaign().toSelect());
       await page.waitForFunction(() => (window as any).__fps.screen === 'campaign');
       await page.keyboard.press('Escape');
       await page.waitForFunction(() => (window as any).__fps.screen === 'title');
-      const h = await until(() => fps(page), (v) => v.want === 'menu' && v.rec === 'rosa-theme');
-      check('back home: the menu theme, control hidden', h.rec === 'rosa-theme' && !(await gate(page)).shown, h);
+      const h = await until(() => fps(page), (v) => v.want === 'menu' && MENU.includes(v.rec ?? ''));
+      check('back home: the menu theme, control hidden', MENU.includes(h.rec ?? '') && !(await gate(page)).shown, h);
       await close();
     }
     // 3. Simulated blocked browser: resume never succeeds. The control must not claim success.
@@ -135,7 +136,7 @@ async function main(): Promise<void> {
       const ctx = await browser.newContext();
       await ctx.addInitScript({ content: 'window.__name = (f) => f;' });
       const page = await ctx.newPage();
-      await page.route('**/music/rosa-theme.mp3', (r) => r.abort());
+      await page.route(/\/music\/playlist\/(08|10|11)-[^/]*\.mp3$/, (r) => r.abort()); // every menu song
       await page.goto(SITE);
       await page.waitForFunction(() => (window as any).__fps?.screen === 'title');
       await page.click('#sound-gate');
@@ -170,8 +171,8 @@ async function main(): Promise<void> {
       const g1 = await gate(page);
       check('Arcade -> Main menu: a new page, so sound waits for a gesture and says so', g1.shown && g1.state === 'enable', g1);
       await page.mouse.click(600, 40);
-      const s = await until(() => fps(page), (v) => v.ctx === 'running' && v.rec === 'rosa-theme');
-      check('one click on the main menu brings the theme back', s.rec === 'rosa-theme' && !(await gate(page)).shown, s);
+      const s = await until(() => fps(page), (v) => v.ctx === 'running' && MENU.includes(v.rec ?? ''));
+      check('one click on the main menu brings the theme back', MENU.includes(s.rec ?? '') && !(await gate(page)).shown, s);
       check('Arcade: no page errors', errors.length === 0, errors);
       await close();
     }

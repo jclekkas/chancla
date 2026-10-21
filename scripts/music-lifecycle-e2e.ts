@@ -37,7 +37,10 @@ async function until(page: Page, pred: (s: MState) => boolean, ms = 12000): Prom
   for (;;) { const s = await state(page); if (pred(s) || Date.now() > end) return s; await page.waitForTimeout(100); }
 }
 const short = (s: MState) => ({ cue: s.cue, layer: s.layer, recording: s.recording, context: s.context, sounding: s.sounding, retrying: s.retrying, failed: s.failed });
-const menuTheme = (s: MState) => s.layer === 'recorded' && s.recording === 'rosa-theme' && s.context === 'running';
+// The menus' pool (Groquo de diversión opens it; Sueño de Cumbia and Grojo Curioso follow).
+const MENU = ['036c0292', '91dee4c5', '6265def8'];
+const MENU_FILES = /\/music\/playlist\/(08|10|11)-[^/]*\.mp3$/;
+const menuTheme = (s: MState) => s.layer === 'recorded' && MENU.includes(s.recording ?? '') && s.context === 'running';
 
 async function open(browser: Browser, opts: { route?: (p: Page) => Promise<void>; save?: boolean; policy?: 'sticky' | 'transient' } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
@@ -145,8 +148,8 @@ async function main(): Promise<void> {
       await page.click('.mcard[data-mission="ruleros"] button');
       await page.click('#btn-mi-start');
       await page.waitForFunction(() => (window as any).__fps.campaign().active);
-      const m = await until(page, (s) => s.recording === 'ruleros');
-      check('the mission plays its track', m.recording === 'ruleros', short(m));
+      const m = await until(page, (s) => s.recording === '66be822e');
+      check('the mission plays its pool\'s opening song (Ruleros, 66be822e)', m.recording === '66be822e', short(m));
       await page.evaluate(() => (window as any).__fps.campaign().toSelect());
       await page.waitForFunction(() => (window as any).__fps.screen === 'campaign');
       await page.keyboard.press('Escape');
@@ -160,7 +163,7 @@ async function main(): Promise<void> {
 
     // 4. Rapid navigation while tracks are still downloading (3 s each).
     {
-      const { page, close } = await open(browser, { route: (p) => p.route('**/music/*.mp3', async (r) => { await new Promise((res) => setTimeout(res, 3000)); await r.continue(); }) });
+      const { page, close } = await open(browser, { route: (p) => p.route('**/music/**/*.mp3', async (r) => { await new Promise((res) => setTimeout(res, 3000)); await r.continue(); }) });
       await page.mouse.click(480, 30);
       await page.click('#btn-campaign');
       await page.click('.mcard[data-mission="ruleros"] button');
@@ -173,7 +176,7 @@ async function main(): Promise<void> {
       await page.waitForFunction(() => (window as any).__fps.screen === 'title');
       await page.waitForTimeout(8000); // both downloads have arrived by now
       const s = await state(page);
-      check('rapid navigation while loading: the late mission track does not start on the main menu', s.cue === 'menu' && s.recording === 'rosa-theme' && s.sounding === 1, short(s));
+      check('rapid navigation while loading: the late mission track does not start on the main menu', s.cue === 'menu' && MENU.includes(s.recording ?? '') && s.sounding === 1, short(s));
       await close();
     }
 
@@ -221,10 +224,10 @@ async function main(): Promise<void> {
     {
       let fail = true;
       let requests = 0;
-      const { page, errors, close } = await open(browser, { route: (p) => p.route('**/music/rosa-theme.mp3', (r) => { requests++; return fail ? r.abort() : r.continue(); }) });
+      const { page, errors, close } = await open(browser, { route: (p) => p.route(MENU_FILES, (r) => { requests++; return fail ? r.abort() : r.continue(); }) });
       await page.mouse.click(480, 30);
       const fb = await until(page, (s) => s.layer === 'synth');
-      check('failed download: the synthesized menu music plays instead', fb.layer === 'synth' && fb.retrying.includes('rosa-theme'), short(fb));
+      check('failed download: the synthesized menu music plays instead', fb.layer === 'synth' && fb.retrying.length === 3, short(fb));
       fail = false;
       const rec = await until(page, menuTheme, 25000);
       check('when the network recovers, a retry brings the menu theme back without a reload', menuTheme(rec) && rec.sounding === 1, { ...short(rec), requests });
@@ -236,11 +239,11 @@ async function main(): Promise<void> {
     // 6b. Failed for good: bounded retries, the fallback keeps playing.
     {
       let requests = 0;
-      const { page, close } = await open(browser, { route: (p) => p.route('**/music/rosa-theme.mp3', (r) => { requests++; return r.abort(); }) });
+      const { page, close } = await open(browser, { route: (p) => p.route(MENU_FILES, (r) => { requests++; return r.abort(); }) });
       await page.mouse.click(480, 30);
       await page.waitForTimeout(24000);
       const s = await state(page);
-      check('failed for good: three attempts in total, then it stops trying', requests === 3 && s.failed.includes('rosa-theme'), { requests, ...short(s) });
+      check('failed for good: three attempts per menu song (nine in all), then it stops trying', requests === 9 && s.failed.length === 3, { requests, ...short(s) });
       check('failed for good: the synthesized menu music keeps playing', s.layer === 'synth' && s.context === 'running', short(s));
       await close();
     }
@@ -248,7 +251,7 @@ async function main(): Promise<void> {
     // 7. Music volume at zero is kept through navigation and a retry.
     {
       let fail = true;
-      const { page, close } = await open(browser, { route: (p) => p.route('**/music/rosa-theme.mp3', (r) => (fail ? r.abort() : r.continue())) });
+      const { page, close } = await open(browser, { route: (p) => p.route(MENU_FILES, (r) => (fail ? r.abort() : r.continue())) });
       await page.evaluate(() => { const raw = localStorage.getItem('chancla.fps.settings.v1'); void raw; });
       await page.mouse.click(480, 30);
       await page.click('#btn-settings');

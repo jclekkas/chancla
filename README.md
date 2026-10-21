@@ -33,7 +33,7 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 | Jump / crouch | Space / C or Shift |
 | Switch chancla | 1, 2, Q, mouse wheel or right click |
 | Scoreboard | Hold Tab |
-| Menu | Esc |
+| Menu | Esc or P (frees the mouse and opens the menu in one press) |
 
 **Trackpad:** F throws, so your fingers can stay on the pad, and two-finger scroll switches weapons at most once per gesture. If the browser refuses pointer lock, the game switches to drag-to-look automatically. Ctrl, Cmd and Alt shortcuts are never captured, so Ctrl+W and Cmd+Q behave normally. That is why crouch is C or Shift, not Ctrl.
 
@@ -104,7 +104,7 @@ What was actually run, in this Linux container (Node 22, headless Chromium with 
 - **Browser end to end** (`scripts/mp-e2e.ts`): separate browser contexts play through the real UI: create, join by invite link, ready-gating, start, a full match, identical results on every client, host-only rematch, leaving mid-match with confirmation, and an invalid-code error. Movement and firing use the page's real keyboard and mouse handlers; aim is scripted. Both the 2-player run and the 4-player (2v2) run passed with no console errors. In the 2-player run the match ended 1-1 on time, with eliminations on both sides. In the 4-player run every client was software-rendering at a few frames per second, and nobody was eliminated before time ran out (0-0). So in the browser, the 4-player run proves the flow, not the combat. Four-client combat and scoring are covered by the Node test `tests/mp-four.test.ts`.
 - **Practice and UI** (`scripts/practice-e2e.ts`): 12 checks, all passing. Bots fill a 2v2 and are labeled BOT. The practice clock freezes while the menu is open and resumes after. The Spanish toggle works. Quality changes apply live. Leaving asks for confirmation. Settings persist across reloads. There are no console errors. With 3D disabled, the title explains the problem and settings still work.
 - **Campaign** (`scripts/campaign-e2e.ts`): the four missions played in order from a fresh save in the browser, through the real UI, with the helper bot driving. No console errors. Unlocking and saved progress were correct after a reload, and every dialogue line played as a voiced clip. Clips with the recorded game audio are in [docs/evidence/campaign/](docs/evidence/campaign/). In Node, `tests/campaign.test.ts` (28 tests) covers: completion from fresh state, objectives completing once, exact checkpoint restores, reachable recovery spots, every challenge proven achievable, progress and reset, and the dialogue rules.
-- **Soundtrack** (`npm run e2e:music`): 32 checks, all passing. Every recording decodes to its exact length in Chromium. Each loop seam, played by the browser's own loop, shows no sample jump beyond the track's ordinary steps. Each screen and mission plays its assigned track, and switching crossfades. Dialogue ducks the music, and the volume controls work. With the files blocked or slow, the synthesized score covers. No listening test yet; see [docs/AUDIO.md](docs/AUDIO.md#recorded-soundtrack).
+- **Soundtrack** (`npm run e2e:music`, `scripts/playlist-e2e.ts`): 44 and 23 browser checks, all passing. All 11 playlist songs decode in the browser from their deployed paths. Each scene plays from its pool and songs hand over at their natural end. Shuffle all, One song, Next, persistence, tab switching, fast scene changes and a missing file are covered. No listening test yet; see [docs/AUDIO.md](docs/AUDIO.md#the-full-soundtrack).
 - Classic solo mode: its original 72 browser checks still pass, now at `/classic.html`.
 - Evidence: screenshots and a match clip in [docs/evidence/](docs/evidence/). There is also the JSON report (`e2e-*.json`).
 
@@ -143,7 +143,7 @@ Nothing has been provisioned or paid for. Once a server exists, set `VITE_GAME_S
 
 ## Assets
 
-Geometry, textures, animation and sound effects are generated in code. The music is five Suno tracks made by the project owner, looped for the browser (originals kept unchanged in `assets/music/originals/`), with the original synthesized score as the fallback. The other third-party pieces are the Lilita One font (OFL) and the three.js and ws libraries (MIT). Full inventory: [docs/ASSETS.md](docs/ASSETS.md) and [ATTRIBUTION.md](ATTRIBUTION.md).
+Geometry, textures, animation and sound effects are generated in code. The music is the owner's 11-song Suno playlist, served as supplied, plus five curated loops prepared earlier, with the original synthesized score as the fallback. The other third-party pieces are the Lilita One font (OFL) and the three.js and ws libraries (MIT). Full inventory: [docs/ASSETS.md](docs/ASSETS.md) and [ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## Known limitations
 

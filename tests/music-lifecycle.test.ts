@@ -52,8 +52,8 @@ class FakeCtx {
   createDynamicsCompressor() { return new Node(this, 'comp'); }
   createBuffer(_c: number, n: number) { return { length: n, duration: n / 48000, getChannelData: () => new Float32Array(n) }; }
   decodeAudioData() { return Promise.resolve({ duration: 200, length: 200 * 48000 }); }
-  /** Recordings audible at the current time (started, not yet stopped). */
-  playing(): number { return this.sources.filter((s) => s.started && s.stopAt > this.currentTime && s.loop).length; }
+  /** Recordings audible at the current time (started, not yet stopped). Decoded songs are the long buffers. */
+  playing(): number { return this.sources.filter((s) => s.started && s.stopAt > this.currentTime && ((s.buffer as { duration?: number } | null)?.duration ?? 0) >= 60).length; }
 }
 
 type Fetcher = (url: string) => Promise<{ ok: boolean; arrayBuffer: () => Promise<ArrayBuffer> }>;
@@ -67,6 +67,7 @@ async function load() {
   return { audio, music };
 }
 const ctx = () => FakeCtx.all[FakeCtx.all.length - 1]!;
+const MENU = ['036c0292', '91dee4c5', '6265def8']; // the menus' pool
 const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 const ok: Fetcher = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) });
 const fail: Fetcher = async () => { throw new TypeError('network'); };
@@ -101,7 +102,7 @@ describe('music lifecycle', () => {
     window.dispatchEvent(new MouseEvent('pointerdown'));
     await advance(1500);
     expect(ctx().state).toBe('running');
-    expect(music.state()).toMatchObject({ cue: 'menu', layer: 'recorded', recording: 'rosa-theme' });
+    expect(music.state()).toMatchObject({ cue: 'menu', layer: 'recorded', recording: '036c0292' }); // Groquo de diversión opens the menus
     expect(FakeCtx.all.length).toBe(1); // one shared context
   });
 
@@ -130,7 +131,7 @@ describe('music lifecycle', () => {
     window.dispatchEvent(new MouseEvent('click'));
     await flush();
     expect(ctx().state).toBe('running');
-    expect(music.state().recording).toBe('rosa-theme');
+    expect(music.state().recording).toBe('036c0292');
     expect(ctx().playing()).toBe(1);
   });
 
@@ -149,7 +150,8 @@ describe('music lifecycle', () => {
     await advance(300);
     release();
     await advance(3000);
-    expect(music.state()).toMatchObject({ cue: 'select', want: 'select', recording: 'rosa-theme' });
+    expect(music.state()).toMatchObject({ cue: 'select', want: 'select' });
+    expect(MENU).toContain(music.state().recording); // a menu song, never the mission's
     expect(ctx().playing()).toBe(1); // no second track underneath
   });
 
@@ -174,14 +176,17 @@ describe('music lifecycle', () => {
     window.dispatchEvent(new MouseEvent('pointerdown'));
     music.play('menu');
     await advance(2000);
-    expect(music.state()).toMatchObject({ layer: 'synth', retrying: ['rosa-theme'] });
+    // Every menu song was tried (each failure moves on to the next), then the built-in score.
+    expect(music.state().layer).toBe('synth');
+    expect(music.state().retrying.length).toBe(3);
     await advance(5000);
     await advance(60000);
-    const attempts = fetchLog.filter((u) => u.includes('rosa-theme')).length;
-    expect(attempts).toBe(3); // first try plus two retries
-    expect(music.state()).toMatchObject({ layer: 'synth', failed: ['rosa-theme'] });
+    for (const id of MENU) expect(fetchLog.filter((u) => u.includes(id)).length, id).toBe(3); // first try plus two retries
+    expect(music.state()).toMatchObject({ layer: 'synth', retrying: [] });
+    expect(music.state().failed.length).toBe(3);
+    expect(music.status()).toBe('failed');
     await advance(60000);
-    expect(fetchLog.filter((u) => u.includes('rosa-theme')).length).toBe(3); // and then it stops
+    for (const id of MENU) expect(fetchLog.filter((u) => u.includes(id)).length, id).toBe(3); // and then it stops
   });
 
   it('hands over from the fallback when a retry succeeds, without overlapping tracks', async () => {
@@ -195,7 +200,8 @@ describe('music lifecycle', () => {
     expect(music.state().layer).toBe('synth');
     fetchImpl = ok;
     await advance(4000);
-    expect(music.state()).toMatchObject({ layer: 'recorded', recording: 'rosa-theme', retrying: [] });
+    expect(music.state().layer).toBe('recorded');
+    expect(MENU).toContain(music.state().recording);
     expect(ctx().playing()).toBe(1);
   });
 
@@ -206,14 +212,15 @@ describe('music lifecycle', () => {
     window.dispatchEvent(new MouseEvent('pointerdown'));
     music.play('menu');
     await advance(1500);
-    fetchImpl = (url) => (url.includes('ruleros') ? fail(url) : ok(url));
+    fetchImpl = (url) => (url.includes('036c0292') ? ok(url) : fail(url)); // every exploration song fails
     music.play('ruleros');
     await advance(2000);
     expect(music.state()).toMatchObject({ cue: 'ruleros', layer: 'synth' });
     fetchImpl = ok;
     music.play('select');
     await advance(20000);
-    expect(music.state()).toMatchObject({ cue: 'select', recording: 'rosa-theme' });
+    expect(music.state().cue).toBe('select');
+    expect(MENU).toContain(music.state().recording);
     expect(ctx().playing()).toBe(1);
   });
 
@@ -233,6 +240,129 @@ describe('music lifecycle', () => {
     expect(bus).toBe(0);
     window.dispatchEvent(new MouseEvent('click'));
     await flush();
+    expect((audio as unknown as { a: { music: { gain: Param } } }).a.music.gain.value).toBe(0);
+  });
+});
+
+describe('playlist', () => {
+  async function started(cue: Parameters<Awaited<ReturnType<typeof load>>['music']['play']>[0], prefs?: { mode: 'auto' | 'shuffle' | 'one'; song: string }) {
+    const { audio, music } = await load();
+    FakeCtx.allowResume = true;
+    audio.armLifecycle();
+    if (prefs) music.setPrefs(prefs);
+    window.dispatchEvent(new MouseEvent('pointerdown'));
+    music.play(cue);
+    await advance(1500);
+    return { audio, music };
+  }
+  /** Runs the clock until the playing song changes (or `limit` seconds pass), checking the rules on the way. */
+  async function untilNextSong(music: Awaited<ReturnType<typeof load>>['music'], limit = 260) {
+    const from = music.state().recording;
+    let peakSounding = 0, peakLoaded = 0;
+    for (let t = 0; t < limit * 10; t++) {
+      await advance(100);
+      const st = music.state();
+      peakSounding = Math.max(peakSounding, ctx().playing());
+      peakLoaded = Math.max(peakLoaded, st.loaded.length);
+      if (st.recording && st.recording !== from) break;
+    }
+    return { to: music.state().recording, peakSounding, peakLoaded };
+  }
+
+  it('hands over at a song\'s natural end with a crossfade: two songs only during the fade, two decoded at most', async () => {
+    const { music } = await started('arcade');
+    const first = music.state();
+    expect(first.layer).toBe('recorded');
+    expect(first.duration).toBeGreaterThan(60);
+    const r = await untilNextSong(music);
+    expect(r.to).not.toBe(first.recording);
+    expect(r.peakSounding).toBeLessThanOrEqual(2);
+    expect(r.peakLoaded).toBeLessThanOrEqual(2); // the current song and the next one
+    await advance(4000);
+    expect(ctx().playing()).toBe(1); // the outgoing song is gone after the fade
+  });
+
+  it('shuffle all: plays all eleven before any repeats, never the same song twice in a row', async () => {
+    const { music } = await started('menu', { mode: 'shuffle', song: '036c0292' });
+    const order = [music.state().recording!];
+    for (let i = 0; i < 14; i++) order.push((await untilNextSong(music)).to!);
+    expect(new Set(order.slice(0, 11)).size).toBe(11);
+    for (let i = 1; i < order.length; i++) expect(order[i], `position ${i}`).not.toBe(order[i - 1]);
+  }, 60000);
+
+  it('automatic: each scene draws from its own pool, and related screens keep the song', async () => {
+    const { music } = await started('menu');
+    expect(music.state().recording).toBe('036c0292'); // the familiar opening theme first
+    const s0 = ctx().sources.length;
+    for (const cue of ['select', 'results', 'menu', 'lobby'] as const) { music.play(cue); await advance(300); }
+    expect(ctx().sources.length).toBe(s0);
+    music.play('ruleros');
+    await advance(2000);
+    expect(music.state().recording).toBe('66be822e'); // Ruleros opens its mission's pool
+    music.play('pinata');
+    await advance(2000);
+    expect(['36b2c7ad', 'd4b3fb6f', 'b5a37a72']).toContain(music.state().recording);
+    music.play('cocina');
+    await advance(2000);
+    expect(['72898684', '4c389fba', 'd5ece162']).toContain(music.state().recording);
+  });
+
+  it('Next skips to another song of the pool at once', async () => {
+    const { music } = await started('combat');
+    const a = music.state().recording;
+    music.next();
+    await advance(2000);
+    expect(music.state().recording).not.toBe(a);
+    expect(ctx().playing()).toBe(1);
+  });
+
+  it('one song: a curated loop repeats seamlessly; a song without one repeats from the top', async () => {
+    const { music } = await started('menu', { mode: 'one', song: '036c0292' });
+    expect(music.state().file).toBe('music/rosa-theme.mp3'); // the prepared seamless loop
+    expect(music.state().loop).not.toBeNull();
+    music.setPrefs({ mode: 'one', song: 'd4b3fb6f' });
+    await advance(2500);
+    expect(music.state()).toMatchObject({ recording: 'd4b3fb6f', loop: null });
+    const n0 = ctx().sources.length;
+    await advance(135000); // past the end of Festive Boss Battle (130.8 s)
+    expect(music.state().recording).toBe('d4b3fb6f');
+    expect(ctx().sources.length).toBeGreaterThan(n0); // it started again
+    expect(ctx().playing()).toBe(1);
+  }, 60000);
+
+  it('an earlier recording stays separately selectable', async () => {
+    const { music } = await started('menu', { mode: 'one', song: 'guerra-de-vecinos' });
+    expect(music.state()).toMatchObject({ recording: 'guerra-de-vecinos', file: 'music/guerra-de-vecinos.mp3' });
+    expect(music.nowPlaying()).toMatchObject({ earlier: true });
+  });
+
+  it('rapid scene and mode changes never leave more than two songs sounding, and the last request wins', async () => {
+    const { music } = await started('menu');
+    let peak = 0;
+    const cues = ['ruleros', 'pinata', 'menu', 'cocina', 'combat', 'select', 'boss', 'arcade'] as const;
+    for (let i = 0; i < 24; i++) {
+      music.play(cues[i % cues.length]!);
+      if (i % 5 === 0) music.setPrefs({ mode: i % 10 === 0 ? 'shuffle' : 'auto', song: '036c0292' });
+      if (i % 7 === 0) music.next();
+      await advance(100);
+      peak = Math.max(peak, ctx().playing());
+    }
+    music.setPrefs({ mode: 'auto', song: '036c0292' });
+    music.play('pinata');
+    await advance(4000);
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(ctx().playing()).toBe(1);
+    expect(['36b2c7ad', 'd4b3fb6f', 'b5a37a72']).toContain(music.state().recording);
+  });
+
+  it('changing songs never touches an intentional mute', async () => {
+    const { audio, music } = await started('menu');
+    audio.setLevels(0, 1);
+    await advance(200);
+    music.next();
+    music.setPrefs({ mode: 'one', song: '4c389fba' });
+    music.play('combat');
+    await advance(3000);
     expect((audio as unknown as { a: { music: { gain: Param } } }).a.music.gain.value).toBe(0);
   });
 });

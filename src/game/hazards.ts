@@ -48,6 +48,7 @@ interface Cone extends Base {
   color: number;
   fill: THREE.Mesh;
   outline: THREE.Mesh;
+  edges: THREE.Mesh;
   wave: THREE.Mesh;
   root: THREE.Group;
 }
@@ -76,13 +77,16 @@ interface Orb extends Base {
 }
 
 const RING_SEG = 72;
+// Hot pink reads clearly against the terracotta pavers at golden hour.
+const DANGER = 0xff2f86;
 const hitTmp: WorldHit = { t: 0, nx: 0, ny: 0, nz: 0, box: null, ground: false };
 const pA = new THREE.Vector3();
 const pB = new THREE.Vector3();
 const tmpV = new THREE.Vector3();
 
-const fanCache = new Map<number, { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry; wave: THREE.BufferGeometry }>();
-function fanGeometries(half: number): { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry; wave: THREE.BufferGeometry } {
+interface FanGeos { fill: THREE.BufferGeometry; outline: THREE.BufferGeometry; wave: THREE.BufferGeometry; edges: THREE.BufferGeometry }
+const fanCache = new Map<number, FanGeos>();
+function fanGeometries(half: number): FanGeos {
   const key = Math.round(half * 1000);
   let g = fanCache.get(key);
   if (!g) {
@@ -96,7 +100,17 @@ function fanGeometries(half: number): { fill: THREE.BufferGeometry; outline: THR
     // Vertical arc of the travelling sound wall.
     const wave = new THREE.CylinderGeometry(1, 1, 1, 20, 1, true, -half, half * 2);
     wave.translate(0, 0.5, 0);
-    g = { fill, outline, wave };
+    // Bright strips along both straight edges so the cone shape reads from afar.
+    const w = 0.035;
+    const pos: number[] = [];
+    for (const a of [-half, half]) {
+      const dx = Math.sin(a), dz = Math.cos(a);
+      const px = Math.cos(a) * w, pz = -Math.sin(a) * w;
+      pos.push(-px, 0, -pz, px, 0, pz, dx + px, 0, dz + pz, -px, 0, -pz, dx + px, 0, dz + pz, dx - px, 0, dz - pz);
+    }
+    const edges = new THREE.BufferGeometry();
+    edges.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g = { fill, outline, wave, edges };
     fanCache.set(key, g);
   }
   return g;
@@ -108,9 +122,11 @@ export class HazardSystem {
   private rings: Ring[] = [];
   private orbs: Orb[] = [];
   private heartMat = new THREE.MeshLambertMaterial({ color: 0xff4d8d, emissive: 0x551133 });
-  private vinylGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.05, 16);
-  private vinylMat = new THREE.MeshLambertMaterial({ color: 0x15121a, emissive: 0x220a33 });
+  private vinylGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.07, 18);
+  private vinylMat = new THREE.MeshLambertMaterial({ color: 0x1d1424, emissive: 0x4a1640 });
   private labelMat = new THREE.MeshBasicMaterial({ color: PALETTE.marigold });
+  private rimGeo = new THREE.TorusGeometry(0.46, 0.035, 4, 24);
+  private rimMat = new THREE.MeshBasicMaterial({ color: DANGER });
   reducedMotion = false;
 
   constructor() {
@@ -121,18 +137,20 @@ export class HazardSystem {
 
   private makeCone(): Cone {
     const root = new THREE.Group();
-    const fill = new THREE.Mesh(fanGeometries(0.5).fill, new THREE.MeshBasicMaterial({ color: PALETTE.violet, transparent: true, opacity: 0.35, depthWrite: false }));
-    const outline = new THREE.Mesh(fanGeometries(0.5).outline, new THREE.MeshBasicMaterial({ color: PALETTE.pink, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+    const fill = new THREE.Mesh(fanGeometries(0.5).fill, new THREE.MeshBasicMaterial({ color: DANGER, transparent: true, opacity: 0.35, depthWrite: false }));
+    const outline = new THREE.Mesh(fanGeometries(0.5).outline, new THREE.MeshBasicMaterial({ color: 0xffd6e8, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
+    const edges = new THREE.Mesh(fanGeometries(0.5).edges, outline.material);
+    edges.renderOrder = 3;
     const wave = new THREE.Mesh(fanGeometries(0.5).wave, new THREE.MeshBasicMaterial({ color: PALETTE.marigold, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     fill.renderOrder = 2;
     outline.renderOrder = 3;
     wave.renderOrder = 4;
-    root.add(fill, outline, wave);
+    root.add(fill, outline, edges, wave);
     root.visible = false;
     this.group.add(root);
     return {
       active: false, owner: -1, source: '', t: 0, telegraph: 1, live: 0.3, damage: 0, push: 0, applied: false,
-      x: 0, z: 0, y: 0, dir: 0, range: 1, half: 0.5, color: PALETTE.violet, fill, outline, wave, root,
+      x: 0, z: 0, y: 0, dir: 0, range: 1, half: 0.5, color: DANGER, fill, outline, edges, wave, root,
     };
   }
 
@@ -208,15 +226,17 @@ export class HazardSystem {
     c.dir = opts.dir;
     c.range = opts.range;
     c.half = opts.half;
-    c.color = opts.color ?? PALETTE.violet;
+    c.color = opts.color ?? DANGER;
     const g = fanGeometries(opts.half);
     c.fill.geometry = g.fill;
     c.outline.geometry = g.outline;
+    c.edges.geometry = g.edges;
     c.wave.geometry = g.wave;
     (c.fill.material as THREE.MeshBasicMaterial).color.setHex(c.color);
     c.root.position.set(opts.x, 0.04, opts.z);
     c.root.rotation.y = opts.dir;
     c.outline.scale.setScalar(opts.range);
+    c.edges.scale.setScalar(opts.range);
     c.fill.scale.setScalar(0.01);
     c.wave.visible = false;
     c.root.visible = true;
@@ -266,7 +286,7 @@ export class HazardSystem {
     o.pos.copy(opts.from);
     o.prev.copy(opts.from);
     o.vel.copy(opts.vel);
-    o.r = opts.style === 'heart' ? 0.3 : 0.34;
+    o.r = opts.style === 'heart' ? 0.3 : 0.46;
     const holder = o.mesh as THREE.Group;
     holder.clear();
     if (opts.style === 'heart') {
@@ -276,8 +296,11 @@ export class HazardSystem {
     } else {
       const disc = new THREE.Mesh(this.vinylGeo, this.vinylMat);
       const label = new THREE.Mesh(this.vinylGeo, this.labelMat);
-      label.scale.set(0.35, 1.2, 0.35);
-      holder.add(disc, label);
+      label.scale.set(0.38, 1.2, 0.38);
+      const rim = new THREE.Mesh(this.rimGeo, this.rimMat);
+      rim.rotation.x = Math.PI / 2;
+      holder.add(disc, label, rim);
+      holder.rotation.set(0.25, 0, 0.15);
     }
     holder.position.copy(o.pos);
     holder.visible = true;
@@ -298,8 +321,8 @@ export class HazardSystem {
       // Fill grows toward the edge: when it reaches the outline, it fires.
       const k = c.t / c.telegraph;
       c.fill.scale.setScalar(Math.max(0.01, k * c.range));
-      const pulse = 0.25 + 0.2 * Math.sin(c.t * 18) * (this.reducedMotion ? 0.3 : 1);
-      (c.fill.material as THREE.MeshBasicMaterial).opacity = pulse + k * 0.25;
+      const pulse = 0.32 + 0.14 * Math.sin(c.t * 18) * (this.reducedMotion ? 0.3 : 1);
+      (c.fill.material as THREE.MeshBasicMaterial).opacity = pulse + k * 0.22;
       return;
     }
     const lt = c.t - c.telegraph;

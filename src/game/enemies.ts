@@ -361,7 +361,7 @@ export class Enemy {
     } else {
       ctx.hazards.cone({
         owner: this.id, source: 'soplador', x: this.pos.x, z: this.pos.z, y: 1.0, dir, range: 5.5, half: 0.62,
-        telegraph: 0.85 * scale, live: 0.5, damage: 7, push: 14, color: 0x3f7537,
+        telegraph: 0.85 * scale, live: 0.5, damage: 7, push: 14, color: 0x4dffb0,
       });
       ctx.onAttack(this, 'gust');
     }

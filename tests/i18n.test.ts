@@ -5,7 +5,7 @@ import path from 'node:path';
 import { STRINGS, QUIPS } from '../src/i18n/strings';
 import { applyDom, hasKey, quip, setLang, t } from '../src/i18n/i18n';
 
-const html = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
+const html = fs.readFileSync(path.resolve(__dirname, '../classic.html'), 'utf8');
 
 describe('i18n', () => {
   it('has every key in both languages, with no blanks', () => {

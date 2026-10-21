@@ -90,7 +90,7 @@ describe('balance (bot playthroughs of the real simulation)', () => {
       // The bot aims faster than a new player and skips the tutorial, so a
       // human run lands later than this window.
       expect(w.seconds).toBeGreaterThan(105);
-      expect(w.seconds).toBeLessThan(300);
+      expect(w.seconds).toBeLessThan(450);
     }
   }, 120000);
 

@@ -2,6 +2,7 @@ import './styles.css';
 import { applyDom, detectLang, setLang, t } from './i18n/i18n';
 import type { StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, defaultSettings } from './persistence/storage';
+import { inject } from '@vercel/analytics';
 
 // Tiny entry: shows real loading progress, checks WebGL, then loads the
 // engine chunk. Failures land on a friendly, actionable screen.
@@ -92,5 +93,8 @@ async function boot(): Promise<void> {
   }
   clearTimeout(slow);
 }
+
+// Initialize Vercel Web Analytics
+inject();
 
 void boot();

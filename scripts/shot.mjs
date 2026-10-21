@@ -1,0 +1,18 @@
+import { launch } from './browser.mjs';
+const url = process.argv[2] || 'http://localhost:4173/';
+const out = process.argv[3] || 'artifacts';
+const browser = await launch();
+const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
+const logs = [];
+page.on('console', (m) => logs.push(`${m.type()}: ${m.text()}`));
+page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
+await page.goto(url);
+await page.waitForFunction(() => !!window.__chancla, null, { timeout: 30000 });
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/title.png` });
+await page.click('#btn-play');
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/play.png` });
+console.log(JSON.stringify(await page.evaluate(() => window.__chancla.snapshot())));
+console.log(logs.join('\n'));
+await browser.close();

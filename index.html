@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Chancla Warfare: La Ley de la Chancla</title>
+    <meta name="description" content="A comedic first-person arcade game. You are Doña Rosa, and the neighborhood is too loud. Two chanclas, zero patience. Free in your browser." />
+    <meta name="theme-color" content="#4b2a6b" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="canonical" href="%SITE_URL%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Chancla Warfare" />
+    <meta property="og:title" content="Chancla Warfare: La Ley de la Chancla" />
+    <meta property="og:description" content="Se acabó la tontería. Restore Sunday peace with an exceptionally aerodynamic chancla." />
+    <meta property="og:url" content="%SITE_URL%" />
+    <meta property="og:image" content="%SITE_URL%og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Chancla Warfare title art: Doña Rosa and a flying chancla over a golden-hour courtyard" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Chancla Warfare: La Ley de la Chancla" />
+    <meta name="twitter:description" content="Se acabó la tontería. Restore Sunday peace with an exceptionally aerodynamic chancla." />
+    <meta name="twitter:image" content="%SITE_URL%og-image.png" />
+    <style>
+      /* Critical styles so the loader shows before the bundle arrives. */
+      html, body { margin: 0; height: 100%; background: #2e1846; color: #f4e6c8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #f2a33a 0%, #c8553d 45%, #2e1846 100%); }
+      #boot .bx { text-align: center; padding: 24px; }
+      #boot .bt { font: 900 clamp(32px, 7vw, 64px)/1 system-ui, sans-serif; letter-spacing: 0.02em; color: #f4e6c8; text-shadow: 0 4px 0 #4b2a6b; }
+      #boot .bar { width: min(320px, 70vw); height: 12px; margin: 20px auto 10px; border-radius: 99px; background: rgba(46, 24, 70, 0.6); overflow: hidden; border: 2px solid #f4e6c8; }
+      #boot .fill { height: 100%; width: 4%; background: #f4e6c8; transition: width 0.25s ease; }
+      #boot .st { font-size: 15px; min-height: 1.4em; }
+      @media (prefers-reduced-motion: reduce) { #boot .fill { transition: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="bx">
+        <div class="bt">CHANCLA WARFARE</div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="4" aria-label="Loading"><div class="fill" id="boot-fill"></div></div>
+        <div class="st" id="boot-status">Loading…</div>
+        <noscript><p>Chancla Warfare needs JavaScript to run. Please enable it and reload.</p></noscript>
+      </div>
+    </div>
+    <div id="app" hidden>
+      <div id="stage" aria-hidden="true"></div>
+
+      <!-- In-game HUD -->
+      <div id="hud" class="hud" hidden>
+        <div class="hud-tl">
+          <div class="hp" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" data-i18n-aria="hud.health" id="hp-meter">
+            <div class="hp-face" aria-hidden="true"></div>
+            <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div></div>
+            <div class="hp-num" id="hp-num">100</div>
+          </div>
+          <div class="ammo" id="ammo" aria-live="off">
+            <span class="slot" data-slot="0"></span>
+            <span class="slot" data-slot="1"></span>
+          </div>
+        </div>
+        <div class="hud-tc">
+          <div class="wave-label" id="wave-label"></div>
+          <div class="boss" id="boss-panel" hidden>
+            <div class="boss-name" data-i18n="boss.name"></div>
+            <div class="boss-bar"><div class="boss-fill" id="boss-fill"></div></div>
+            <div class="boss-state" id="boss-state"></div>
+          </div>
+          <div class="tutorial" id="tutorial" hidden>
+            <span class="tut-tag" data-i18n="tutorial.label"></span>
+            <span id="tutorial-text"></span>
+            <button type="button" class="btn-ghost small" id="btn-skip-tutorial" data-i18n="hud.skipTutorial"></button>
+          </div>
+        </div>
+        <div class="hud-tr">
+          <div class="score"><span class="score-label" data-i18n="hud.score"></span><span id="score">0</span></div>
+          <div class="combo" id="combo" hidden><span class="mult" id="mult">x1</span><span class="combo-n" id="combo-n"></span><div class="combo-timer"><div id="combo-timer"></div></div></div>
+          <div class="fps" id="fps" hidden></div>
+          <button type="button" class="hud-btn" id="btn-pause" data-i18n-aria="hud.pause" title="Esc">❚❚</button>
+        </div>
+        <div class="crosshair" id="crosshair" aria-hidden="true">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <circle cx="40" cy="40" r="26" class="ring-bg" />
+            <circle cx="40" cy="40" r="26" class="ring" id="charge-ring" />
+            <circle cx="40" cy="40" r="2.6" class="dot" />
+            <g class="hitmarker" id="hitmarker">
+              <line x1="27" y1="27" x2="33" y2="33" /><line x1="53" y1="27" x2="47" y2="33" />
+              <line x1="27" y1="53" x2="33" y2="47" /><line x1="53" y1="53" x2="47" y2="47" />
+            </g>
+          </svg>
+        </div>
+        <div class="meter" id="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-i18n-aria="hud.meter">
+          <div class="meter-icon" aria-hidden="true">★</div>
+          <div class="meter-bar"><div class="meter-fill" id="meter-fill"></div></div>
+          <div class="meter-hint" id="meter-hint"></div>
+        </div>
+        <div class="quip" id="quip" aria-live="polite" hidden>
+          <div class="quip-face" aria-hidden="true"></div>
+          <div class="quip-body"><div class="quip-es" id="quip-es"></div><div class="quip-sub" id="quip-sub"></div></div>
+        </div>
+        <div class="banner" id="banner" aria-live="polite" hidden>
+          <div class="banner-title" id="banner-title"></div>
+          <div class="banner-sub" id="banner-sub"></div>
+        </div>
+        <div id="callouts" class="callouts" aria-hidden="true"></div>
+        <div class="vignette hurt" id="vig-hurt" aria-hidden="true"></div>
+        <div class="vignette gold" id="vig-gold" aria-hidden="true"></div>
+      </div>
+
+      <!-- Touch controls -->
+      <div id="touch" class="touch" hidden>
+        <div class="touch-move" id="touch-move" role="application" data-i18n-aria="touch.joystick">
+          <div class="stick-base" id="stick-base"><div class="stick-knob" id="stick-knob"></div></div>
+        </div>
+        <div class="touch-look" id="touch-look" data-i18n-aria="touch.look"></div>
+        <div class="touch-buttons">
+          <button type="button" class="tbtn tbtn-special" id="t-special" data-i18n-aria="touch.special">★</button>
+          <button type="button" class="tbtn tbtn-recall" id="t-recall" data-i18n-aria="touch.recall">↩</button>
+          <button type="button" class="tbtn tbtn-throw" id="t-throw" data-i18n-aria="touch.throw"><span class="tbtn-chancla" aria-hidden="true"></span></button>
+        </div>
+      </div>
+      <div class="rotate-hint" id="rotate-hint" data-i18n="touch.rotate" hidden></div>
+
+      <!-- Title -->
+      <section id="screen-title" class="screen title" hidden aria-labelledby="logo">
+        <div class="title-col">
+          <h1 class="logo" id="logo">
+            <span class="logo-main">CHANCLA</span>
+            <span class="logo-stamp">WARFARE</span>
+          </h1>
+          <p class="subtitle" data-i18n="brand.subtitle"></p>
+          <p class="tagline"><span data-i18n="brand.tagline"></span> <span class="tagline-tr" data-i18n="brand.taglineTr"></span></p>
+          <p class="pitch" data-i18n="title.pitch"></p>
+          <button type="button" class="btn-play" id="btn-play" data-i18n-aria="title.playAria"><span data-i18n="title.play"></span></button>
+          <div class="title-row">
+            <button type="button" class="btn-ghost" id="btn-howto" aria-expanded="false" aria-controls="controls-card" data-i18n="title.howto"></button>
+            <button type="button" class="btn-ghost" id="btn-settings" data-i18n="title.settings"></button>
+            <button type="button" class="btn-ghost" id="btn-lang" data-i18n-aria="lang.toggleAria"><span data-i18n="lang.toggle"></span></button>
+            <button type="button" class="btn-ghost icon" id="btn-mute" aria-pressed="false"></button>
+          </div>
+          <p class="best" id="title-best"></p>
+          <p class="note" id="title-storage" hidden data-i18n="title.storageOff"></p>
+        </div>
+        <div class="title-side">
+          <figure class="rosa-card">
+            <div class="rosa-portrait" id="rosa-portrait" role="img" data-i18n-aria="title.portraitAlt"></div>
+            <figcaption><strong data-i18n="title.rosaName"></strong><span data-i18n="title.rosaBio"></span></figcaption>
+          </figure>
+        </div>
+        <div class="controls-card" id="controls-card" hidden>
+          <h2 data-i18n="controls.heading"></h2>
+          <dl class="controls">
+            <dt data-i18n="controls.keysMove"></dt><dd data-i18n="controls.move"></dd>
+            <dt data-i18n="controls.keysLook"></dt><dd data-i18n="controls.look"></dd>
+            <dt data-i18n="controls.keysThrow"></dt><dd data-i18n="controls.throw"></dd>
+            <dt data-i18n="controls.keysCharge"></dt><dd data-i18n="controls.charge"></dd>
+            <dt data-i18n="controls.keysRecall"></dt><dd data-i18n="controls.recall"></dd>
+            <dt data-i18n="controls.keysSpecial"></dt><dd data-i18n="controls.special"></dd>
+            <dt data-i18n="controls.keysPause"></dt><dd data-i18n="controls.pause"></dd>
+          </dl>
+          <p class="note" data-i18n="controls.trackpadNote"></p>
+          <p class="note" data-i18n="controls.touchNote"></p>
+        </div>
+      </section>
+
+      <!-- Pause -->
+      <section id="screen-pause" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="panel">
+          <h2 id="pause-title" data-i18n="pause.title"></h2>
+          <button type="button" class="btn-play small" id="btn-resume" data-i18n="pause.resume"></button>
+          <button type="button" class="btn-ghost wide" id="btn-restart" data-i18n="pause.restart"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-settings" data-i18n="pause.settings"></button>
+          <button type="button" class="btn-ghost wide" id="btn-to-title" data-i18n="pause.toTitle"></button>
+          <p class="note" id="pause-lock-note" data-i18n="pause.lockNote"></p>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section id="screen-results" class="screen overlay results" hidden role="dialog" aria-modal="true" aria-labelledby="results-title">
+        <div class="panel wide">
+          <div class="results-head">
+            <div class="results-face" id="results-face" aria-hidden="true"></div>
+            <div>
+              <h2 id="results-title"></h2>
+              <p class="results-sub" id="results-sub"></p>
+            </div>
+          </div>
+          <div class="new-best" id="new-best" hidden data-i18n="results.newBest"></div>
+          <dl class="stats">
+            <div><dt data-i18n="results.score"></dt><dd id="r-score"></dd></div>
+            <div><dt data-i18n="results.bestCombo"></dt><dd id="r-combo"></dd></div>
+            <div><dt data-i18n="results.accuracy"></dt><dd id="r-acc"></dd></div>
+            <div><dt data-i18n="results.ricochets"></dt><dd id="r-rico"></dd></div>
+            <div><dt data-i18n="results.time"></dt><dd id="r-time"></dd></div>
+            <div><dt data-i18n="results.wave"></dt><dd id="r-wave"></dd></div>
+          </dl>
+          <p class="pb"><span data-i18n="results.personalBest"></span>: <strong id="r-best"></strong> <span class="pb-note" id="r-best-note"></span></p>
+          <div class="results-actions">
+            <button type="button" class="btn-play small" id="btn-again" data-i18n="results.playAgain"></button>
+            <button type="button" class="btn-ghost" id="btn-share" data-i18n="results.share"></button>
+            <button type="button" class="btn-ghost" id="btn-copy" data-i18n="results.copy"></button>
+            <button type="button" class="btn-ghost" id="btn-download" data-i18n="results.download"></button>
+            <button type="button" class="btn-ghost" id="btn-results-title" data-i18n="results.toTitle"></button>
+          </div>
+          <textarea class="share-fallback" id="share-fallback" readonly hidden aria-label="Share text"></textarea>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="modal-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="panel settings">
+          <h2 id="settings-title" data-i18n="settings.title"></h2>
+          <div class="field">
+            <span class="label" id="lbl-lang" data-i18n="settings.language"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">
+              <button type="button" role="radio" data-lang="en">English</button>
+              <button type="button" role="radio" data-lang="es">Español</button>
+            </div>
+          </div>
+          <label class="field"><span class="label" data-i18n="settings.volume"></span><input type="range" min="0" max="100" step="1" id="set-volume" /></label>
+          <label class="field check"><input type="checkbox" id="set-mute" /><span data-i18n="settings.mute"></span></label>
+          <label class="field check"><input type="checkbox" id="set-music" /><span data-i18n="settings.music"></span></label>
+          <label class="field"><span class="label" data-i18n="settings.sensitivity"></span><input type="range" min="20" max="300" step="5" id="set-sens" /><output id="out-sens"></output></label>
+          <label class="field check"><input type="checkbox" id="set-invert" /><span data-i18n="settings.invertY"></span></label>
+          <label class="field check"><input type="checkbox" id="set-assist" /><span data-i18n="settings.aimAssist"></span></label>
+          <label class="field check"><input type="checkbox" id="set-motion" /><span data-i18n="settings.reducedMotion"></span></label>
+          <div class="field">
+            <span class="label" id="lbl-quality" data-i18n="settings.quality"></span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-quality">
+              <button type="button" role="radio" data-quality="low" data-i18n="settings.qualityLow"></button>
+              <button type="button" role="radio" data-quality="medium" data-i18n="settings.qualityMedium"></button>
+              <button type="button" role="radio" data-quality="high" data-i18n="settings.qualityHigh"></button>
+            </div>
+          </div>
+          <label class="field check"><input type="checkbox" id="set-fps" /><span data-i18n="settings.showFps"></span></label>
+          <div class="danger">
+            <h3 data-i18n="settings.dataHeading"></h3>
+            <p class="note" data-i18n="settings.resetNote"></p>
+            <button type="button" class="btn-danger" id="btn-reset" data-i18n="settings.reset"></button>
+          </div>
+          <button type="button" class="btn-play small" id="btn-settings-close" data-i18n="settings.close"></button>
+        </div>
+      </section>
+
+      <!-- Confirm -->
+      <section id="modal-confirm" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+        <div class="panel">
+          <h2 id="confirm-title" data-i18n="confirm.resetTitle"></h2>
+          <p id="confirm-body" data-i18n="confirm.resetBody"></p>
+          <div class="results-actions">
+            <button type="button" class="btn-ghost" id="btn-confirm-no" data-i18n="confirm.no"></button>
+            <button type="button" class="btn-danger" id="btn-confirm-yes" data-i18n="confirm.yes"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Graphics context lost -->
+      <section id="screen-ctx" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="ctx-title">
+        <div class="panel">
+          <h2 id="ctx-title" data-i18n="ctx.lost"></h2>
+          <button type="button" class="btn-play small" id="btn-ctx-reload" data-i18n="ctx.reload"></button>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <!-- Fatal errors (WebGL unavailable, failed load) -->
+    <section id="screen-error" class="screen error" hidden role="alertdialog" aria-labelledby="error-title">
+      <div class="panel">
+        <h2 id="error-title"></h2>
+        <p id="error-body"></p>
+        <ul id="error-tips"></ul>
+        <button type="button" class="btn-play small" id="btn-error-retry"></button>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

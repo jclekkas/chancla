@@ -82,6 +82,9 @@ export class Trail {
       const toCam = this.tmpB.subVectors(camPos, p);
       const side = dir.cross(toCam).normalize();
       const f = 1 - i / (SEGMENTS - 1);
+      // Fade the ribbon out close to the camera so it never fills the view.
+      const camD = toCam.length();
+      const near = Math.min(1, Math.max(0, (camD - 1.2) / 2.5));
       const w = this.width * f;
       const o = i * 6;
       this.positions[o] = p.x + side.x * w;
@@ -90,7 +93,7 @@ export class Trail {
       this.positions[o + 3] = p.x - side.x * w;
       this.positions[o + 4] = p.y - side.y * w;
       this.positions[o + 5] = p.z - side.z * w;
-      const a = f * f * 0.75;
+      const a = f * f * 0.55 * near;
       const co = i * 8;
       for (let s = 0; s < 2; s++) {
         this.colors[co + s * 4] = this.color.r;

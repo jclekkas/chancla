@@ -91,7 +91,7 @@ export class ChanclaSystem {
     const model = buildSandal(golden ? GOLD_SKIN : undefined, golden);
     model.scale.setScalar(golden ? 1.9 : 1.7);
     model.visible = false;
-    const trail = new Trail(mat, golden ? 0.16 : 0.1);
+    const trail = new Trail(mat, golden ? 0.13 : 0.07);
     trail.setColor(golden ? PALETTE.gold : PALETTE.cream);
     this.group.add(model, trail.mesh);
     return {

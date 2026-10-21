@@ -56,11 +56,12 @@ export class FixedLoop {
     let frameDt = (now - this.last) / 1000;
     this.last = now;
     if (!(frameDt > 0)) frameDt = 0;
-    if (frameDt > MAX_FRAME_DT) frameDt = MAX_FRAME_DT;
-
+    // Measure real frame time before clamping the simulation step.
     this.fpsAcc += frameDt;
     this.fpsFrames++;
     if (this.frameTimes.length < 600) this.frameTimes.push(frameDt * 1000);
+    if (frameDt > MAX_FRAME_DT) frameDt = MAX_FRAME_DT;
+
     if (this.fpsAcc >= 0.5) {
       this.fps = this.fpsFrames / this.fpsAcc;
       this.fpsAcc = 0;

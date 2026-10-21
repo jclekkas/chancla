@@ -14,9 +14,15 @@ export interface WaveDef {
 // Wave 2 adds fast Influencers whose poses open attack windows.
 // Wave 3 mixes in Sopladores that push you around, rewarding movement.
 export const WAVES: WaveDef[] = [
-  { spawns: ['bocinas', 'bocinas', 'bocinas', 'bocinas'], maxActive: 2, interval: [2.6, 3.4], telegraphScale: 1.3 },
-  { spawns: ['influencer', 'bocinas', 'influencer', 'influencer', 'bocinas', 'influencer'], maxActive: 3, interval: [1.8, 2.6], telegraphScale: 1.12 },
-  { spawns: ['soplador', 'influencer', 'bocinas', 'soplador', 'influencer', 'soplador', 'bocinas', 'influencer'], maxActive: 4, interval: [1.4, 2.1], telegraphScale: 1.0 },
+  { spawns: ['bocinas', 'bocinas', 'bocinas', 'bocinas', 'bocinas', 'bocinas'], maxActive: 2, interval: [2.4, 3.2], telegraphScale: 1.3 },
+  {
+    spawns: ['influencer', 'bocinas', 'influencer', 'influencer', 'bocinas', 'influencer', 'bocinas', 'influencer', 'influencer'],
+    maxActive: 3, interval: [1.8, 2.5], telegraphScale: 1.12,
+  },
+  {
+    spawns: ['soplador', 'influencer', 'bocinas', 'soplador', 'influencer', 'bocinas', 'soplador', 'influencer', 'bocinas', 'soplador', 'influencer', 'bocinas'],
+    maxActive: 4, interval: [1.5, 2.2], telegraphScale: 1.0,
+  },
 ];
 
 export type DirectorPhase = 'idle' | 'intro' | 'spawning' | 'clear' | 'done';

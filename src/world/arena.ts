@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { box, type AABB } from '../physics/collision';
 import { NavGrid } from './nav';
 import { GEO, PALETTE, basic, lambert, mesh } from './palette';
@@ -102,6 +103,53 @@ function signTexture(text: string, bg: number, fg: number, w = 512, h = 128): TH
   });
 }
 
+// Bakes every static, non-instanced mesh into one mesh per material, so the
+// whole courtyard draws in a few dozen calls instead of a few hundred.
+function mergeStatic(group: THREE.Group): void {
+  group.updateMatrixWorld(true);
+  const buckets = new Map<string, { mat: THREE.Material; cast: boolean; geos: THREE.BufferGeometry[] }>();
+  const remove: THREE.Object3D[] = [];
+  for (const child of group.children) {
+    if (child.userData.dynamic || (child as THREE.InstancedMesh).isInstancedMesh) continue;
+    if (!(child as THREE.Mesh).isMesh && child.type !== 'Group') continue;
+    let ok = true;
+    child.traverse((o) => {
+      if (o.userData.dynamic || (o as THREE.InstancedMesh).isInstancedMesh) ok = false;
+      if ((o as THREE.Mesh).isMesh && Array.isArray((o as THREE.Mesh).material)) ok = false;
+    });
+    if (!ok) continue;
+    child.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.Material;
+      if (mat.transparent) { ok = false; return; }
+      const key = `${mat.uuid}:${m.castShadow ? 1 : 0}`;
+      let b = buckets.get(key);
+      if (!b) { b = { mat, cast: m.castShadow, geos: [] }; buckets.set(key, b); }
+      const g = m.geometry.index ? m.geometry.clone() : m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+      if (!g.index) {
+        const idx: number[] = [];
+        for (let i = 0; i < (g.attributes.position as THREE.BufferAttribute).count; i++) idx.push(i);
+        g.setIndex(idx);
+      }
+      b.geos.push(g);
+    });
+    remove.push(child);
+  }
+  for (const o of remove) group.remove(o);
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos, false);
+    for (const g of b.geos) g.dispose();
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, b.mat);
+    mesh.castShadow = b.cast;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+}
+
 type Face = 'n' | 's' | 'e' | 'w';
 
 interface HouseDef {
@@ -129,6 +177,7 @@ export function buildArena(): Arena {
   skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
   const sky = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
   sky.renderOrder = -10;
+  sky.userData.dynamic = true;
   group.add(sky);
   const sunDisk = new THREE.Mesh(new THREE.CircleGeometry(9, 24), new THREE.MeshBasicMaterial({ color: 0xffe2a0, fog: false, transparent: true, opacity: 0.95 }));
   sunDisk.position.set(-110, 22, 50);
@@ -314,8 +363,9 @@ export function buildArena(): Arena {
   const statue = buildSandal(GOLD_SKIN, true);
   statue.scale.setScalar(5.5);
   statue.position.set(0, 3.6, 0);
-  statue.rotation.set(-1.1, 0, 0.3);
+  statue.rotation.set(-0.75, 0, 0.35);
   const statuePivot = new THREE.Group();
+  statuePivot.userData.dynamic = true;
   statuePivot.add(statue);
   group.add(statuePivot);
   // Water spouts.
@@ -326,6 +376,7 @@ export function buildArena(): Arena {
     const s = mesh(GEO.cylLo, spoutMat, 0.08, 0.6, 0.08, Math.cos(a) * 0.7, 1.0, Math.sin(a) * 0.7);
     s.rotation.z = Math.cos(a) * 0.6;
     s.rotation.x = -Math.sin(a) * 0.6;
+    s.userData.dynamic = true;
     spouts.push(s);
     group.add(s);
   }
@@ -443,6 +494,8 @@ export function buildArena(): Arena {
       const cap = mesh(GEO.cyl, lambert(PALETTE.pink, { emissive: 0x440022 }), r * 0.7, 0.14, r * 0.7, sx, cy, -15.44);
       cap.rotation.x = Math.PI / 2;
       group.add(cap);
+      cone.userData.dynamic = true;
+      cap.userData.dynamic = true;
       speakerCones.push(cone, cap);
     }
     colliders.push(box(sx - 1.3, 1.2, -17.3, sx + 1.3, 5.0, -15.5, 'speaker'));
@@ -519,6 +572,7 @@ export function buildArena(): Arena {
     }
     const im = local.build(GEO.box, lambert(0xffffff, { side: THREE.DoubleSide }));
     g.add(im);
+    g.userData.dynamic = true;
     group.add(g);
     swayGroups.push(g);
   }
@@ -528,16 +582,28 @@ export function buildArena(): Arena {
   laundry(16, -20, 20, -14, 5.2);
 
   const bulbs = new Batch();
+  const wirePts: number[] = [];
   function lights(ax: number, ay: number, az: number, bx: number, by: number, bz: number, count: number): void {
     for (let i = 0; i <= count; i++) {
       const t = i / count;
       const sag = Math.sin(t * Math.PI) * 1.2;
+      if (i > 0) {
+        const t0 = (i - 1) / count;
+        const sag0 = Math.sin(t0 * Math.PI) * 1.2;
+        wirePts.push(ax + (bx - ax) * t0, ay + (by - ay) * t0 - sag0 + 0.1, az + (bz - az) * t0);
+        wirePts.push(ax + (bx - ax) * t, ay + (by - ay) * t - sag + 0.1, az + (bz - az) * t);
+      }
       bulbs.add(ax + (bx - ax) * t, ay + (by - ay) * t - sag, az + (bz - az) * t, 0.16, 0.2, 0.16, 0, i % 3 === 0 ? PALETTE.pink : i % 3 === 1 ? 0xfff0b0 : PALETTE.turquoiseFaded);
     }
   }
   lights(-20, 6.5, -6, 20, 6.5, 6, 26);
   lights(-20, 6.5, 8, 20, 6.5, -8, 26);
   group.add(bulbs.build(GEO.sphereLo, basic(0xffffff)));
+  const wireGeo = new THREE.BufferGeometry();
+  wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3));
+  const wires = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: PALETTE.ink }));
+  wires.userData.dynamic = true;
+  group.add(wires);
 
   const flags = new Batch();
   const flagColors = [PALETTE.pink, PALETTE.marigold, PALETTE.turquoise, PALETTE.violet, PALETTE.terracotta, PALETTE.cream];
@@ -559,6 +625,8 @@ export function buildArena(): Arena {
     }
     group.add(mesh(GEO.cylLo, lineMat, 0.015, 2.2, 0.015, bx, 1.3, bz));
   }
+
+  mergeStatic(group);
 
   // Navigation grid.
   const nav = new NavGrid(-ARENA.outer, -ARENA.outer, ARENA.outer, ARENA.outer, ARENA.navCell, colliders, 0.45);

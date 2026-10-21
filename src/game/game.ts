@@ -133,6 +133,7 @@ export class Game {
   private targets: HitTarget[] = [];
   private targetPool: HitTarget[] = [];
   private reached = 0;
+  private bossPickupT = 0;
   private meterAnnounced = false;
   private lastQuip = -10;
   private enemyCtx: EnemyContext;
@@ -255,6 +256,7 @@ export class Game {
     this.ending = null;
     this.ended = false;
     this.reached = 0;
+    this.bossPickupT = 0;
     this.meterAnnounced = false;
     this.lastQuip = -10;
     this.enemyCtx.telegraphScale = 1;
@@ -374,6 +376,14 @@ export class Game {
     }
 
     this.boss.update(dt, this.bossCtx);
+    if (this.phase === 'boss' && !this.ending) {
+      // A fresh cafecito every so often keeps the finale fair.
+      this.bossPickupT += dt;
+      if (this.bossPickupT > 24 && this.pickups.activeCount() === 0) {
+        this.bossPickupT = 0;
+        this.spawnPickupFar();
+      }
+    }
 
     this.hazards.step(dt, { x: this.player.pos.x, z: this.player.pos.z, eyeY: PLAYER.eye, radius: PLAYER.radius }, this.arena.colliders, (h) => this.onHazardHit(h));
 
@@ -630,7 +640,8 @@ export class Game {
       return true;
     }
     if (t.kind === 'boss') {
-      const out = this.boss.takeHit(c.damage);
+      // Golden barrages are rapid-fire, so each one stings the boss less.
+      const out = this.boss.takeHit(c.golden ? LEGEND.bossDamage : c.damage);
       if (!out.valid) return false;
       if (!c.hitAny) this.scoring.noteThrowConnected();
       const res = this.scoring.hit({ ricochet: c.ricocheted, charged, interrupt: false, posing: false, legendary: c.golden, boss: true, kill: out.killed });

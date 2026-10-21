@@ -52,6 +52,7 @@ export class App {
   private heroSandal: THREE.Group;
   private goldHand: THREE.Group;
   private frame = emptyInput();
+  private sample = emptyInput();
   private blank = emptyInput();
   private shake = 0;
   private fovPunch = 0;
@@ -79,6 +80,7 @@ export class App {
     const stage = $('stage');
     stage.appendChild(renderer.domElement);
     renderer.domElement.tabIndex = -1;
+    renderer.info.autoReset = false;
     renderer.domElement.setAttribute('aria-hidden', 'true');
 
     this.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 220);
@@ -190,10 +192,11 @@ export class App {
   private bindUi(): void {
     this.click('btn-play', () => this.play(!this.shouldTutorial()));
     this.click('btn-howto', () => {
-      const card = $('controls-card');
-      card.hidden = !card.hidden;
-      $('btn-howto').setAttribute('aria-expanded', String(!card.hidden));
+      this.lastFocus = $('btn-howto');
+      $('modal-howto').hidden = false;
+      this.focusFirst('modal-howto');
     });
+    this.click('btn-howto-close', () => this.closeHowto(), 'uiBack');
     this.click('btn-settings', () => this.openSettings('title'));
     this.click('btn-lang', () => this.updateSettings({ lang: getLang() === 'en' ? 'es' : 'en' }));
     this.click('btn-mute', () => this.updateSettings({ muted: !this.settings.value.muted }));
@@ -242,7 +245,8 @@ export class App {
     // Escape closes dialogs.
     this.bag.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!$('modal-confirm').hidden) this.closeConfirm();
+      if (!$('modal-howto').hidden) this.closeHowto();
+      else if (!$('modal-confirm').hidden) this.closeConfirm();
       else if (!$('modal-settings').hidden) this.closeSettings();
       else if (this.state === 'paused' && $('modal-settings').hidden) { /* stay paused: Resume is explicit */ }
     });
@@ -418,7 +422,7 @@ export class App {
 
   // ---------- state transitions ----------
   private hideAllScreens(): void {
-    for (const id of ['screen-title', 'screen-pause', 'screen-results', 'modal-settings', 'modal-confirm']) $(id).hidden = true;
+    for (const id of ['screen-title', 'screen-pause', 'screen-results', 'modal-settings', 'modal-confirm', 'modal-howto']) $(id).hidden = true;
   }
 
   private focusFirst(id: string): void {
@@ -466,6 +470,8 @@ export class App {
     this.callouts.clear();
     this.state = 'playing';
     this.input.clear();
+    this.input.consume(this.frame);
+    this.frame.cancelCharge = false;
     this.input.enabled = true;
     this.touch.reset();
     this.syncTouchVisibility();
@@ -541,6 +547,11 @@ export class App {
     }
   }
 
+  private closeHowto(): void {
+    $('modal-howto').hidden = true;
+    $('btn-howto').focus();
+  }
+
   private openConfirm(): void {
     $('modal-confirm').hidden = false;
     $('btn-confirm-no').focus();
@@ -556,13 +567,16 @@ export class App {
     this.sessionTutorialDone = true;
     this.lastResult = r;
     this.lastWasBest = best;
+    // Leave the playing state first so releasing the pointer lock below is
+    // not mistaken for the player pausing.
+    this.state = 'results';
     this.input.enabled = false;
     this.input.clear();
     this.touch.reset();
     this.input.exitLock();
+    this.syncTouchVisibility();
     this.resultsTimer = setTimeout(() => {
       this.resultsTimer = null;
-      this.state = 'results';
       this.syncTouchVisibility();
       this.fillResults(r, best);
       $('screen-results').hidden = false;
@@ -635,28 +649,37 @@ export class App {
   }
 
   // ---------- frame ----------
-  private step(dt: number, first: boolean): void {
+  private step(dt: number, _first: boolean): void {
     if (this.contextLost) return;
     if (this.state === 'playing') {
-      this.game.update(dt, first ? this.frame : this.blank);
+      this.game.update(dt, this.frame);
+      const p = this.frame;
+      p.throwDown = p.throwUp = p.recall = p.special = p.cancelCharge = false;
     } else if (this.state === 'title' || this.state === 'results') {
       // Ambient animation (and the end-of-run beat) keep the world alive behind menus.
       this.game.update(dt, this.blank);
     }
   }
 
-  // Input is sampled once per frame, before the simulation steps. Extra
-  // steps in the same frame get the held state without repeating edges.
+  // Input is sampled once per frame, before the simulation steps. Edges
+  // (press, release, recall, special) stay latched until a simulation step
+  // actually consumes them, so a click is never lost on a frame that runs
+  // zero steps (high refresh displays) or several.
   private beginFrame(): void {
     if (this.state !== 'playing') return;
     this.input.tick();
-    this.input.consume(this.frame);
+    const f = this.input.consume(this.sample);
+    const p = this.frame;
+    p.moveX = f.moveX;
+    p.moveZ = f.moveZ;
+    p.throwHeld = f.throwHeld;
+    p.throwDown ||= f.throwDown;
+    p.throwUp ||= f.throwUp;
+    p.recall ||= f.recall;
+    p.special ||= f.special;
+    p.cancelCharge ||= f.cancelCharge;
     const look = this.input.consumeLook();
     if (this.game.player.alive) this.game.player.look(look.dx, look.dy);
-    this.blank.moveX = this.frame.moveX;
-    this.blank.moveZ = this.frame.moveZ;
-    this.blank.throwHeld = this.frame.throwHeld;
-    this.blank.throwDown = this.blank.throwUp = this.blank.recall = this.blank.special = this.blank.cancelCharge = false;
   }
 
   private render(frameDt: number, alpha: number): void {
@@ -666,6 +689,7 @@ export class App {
     this.updateCamera(frameDt);
     this.game.chanclas.render(frameDt, this.camera, this.state === 'playing' ? alpha : 1);
     this.updateViewmodel(frameDt);
+    this.renderer.info.reset();
     this.renderer.autoClear = true;
     this.renderer.render(this.game.scene, this.camera);
     this.renderer.autoClear = false;

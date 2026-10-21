@@ -49,6 +49,7 @@ export const LEGEND = {
   pool: 14,
   speed: 50,
   damage: 2,
+  bossDamage: 0.5,
   pierce: 2,
   splashRadius: 2.6,
   life: 1.4,

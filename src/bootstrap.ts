@@ -21,6 +21,23 @@ declare global {
   }
 }
 
+async function precompile(renderer: THREE.WebGLRenderer, scene: THREE.Object3D, cam: THREE.Camera): Promise<void> {
+  const hidden: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if (!o.visible) {
+      hidden.push(o);
+      o.visible = true;
+    }
+  });
+  try {
+    await renderer.compileAsync(scene, cam);
+  } catch {
+    try { renderer.compile(scene, cam); } catch { /* compile lazily instead */ }
+  } finally {
+    for (const o of hidden) o.visible = false;
+  }
+}
+
 export async function start(o: StartOptions): Promise<App> {
   const quality = o.settings.value.quality;
   const renderer = new THREE.WebGLRenderer({
@@ -36,12 +53,11 @@ export async function start(o: StartOptions): Promise<App> {
   await o.onProgress(78, 'loading.shaders');
   const cam = new THREE.PerspectiveCamera(74, 1.6, 0.1, 200);
   cam.position.set(0, 1.6, 15);
-  try {
-    await renderer.compileAsync(game.scene, cam);
-  } catch {
-    /* compile lazily instead */
-  }
   const app = new App(renderer, game, o.storage, o.settings, o.progress);
+  // Precompile every shader, including objects that start hidden (chanclas,
+  // trails, enemies, hazards, the hand), so the first throw never hitches.
+  await precompile(renderer, game.scene, cam);
+  await precompile(renderer, app.vmScene, app.vmCamera);
   await o.onProgress(100, 'loading.ready');
   document.getElementById('app')?.removeAttribute('hidden');
   document.getElementById('boot')?.remove();

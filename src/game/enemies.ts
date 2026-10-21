@@ -25,8 +25,8 @@ interface KindDef {
 
 export const ENEMY_DEFS: Record<EnemyKind, KindDef> = {
   bocinas: { hp: 3, speed: 2.7, radius: 0.45, capR: 0.48, capTop: 1.85, rangeMin: 5.5, rangeMax: 9.5, cooldown: [3.0, 4.2] },
-  influencer: { hp: 2, speed: 5.0, radius: 0.4, capR: 0.42, capTop: 1.85, rangeMin: 6, rangeMax: 11, cooldown: [2.6, 3.8] },
-  soplador: { hp: 4, speed: 3.5, radius: 0.5, capR: 0.55, capTop: 1.85, rangeMin: 2.2, rangeMax: 4.2, cooldown: [2.4, 3.2] },
+  influencer: { hp: 3, speed: 5.0, radius: 0.4, capR: 0.42, capTop: 1.85, rangeMin: 6, rangeMax: 11, cooldown: [2.6, 3.8] },
+  soplador: { hp: 5, speed: 3.5, radius: 0.5, capR: 0.55, capTop: 1.85, rangeMin: 2.2, rangeMax: 4.2, cooldown: [2.4, 3.2] },
 };
 
 export interface EnemyContext {

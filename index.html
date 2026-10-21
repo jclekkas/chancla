@@ -16,14 +16,14 @@
     <meta property="og:title" content="Chancla Warfare: La Ley de la Chancla" />
     <meta property="og:description" content="Se acabó la tontería. Restore Sunday peace with an exceptionally aerodynamic chancla." />
     <meta property="og:url" content="%SITE_URL%" />
-    <meta property="og:image" content="%SITE_URL%og-image.png" />
+    <meta property="og:image" content="%SITE_URL%og-image.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Chancla Warfare title art: Doña Rosa and a flying chancla over a golden-hour courtyard" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Chancla Warfare: La Ley de la Chancla" />
     <meta name="twitter:description" content="Se acabó la tontería. Restore Sunday peace with an exceptionally aerodynamic chancla." />
-    <meta name="twitter:image" content="%SITE_URL%og-image.png" />
+    <meta name="twitter:image" content="%SITE_URL%og-image.jpg" />
     <style>
       /* Critical styles so the loader shows before the bundle arrives. */
       html, body { margin: 0; height: 100%; background: #2e1846; color: #f4e6c8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -135,7 +135,7 @@
           <p class="pitch" data-i18n="title.pitch"></p>
           <button type="button" class="btn-play" id="btn-play" data-i18n-aria="title.playAria"><span data-i18n="title.play"></span></button>
           <div class="title-row">
-            <button type="button" class="btn-ghost" id="btn-howto" aria-expanded="false" aria-controls="controls-card" data-i18n="title.howto"></button>
+            <button type="button" class="btn-ghost" id="btn-howto" aria-haspopup="dialog" data-i18n="title.howto"></button>
             <button type="button" class="btn-ghost" id="btn-settings" data-i18n="title.settings"></button>
             <button type="button" class="btn-ghost" id="btn-lang" data-i18n-aria="lang.toggleAria"><span data-i18n="lang.toggle"></span></button>
             <button type="button" class="btn-ghost icon" id="btn-mute" aria-pressed="false"></button>
@@ -149,8 +149,11 @@
             <figcaption><strong data-i18n="title.rosaName"></strong><span data-i18n="title.rosaBio"></span></figcaption>
           </figure>
         </div>
-        <div class="controls-card" id="controls-card" hidden>
-          <h2 data-i18n="controls.heading"></h2>
+      </section>
+
+      <section id="modal-howto" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="howto-title">
+        <div class="panel controls-card" id="controls-card">
+          <h2 id="howto-title" data-i18n="controls.heading"></h2>
           <dl class="controls">
             <dt data-i18n="controls.keysMove"></dt><dd data-i18n="controls.move"></dd>
             <dt data-i18n="controls.keysLook"></dt><dd data-i18n="controls.look"></dd>
@@ -162,6 +165,7 @@
           </dl>
           <p class="note" data-i18n="controls.trackpadNote"></p>
           <p class="note" data-i18n="controls.touchNote"></p>
+          <button type="button" class="btn-play small" id="btn-howto-close" data-i18n="settings.close"></button>
         </div>
       </section>
 

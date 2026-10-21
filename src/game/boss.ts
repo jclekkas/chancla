@@ -17,7 +17,7 @@ export type BossState = 'idle' | 'intro' | 'attack' | 'vulnerable' | 'dying' | '
 export type BossAttack = 'bassDrop' | 'sweep' | 'vinyl';
 
 export const BOSS_ID = 9000;
-export const BOSS_MAX_HP = 36;
+export const BOSS_MAX_HP = 34;
 
 export interface BossContext {
   player: THREE.Vector3;
@@ -166,7 +166,7 @@ export class Boss {
         }
         break;
       case 'vulnerable':
-        if (this.stateT >= (this.phase2 ? 3.4 : 3.9)) this.beginAttack(ctx);
+        if (this.stateT >= (this.phase2 ? 3.8 : 4.4)) this.beginAttack(ctx);
         break;
       case 'dying':
         if (this.stateT > 2.6) this.state = 'dead';
@@ -199,7 +199,7 @@ export class Boss {
           const gap = bearing() + ctx.rng.range(-0.55, 0.55);
           ctx.hazards.ring({
             owner: BOSS_ID, source: 'boss', x: o.x, z: o.z, telegraph: 1.3, speed: p2 ? 9 : 7.5, maxR: 34,
-            gapDir: gap, gapHalf: 0.32, damage: 16, push: 7,
+            gapDir: gap, gapHalf: 0.34, damage: 14, push: 7,
           });
           ctx.onBeat('ring');
         });
@@ -213,7 +213,7 @@ export class Boss {
         at(i * gap, () => {
           ctx.hazards.cone({
             owner: BOSS_ID, source: 'boss', x: o.x, z: o.z, y: 1.4, dir: bearing() + off, range: 30, half: 0.2,
-            telegraph: tele, live: 0.45, damage: 15, push: 6,
+            telegraph: tele, live: 0.45, damage: 13, push: 6,
           });
           ctx.onBeat('cone');
         });

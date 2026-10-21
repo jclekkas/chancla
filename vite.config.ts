@@ -28,6 +28,9 @@ function socialMeta(): Plugin {
 
 export default defineConfig({
   base,
+  // True only for Vercel preview deployments: enables tester conveniences
+  // (?unlock=all) that never exist in production builds.
+  define: { __PREVIEW_BUILD__: JSON.stringify(process.env.VERCEL_ENV === 'preview' || process.env.PREVIEW_BUILD === '1') },
   plugins: [socialMeta()],
   build: {
     target: 'es2020',

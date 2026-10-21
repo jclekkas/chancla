@@ -108,7 +108,7 @@ describe('balance (bot playthroughs of the real simulation)', () => {
     for (const w of wins) {
       // The bot skips the tutorial. Human pacing still needs playtesting.
       expect(w.seconds).toBeGreaterThan(105);
-      expect(w.seconds).toBeLessThan(450);
+      expect(w.seconds).toBeLessThan(300);
     }
   }, 120000);
 

@@ -6,6 +6,16 @@ import { MISSIONS } from '../../shared/campaign/missions';
 
 export const CAMPAIGN_KEY = 'chancla.campaign.v1';
 
+declare const __PREVIEW_BUILD__: boolean;
+
+// Preview builds only: `?unlock=all` opens every mission for testers without
+// touching saved progress. Production builds compile this to false.
+function testerUnlock(): boolean {
+  try {
+    return typeof __PREVIEW_BUILD__ !== 'undefined' && __PREVIEW_BUILD__ && new URLSearchParams(location.search).get('unlock') === 'all';
+  } catch { return false; }
+}
+
 export interface MissionRecord {
   completed: boolean;
   bestMs: number | null;
@@ -50,6 +60,7 @@ export class CampaignProgress {
 
   /** First play is sequential; finished missions stay replayable. */
   unlocked(id: string): boolean {
+    if (testerUnlock()) return MISSIONS.some((m) => m.id === id);
     const i = MISSIONS.findIndex((m) => m.id === id);
     if (i <= 0) return i === 0;
     return this.get(MISSIONS[i - 1]!.id).completed || this.get(id).completed;

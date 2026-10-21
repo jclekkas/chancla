@@ -78,7 +78,9 @@
           <div class="score"><span class="score-label" data-i18n="hud.score"></span><span id="score">0</span></div>
           <div class="combo" id="combo" hidden><span class="mult" id="mult">x1</span><span class="combo-n" id="combo-n"></span><div class="combo-timer"><div id="combo-timer"></div></div></div>
           <div class="fps" id="fps" hidden></div>
-          <button type="button" class="hud-btn" id="btn-pause" data-i18n-aria="hud.pause" title="Esc">❚❚</button>
+          <button type="button" class="hud-btn menu-btn" id="btn-pause" data-i18n-aria="hud.pause" title="Esc"><span aria-hidden="true">❚❚</span> <span data-i18n="hud.pause"></span></button>
+          <div class="esc-hint" aria-hidden="true" data-i18n="hud.escHint"></div>
+          <div class="mode-chip" id="mode-chip" data-i18n="hud.mode"></div>
         </div>
         <div class="crosshair" id="crosshair" aria-hidden="true">
           <svg viewBox="0 0 80 80" width="80" height="80">
@@ -177,7 +179,9 @@
           <button type="button" class="btn-play small" id="btn-resume" data-i18n="pause.resume"></button>
           <button type="button" class="btn-ghost wide" id="btn-restart" data-i18n="pause.restart"></button>
           <button type="button" class="btn-ghost wide" id="btn-pause-settings" data-i18n="pause.settings"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-maps" data-i18n="pause.maps" hidden></button>
           <button type="button" class="btn-ghost wide" id="btn-to-title" data-i18n="pause.toTitle"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-home" data-i18n="title.mainMenu"></button>
           <p class="note" id="pause-lock-note" data-i18n="pause.lockNote"></p>
         </div>
       </section>
@@ -207,7 +211,9 @@
             <button type="button" class="btn-ghost" id="btn-share" data-i18n="results.share"></button>
             <button type="button" class="btn-ghost" id="btn-copy" data-i18n="results.copy"></button>
             <button type="button" class="btn-ghost" id="btn-download" data-i18n="results.download"></button>
+            <button type="button" class="btn-ghost" id="btn-results-maps" data-i18n="pause.maps" hidden></button>
             <button type="button" class="btn-ghost" id="btn-results-title" data-i18n="results.toTitle"></button>
+            <button type="button" class="btn-ghost" id="btn-results-home" data-i18n="title.mainMenu"></button>
           </div>
           <textarea class="share-fallback" id="share-fallback" readonly hidden aria-label="Share text"></textarea>
         </div>
@@ -217,6 +223,7 @@
       <section id="modal-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="panel settings">
           <h2 id="settings-title" data-i18n="settings.title"></h2>
+          <p class="note sound-status" id="sound-status" role="status"></p>
           <div class="field">
             <span class="label" id="lbl-lang" data-i18n="settings.language"></span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">

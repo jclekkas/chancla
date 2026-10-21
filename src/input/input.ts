@@ -133,9 +133,13 @@ export class InputManager {
     const target = e.target as HTMLElement | null;
     const inForm = !!target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON');
     if (e.code === 'Escape' && down) {
-      // With pointer lock the browser consumes Escape and we pause via
-      // pointerlockchange; without lock we pause here.
-      if (this.enabled && this.lock !== 'locked') this.onPause?.();
+      // Most browsers release the pointer lock themselves on Escape (and we
+      // pause via pointerlockchange), but some deliver the key while the
+      // lock is still held. Release it here too, so one press always pauses.
+      if (this.enabled && !e.repeat) {
+        if (this.lock === 'locked') this.exitLock();
+        this.onPause?.();
+      }
       return;
     }
     if (!this.enabled) {

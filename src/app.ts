@@ -17,6 +17,7 @@ import { rosaSVG, svgUrl } from './ui/art';
 import { copyText, downloadScoreCard, shareScore, shareText, shareUrl } from './ui/share';
 import { PLAYER } from './config';
 import { clamp, damp } from './core/math';
+import { SoundGate } from './ui/soundGate';
 
 type AppState = 'title' | 'playing' | 'paused' | 'results';
 
@@ -65,6 +66,7 @@ export class App {
   private usingTouch = false;
   private contextLost = false;
   private settingsReturn: 'title' | 'pause' = 'title';
+  private soundGate: SoundGate | null = null;
   private lastCanvasSize = '';
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private resultsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -120,6 +122,11 @@ export class App {
     // Title music starts on the first eligible click or key press anywhere,
     // and resumes after the tab is hidden or the page returns via Back.
     audio.armLifecycle();
+    this.soundGate = new SoundGate({
+      text: (k) => t(`sound.${k}` as StringKey),
+      inGame: () => this.state === 'playing',
+      openSettings: () => this.openSettings(this.state === 'paused' ? 'pause' : 'title'),
+    });
     this.detectTouch(matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0);
     this.resize();
     this.showTitle();
@@ -161,6 +168,7 @@ export class App {
   }
 
   private syncSettingsUi(): void {
+    if (this.soundGate) $('sound-status').textContent = this.soundGate.describe((k) => t(`sound.status.${k}` as StringKey));
     const s = this.settings.value;
     ($('set-volume') as HTMLInputElement).value = String(Math.round(s.volume * 100));
     ($('set-mute') as HTMLInputElement).checked = s.muted;
@@ -215,15 +223,18 @@ export class App {
     this.click('btn-copy', () => void this.copy());
     this.click('btn-download', () => void this.download());
     this.click('btn-settings-close', () => this.closeSettings(), 'uiBack');
-    this.click('btn-reset', () => this.openConfirm());
-    this.click('btn-confirm-no', () => this.closeConfirm(), 'uiBack');
-    this.click('btn-confirm-yes', () => {
+    this.click('btn-reset', () => this.openConfirm('confirm.resetTitle', 'confirm.resetBody', 'confirm.yes', () => {
       this.progress.reset();
       this.sessionTutorialDone = false;
-      this.closeConfirm();
       this.refreshBest();
       this.toast(t('settings.resetDone'));
-    });
+    }));
+    this.click('btn-confirm-no', () => this.closeConfirm(), 'uiBack');
+    this.click('btn-confirm-yes', () => { const f = this.confirmAction; this.closeConfirm(); f?.(); });
+    // Main menu: the shooter's title page. From the pause menu a run is in
+    // progress, so it asks first; from results the run is already over.
+    this.click('btn-pause-home', () => this.openConfirm('confirm.leaveTitle', 'confirm.leaveBody', 'confirm.leaveYes', () => this.goHome()), 'uiBack');
+    this.click('btn-results-home', () => this.goHome(), 'uiBack');
     this.click('btn-ctx-reload', () => location.reload());
     document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => {
       this.bag.on(b, 'click', () => { audio.unlock(); audio.play('ui'); this.updateSettings({ lang: b.dataset.lang as Lang }); });
@@ -271,6 +282,7 @@ export class App {
     onLangChange(() => {
       applyDom(document);
       this.hud.invalidate();
+      this.soundGate?.render();
       this.refreshBest();
       this.updateMuteButton();
       if (this.lastResult && this.state === 'results') this.fillResults(this.lastResult, this.lastWasBest);
@@ -588,14 +600,35 @@ export class App {
     $('btn-howto').focus();
   }
 
-  private openConfirm(): void {
+  private confirmAction: (() => void) | null = null;
+
+  private openConfirm(title: StringKey, body: StringKey, yes: StringKey, action: () => void): void {
+    for (const [id, k] of [['confirm-title', title], ['confirm-body', body], ['btn-confirm-yes', yes]] as const) {
+      const el = $(id);
+      el.dataset.i18n = k;
+      el.textContent = t(k);
+    }
+    this.confirmAction = action;
+    this.confirmReturn = document.activeElement as HTMLElement | null;
     $('modal-confirm').hidden = false;
     $('btn-confirm-no').focus();
   }
 
+  private goHome(): void {
+    this.clearTimers();
+    this.input.clear();
+    this.input.exitLock();
+    audio.setMusicMode('off');
+    location.assign('./');
+  }
+
+  private confirmReturn: HTMLElement | null = null;
+
   private closeConfirm(): void {
     $('modal-confirm').hidden = true;
-    $('btn-reset').focus();
+    const back = this.confirmReturn;
+    this.confirmReturn = null;
+    (back && back.offsetParent !== null ? back : $('btn-reset')).focus();
   }
 
   private onRunEnd(r: RunResult): void {

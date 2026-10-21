@@ -75,6 +75,33 @@ Regression coverage:
 - `tests/music-lifecycle.test.ts`: 8 tests with a fake audio context.
 - `npm run e2e:music-lifecycle`: 27 browser checks. Headless Chromium doesn't enforce the gesture rule, so the script enforces it from trusted input events, in a Chrome-like mode and a strict Safari-like mode.
 
+### The "Enable sound" control
+
+A visitor reported no audio on production. In this environment, a first visit to the exact production build (`45900d0`) in a real, headed Chromium with an empty profile started audio on the first click every time. All music and voice files loaded with status 200. So the report is **not reproduced here**. The likely causes are ones this environment can't exercise:
+
+- the visitor never clicked: the page gave no sign that a click turns sound on
+- an iPhone or iPad with the silent switch on, which mutes Web Audio
+- a browser stricter than Chromium
+
+`src/ui/soundGate.ts` (main game and Arcade) shows a button whenever audio is not actually running:
+
+| State | What it says | What it means |
+| --- | --- | --- |
+| enable | Enable sound / Activar sonido | No gesture yet. Clicking it, or anything else, starts audio. |
+| blocked | Sound is blocked. Tap to try again | A gesture was made but the browser still won't play. Its hint mentions tab mute and the iPhone silent switch. |
+| unsupported | This browser can't play sound | No Web Audio. The game works without it. |
+| muted (menus only) | Sound muted in Settings | The player turned it down to zero. Clicking opens Settings. |
+
+- The button calls `audio.unlockFromGesture()` directly from its own click. It hides only when the audio context reports `running`, never just because it was clicked.
+- A music track that fails to download is not shown as a sound problem, because the built-in score plays. The Settings panel's status line says which state applies, including "the music track didn't load; the built-in score is playing; retrying".
+- iPhone and iPad: the page asks for a "playback" audio session (Safari 16.4+), and plays 50 ms of silence through a media element on the first gesture, so the silent switch doesn't mute the game. **Not tested on a real device.**
+- Play is never blocked: menus and play work while sound loads or stays unavailable.
+
+Checks:
+
+- `xvfb-run -a node --import tsx scripts/sound-gate-e2e.ts` runs 23 checks in headed Chromium with its real autoplay policy. They cover a fresh visit, Practice, campaign and back home, mute, a failed track, and the Arcade and back to the main menu. The "blocked" case is simulated, by stubbing `AudioContext.resume()`.
+- 3 unit tests in `tests/music-lifecycle.test.ts`.
+
 ### Verified, and not
 
 Run in this Linux container with headless Chromium. `npm run e2e:music` makes 32 checks, all passing; the report is in [evidence/music/music-e2e.json](evidence/music/music-e2e.json). It checks:

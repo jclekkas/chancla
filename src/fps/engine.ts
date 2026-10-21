@@ -67,6 +67,7 @@ export class Engine {
   private eye = { x: 0, y: 0, z: 0 };
   private wasGround = true;
   private wasAlive = false;
+  private spawnedOnce = false; // the first spawn of a match gets the longer team banner
   private stepT = 0;
   private heartT = 0;
   private lastCountdown = -1;
@@ -209,6 +210,7 @@ export class Engine {
     for (const a of this.menuAvatars) a.root.visible = false;
     this.acc = 0;
     this.wasAlive = false;
+    this.spawnedOnce = false;
     this.lastPhase = '';
     this.lastCountdown = -1;
     const team = session.team;
@@ -373,6 +375,7 @@ export class Engine {
       this.input.yaw = s.yaw;
       this.input.pitch = 0;
       this.input.weapon = s.weapon;
+      if (s.team !== null) { this.hud.spawnBanner(s.team, !this.spawnedOnce); this.spawnedOnce = true; }
     }
     this.wasAlive = s.alive;
     // Fixed-rate prediction ticks.
@@ -432,7 +435,7 @@ export class Engine {
       respawnInMs: s.respawnInMs, protectedMs: s.protectedMs, scores: snap?.sc ?? [0, 0],
       timeLeftMs: snap?.tl ?? MATCH.durationMs, phase: s.phase, countdownMs: snap?.cd ?? 0,
       region: regionAt(EL_PATIO, s.body.x, s.body.y, s.body.z), rtt: s.rtt, quality: s.connectionQuality,
-      fps: this.fps, showStats: settings.showStats, practice: this.practice,
+      fps: this.fps, showStats: settings.showStats, practice: this.practice, team: s.team,
     }, dt, this.input.yaw);
 
     // Name tags: teammates always, opponents only in plain sight.
@@ -455,7 +458,7 @@ export class Engine {
       }
       labels.push({ id: r.id, name: m.name, team: m.team, pos, hp: r.hp, visible, bot: m.bot });
     }
-    this.hud.placeLabels(cam, w, h, labels, dt);
+    this.hud.placeLabels(cam, w, h, labels, dt, team);
   }
 
   private syncAvatars(s: GameSession, dt: number, reduced: boolean): void {

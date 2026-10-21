@@ -236,3 +236,62 @@ describe('music lifecycle', () => {
     expect((audio as unknown as { a: { music: { gain: Param } } }).a.music.gain.value).toBe(0);
   });
 });
+
+describe('sound control (Enable sound)', () => {
+  async function loadGate() {
+    const { audio, music } = await load();
+    const { SoundGate } = await import('../src/ui/soundGate');
+    const gate = new SoundGate({ text: (k) => k, inGame: () => false, musicStatus: () => music.status() });
+    return { audio, music, gate };
+  }
+
+  it('is offered before any interaction, and stays offered after a click that could not start audio', async () => {
+    const { audio, gate } = await loadGate();
+    audio.armLifecycle();
+    expect(gate.state).toBe('enable');
+    window.dispatchEvent(new MouseEvent('pointerdown')); // the browser refuses (allowResume = false)
+    await advance(1600);
+    expect(gate.state).toBe('blocked');
+    gate.dispose();
+  });
+
+  it('its own click reports the real result: still blocked, then running once the browser allows it', async () => {
+    const { audio, gate } = await loadGate();
+    audio.armLifecycle();
+    const p1 = audio.unlockFromGesture(300);
+    await advance(400);
+    expect(await p1).toBe('blocked');
+    gate.update(true);
+    expect(gate.state).toBe('blocked'); // never shown as enabled just because it was clicked
+    FakeCtx.allowResume = true;
+    const p2 = audio.unlockFromGesture(300);
+    await advance(100);
+    expect(await p2).toBe('running');
+    gate.update(true);
+    expect(gate.state).toBe('hidden');
+    gate.dispose();
+  });
+
+  it('tells an intentional mute apart from a block, and a failed track apart from both', async () => {
+    const { audio, music, gate } = await loadGate();
+    FakeCtx.allowResume = true;
+    audio.armLifecycle();
+    window.dispatchEvent(new MouseEvent('pointerdown'));
+    music.play('menu');
+    await advance(1500);
+    expect(gate.state).toBe('hidden');
+    audio.setLevels(0, 0);
+    gate.update();
+    expect(gate.state).toBe('muted');
+    const words = (k: string) => k;
+    expect(gate.describe(words)).toBe('muted');
+    audio.setLevels(0.5, 0.5);
+    fetchImpl = fail;
+    music.play('ruleros');
+    await advance(2000);
+    gate.update();
+    expect(gate.state).toBe('hidden'); // sound works: the built-in score plays
+    expect(gate.describe(words)).toBe('fallback');
+    gate.dispose();
+  });
+});

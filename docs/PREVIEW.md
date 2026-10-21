@@ -83,6 +83,7 @@ Please note your computer, browser, and whether you used a mouse or a trackpad. 
 - [ ] Loops: stay in a mission for 2 minutes or more (Missions 1-3), or leave the menu running. Does the music jump or stutter when it repeats? Note roughly when.
 - [ ] Transitions: menu to mission select, mission start, leaving a mission. Is each change smooth, with no gap or clash?
 - [ ] Volume: Settings → Music at 0 silences it; other levels scale it
+- [ ] First visit (a private window): is there an "Enable sound" button at the bottom left? Does one click on it, or anywhere, start the music and make it disappear? On iPhone, try with the silent switch on.
 - [ ] Menus: open the page, click once. Is music playing? Try Main menu → Arcade → Main menu, switching tabs and back, and a mission then back to the menu. Music should be playing every time, without a refresh.
 - [ ] Nothing grates after several minutes
 

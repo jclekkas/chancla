@@ -305,3 +305,25 @@ body.reduced-motion .crosshair .hitmarker.on { animation: none; opacity: 1; }
   .rotate-hint { top: auto; bottom: calc(200px + var(--safe-b)); }
   .banner { top: 42%; }
 }
+/* Pause button with a text label, its Esc hint and the mode label. */
+.hud-btn.menu-btn { width: auto; min-width: 44px; padding: 0 12px; }
+.esc-hint { margin-top: 4px; font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 6px; background: rgba(20, 10, 30, 0.72); text-shadow: none; }
+.mode-chip { margin-top: 4px; font-size: 11px; font-weight: 900; letter-spacing: 0.12em; padding: 2px 8px; border-radius: 6px; background: rgba(20, 10, 30, 0.72); border: 1px solid rgba(244, 230, 200, 0.55); text-shadow: none; }
+/* "Enable sound": shown only while audio isn't really running (or is muted, on menus). */
+.sound-gate { position: fixed; left: calc(16px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 999px; border: 2px solid #fff; background: #2e1846; color: #fff; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); text-shadow: none; }
+.sound-gate[hidden] { display: none; }
+.sound-gate:hover { background: #4b2a6b; }
+.sound-gate:focus-visible { outline: 3px solid #ffd27a; outline-offset: 2px; }
+.sound-gate[data-state='blocked'] { background: #7a2430; }
+.sound-gate[data-state='muted'] { background: rgba(46, 24, 70, 0.85); font-size: 13px; padding: 6px 12px; }
+.sound-gate[data-state='unsupported'] { cursor: default; opacity: 0.9; }
+.sound-gate.trying { opacity: 0.7; }
+/* In play: top centre, clear of health, weapons and the menu button. */
+.sound-gate.in-game { left: 50%; bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
+.sound-status { margin: 0 0 8px; }
+/* Pause menu: secondary actions in two columns so it fits short landscape screens. */
+#screen-pause .panel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#screen-pause .panel > h2, #screen-pause .panel > .btn-play, #screen-pause .panel > .note { grid-column: 1 / -1; }
+#screen-pause .panel > .btn-ghost.wide { width: auto; }
+@media (max-height: 420px) { #screen-pause .panel > .btn-ghost.wide { padding: 6px 10px; } }
+#screen-pause .panel > [hidden] { display: none; }

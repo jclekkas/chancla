@@ -20,6 +20,7 @@ import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
 import { music } from '../audio/music';
+import { SoundGate } from '../ui/soundGate';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
@@ -77,6 +78,7 @@ let retry: (() => void) | null = null;
 let pendingInviteCode = '';
 let lastCode: string | null = null;
 let lockFailures = 0;
+let pauseOpenedAt = -1e9;
 
 // Dialogue (campaign and multiplayer quips) with subtitles.
 const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
@@ -91,6 +93,12 @@ const dialogue = new Dialogue(
   },
 );
 let campaign: CampaignUi;
+let soundGate: SoundGate | null = null;
+
+function renderSoundStatus(): void {
+  if (!soundGate) return;
+  $('sound-status').textContent = soundGate.describe((k) => t(`sound.status.${k}` as Key));
+}
 
 // ---------------------------------------------------------------------
 // Screens
@@ -214,6 +222,13 @@ async function boot(): Promise<void> {
   const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
   $('mobile-note').hidden = !coarse;
   bindUi();
+  soundGate = new SoundGate({
+    text: (k) => t(`sound.${k}` as Key),
+    inGame: () => inMatch && base === 'none',
+    openSettings: () => { renderSettings(); pushOverlay('settings'); },
+    musicStatus: () => music.status(),
+  });
+  setInterval(() => { if (top() === 'settings') renderSoundStatus(); }, 1000);
   readInvite();
 
   if (webglAvailable()) {
@@ -595,6 +610,7 @@ function applyInputSettings(): void {
 }
 
 function renderSettings(): void {
+  renderSoundStatus();
   const v = store.value;
   const seg = (attr: string, val: string) => document.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) => {
     const on = b.dataset[attr] === val;
@@ -640,6 +656,7 @@ function changeLang(lang: 'en' | 'es'): void {
   document.title = t('meta.title');
   applyDom(document);
   hud.invalidate();
+  soundGate?.render();
   if (serverOk !== null || !serverUrl()) checkServer();
   if (lastRoom && base === 'lobby') renderLobby(lastRoom);
   if (lastRoom && base === 'results') renderResults(lastRoom);
@@ -662,10 +679,20 @@ function openOnline(): void {
 function openPause(): void {
   if (!inMatch || base !== 'none') return;
   if (campaign.runtime?.inVictory) return;
+  input?.release();
+  input?.exitLock();
+  pauseOpenedAt = performance.now();
   const m = campaign.active;
+  const online = !m && !practice;
   $('pause-note').textContent = m ? t('pause.missionNote') : practice ? t('pause.practiceNote') : t('pause.note');
+  $('pause-note').classList.toggle('live', online);
   ($('btn-pause-retrycp') as HTMLButtonElement).hidden = !m;
-  ($('btn-pause-restart') as HTMLButtonElement).hidden = !m;
+  const rb = $('btn-pause-restart') as HTMLButtonElement;
+  rb.hidden = !m && !practice;
+  rb.dataset.t = m ? 'pause.restart' : 'pause.restartMatch';
+  rb.textContent = t(rb.dataset.t as Key);
+  ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
+  ($('btn-pause-select') as HTMLButtonElement).hidden = !m;
   show('pause');
 }
 
@@ -677,19 +704,27 @@ function confirmBox(title: string, body: string, yes: string, action: () => void
   pushOverlay('confirm');
 }
 
-function resume(): void {
+// From a click (or Enter on the Resume button) the mouse is captured again
+// right away. From Escape it can't be: browsers only grant pointer lock to a
+// click or key press that counts as user activation, and Escape never does.
+// Then the "click to aim" prompt asks for that explicit click.
+function resume(viaClick: boolean): void {
   show('none');
-  input?.requestLock();
+  if (viaClick) input?.requestLock();
 }
 
-function askLeave(): void {
-  if (campaign.active) { campaign.leave(); return; }
-  $('confirm-title').textContent = t('confirm.leaveTitle');
-  $('btn-confirm-yes').textContent = t('confirm.yes');
-  const body = practice ? t('confirm.leavePractice') : t('confirm.leaveBody');
-  $('confirm-body').textContent = body;
-  confirmAction = () => endSession('title');
-  pushOverlay('confirm');
+/** Main menu from the pause menu: confirms first, because a run or match is in progress. */
+function askHome(): void {
+  if (campaign.active) {
+    confirmBox(t('confirm.leaveTitle'), t('confirm.leaveMission'), t('confirm.yes'), () => { campaign.toSelect(); show('title'); music.play('menu'); });
+    return;
+  }
+  confirmBox(t('confirm.leaveTitle'), practice ? t('confirm.leavePractice') : t('confirm.leaveBody'), t('confirm.yes'), () => endSession('title'));
+}
+
+/** Practice: the same match settings and map again. */
+function askRestartPractice(): void {
+  confirmBox(t('confirm.restartPracticeTitle'), t('confirm.restartPractice'), t('confirm.restartYes'), () => { overlayStack.length = 0; startPractice(); });
 }
 
 async function copyInvite(): Promise<void> {
@@ -770,11 +805,13 @@ function bindUi(): void {
   on('btn-to-lobby', () => session?.send({ t: 'lobby' }));
   on('btn-res-leave', () => endSession('title'));
 
-  on('btn-resume', resume);
+  on('btn-resume', () => resume(true));
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
   on('btn-fullscreen', toggleFullscreen);
-  on('btn-pause-leave', askLeave);
+  on('btn-pause-leave', askHome);
+  on('btn-pause-select', () => campaign.leave());
+  on('btn-pause-restart', () => { if (campaign.active) campaign.restart(); else if (practice) askRestartPractice(); });
   on('btn-menu', () => { input?.exitLock(); openPause(); });
   on('btn-click-play', () => input?.requestLock());
 
@@ -812,14 +849,20 @@ function bindUi(): void {
     dialogue.refreshSubtitle();
   }));
 
-  // Esc closes the newest panel when the pointer is not locked.
+  // Esc closes the newest panel when the pointer is not locked. This handler
+  // is registered before the game's input handler: whenever it acts on the
+  // key it stops the event, or closing the menu would re-enable game input
+  // and the same press would open the menu again.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || input?.locked) return;
     const cur = top();
+    if (cur !== 'none') e.stopImmediatePropagation();
     if (OVERLAYS.has(cur)) { e.preventDefault(); popOverlay(); return; }
     if (cur === 'online' || cur === 'practice' || cur === 'campaign') { e.preventDefault(); show('title'); music.play('menu'); return; }
     if (cur === 'mintro' || cur === 'mresults') { e.preventDefault(); campaign.openSelect(); return; }
-    if (cur === 'pause') { e.preventDefault(); resume(); }
+    // The same Escape press that opened the menu (some browsers deliver it
+    // just after releasing the pointer) must not close it again.
+    if (cur === 'pause') { e.preventDefault(); if (!e.repeat && performance.now() - pauseOpenedAt > 250) resume(false); }
   });
   window.addEventListener('resize', () => engine?.resize());
   document.addEventListener('fullscreenchange', () => engine?.resize());
@@ -847,10 +890,14 @@ function bindInput(inp: FpsInput): void {
     else render();
   };
   inp.onLockError = () => {
-    // Browsers also refuse a re-lock right after Esc; only fall back to
-    // drag-to-look when the lock keeps failing or does not exist at all.
+    // Browsers refuse a re-lock for about a second after the lock was
+    // released (Chrome after Esc). That is expected, not a failure: the
+    // "click to aim" prompt stays and the next click tries again. Only fall
+    // back to drag-to-look when the lock is missing or keeps failing later.
+    const cooldown = performance.now() - inp.unlockedAt < 1600;
+    if (cooldown) { if (inMatch && base === 'none') { render(); toast(t('hud.clickAgain'), 2200); } return; }
     lockFailures++;
-    if (lockFailures >= 2 || typeof $('stage').requestPointerLock !== 'function') {
+    if (lockFailures >= 3 || typeof $('stage').requestPointerLock !== 'function') {
       if (!inp.fallback) toast(t('hud.dragLook'), 4000);
       inp.fallback = true;
     }

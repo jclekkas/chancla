@@ -15,7 +15,8 @@
     "start:server": "node dist-server/index.js",
     "e2e:music": "node --import tsx scripts/music-e2e.ts",
     "music:prepare": "python3 scripts/music/prepare.py && python3 scripts/music/check-seams.py",
-    "e2e:music-lifecycle": "node --import tsx scripts/music-lifecycle-e2e.ts"
+    "e2e:music-lifecycle": "node --import tsx scripts/music-lifecycle-e2e.ts",
+    "e2e:sound": "node --import tsx scripts/sound-gate-e2e.ts"
   },
   "dependencies": {
     "@fontsource/lilita-one": "5.3.0",

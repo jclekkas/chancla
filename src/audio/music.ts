@@ -396,6 +396,16 @@ export class Music {
     this.play(w);
   }
 
+  /** The recorded soundtrack for the intended cue: playing, loading, or replaced by the built-in score. */
+  status(): 'ok' | 'loading' | 'fallback' | 'failed' {
+    const r = this.recordings && this.want !== 'off' ? ASSIGN[this.want] : undefined;
+    if (!r) return 'ok';
+    if (this.rec?.rec.id === r) return 'ok';
+    const f = this.failed.get(r);
+    if (f) return f.permanent ? 'failed' : 'fallback';
+    return 'loading';
+  }
+
   /** What is playing, for tests and the debug API. */
   state(): { cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number } {
     const r = this.rec;

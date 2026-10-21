@@ -50,12 +50,18 @@
           <div class="timer" id="timer" aria-live="off">5:00</div>
           <div class="teamscore luna"><b id="sc-luna">0</b><span data-t="hud.luna"></span><span class="ts-icon" aria-hidden="true">☾</span></div>
         </div>
-        <div class="hud-practice" id="hud-practice" hidden data-t="hud.practice"></div>
+        <div class="hud-ident">
+          <div class="team-chip" id="team-chip" hidden><span class="tc-icon" id="team-chip-icon" aria-hidden="true"></span><span id="team-chip-text"></span></div>
+          <div class="hud-practice" id="hud-practice" hidden data-t="hud.practice"></div>
+          <div class="mode-chip" data-t="hud.modeStory"></div>
+        </div>
+        <div class="spawn-banner" id="spawn-banner" hidden role="status"><span class="sbn-icon" id="spawn-banner-icon" aria-hidden="true"></span><span id="spawn-banner-text"></span></div>
         <div class="killfeed" id="killfeed" aria-live="polite"></div>
         <div class="hud-tr">
           <div class="net" id="net"><span class="dot" id="net-dot"></span><span id="net-ping"></span></div>
           <div class="fps" id="fps" hidden></div>
-          <button type="button" class="hud-btn" id="btn-menu" data-t-aria="hud.pause">☰</button>
+          <button type="button" class="hud-btn menu-btn" id="btn-menu" data-t-aria="hud.pause"><span aria-hidden="true">☰</span> <span data-t="hud.pause"></span></button>
+          <div class="esc-hint" aria-hidden="true" data-t="hud.escHint"></div>
         </div>
         <div class="crosshair" id="crosshair" aria-hidden="true">
           <svg viewBox="0 0 64 64" width="64" height="64">
@@ -278,6 +284,7 @@
             <button type="button" class="btn primary" id="btn-mr-next" data-t="mr.next"></button>
             <button type="button" class="btn" id="btn-mr-retry" data-t="mr.retry"></button>
             <button type="button" class="btn ghost" id="btn-mr-select" data-t="mr.select"></button>
+            <button type="button" class="btn ghost" id="btn-mr-home" data-t="pause.home"></button>
           </div>
         </div>
       </section>
@@ -292,7 +299,8 @@
           <div class="actions">
             <button type="button" class="btn primary" id="btn-rematch" data-t="results.rematch"></button>
             <button type="button" class="btn" id="btn-to-lobby" data-t="results.lobby"></button>
-            <button type="button" class="btn ghost" id="btn-res-leave" data-t="results.leave"></button>
+            <button type="button" class="btn" id="btn-res-maps" data-t="results.maps" hidden></button>
+            <button type="button" class="btn ghost" id="btn-res-leave" data-t="results.home"></button>
           </div>
         </div>
       </section>
@@ -308,7 +316,9 @@
           <button type="button" class="btn" id="btn-fullscreen" data-t="pause.fullscreen"></button>
           <button type="button" class="btn" id="btn-pause-retrycp" data-t="pause.retryCp" hidden></button>
           <button type="button" class="btn" id="btn-pause-restart" data-t="pause.restart" hidden></button>
-          <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.leave"></button>
+          <button type="button" class="btn" id="btn-pause-maps" data-t="pause.maps" hidden></button>
+          <button type="button" class="btn" id="btn-pause-select" data-t="pause.select" hidden></button>
+          <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.home"></button>
         </div>
       </section>
 
@@ -316,6 +326,7 @@
       <section id="scr-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="panel settings">
           <h2 id="settings-title" data-t="settings.title"></h2>
+          <p class="note sound-status" id="sound-status" role="status"></p>
           <div class="field"><span id="lbl-lang" data-t="settings.language"></span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">
               <button type="button" role="radio" data-lang="en">English</button>

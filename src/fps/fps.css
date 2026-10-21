@@ -173,7 +173,23 @@ table.stats tr.me td { background: rgba(244, 230, 200, 0.1); }
 .ts-icon { font-size: 18px; }
 .timer { font-family: var(--display); font-weight: 400; font-size: 30px; padding: 2px 12px; border-radius: 10px; background: rgba(46, 24, 70, 0.75); min-width: 92px; text-align: center; }
 .timer.low { color: #ffb38a; }
-.hud-practice { position: absolute; top: calc(58px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-size: 12px; letter-spacing: 0.2em; background: rgba(46, 24, 70, 0.75); padding: 2px 10px; border-radius: 8px; }
+.hud-ident { position: absolute; top: calc(58px + var(--safe-t)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.hud-practice { font-size: 12px; letter-spacing: 0.2em; background: rgba(46, 24, 70, 0.75); padding: 2px 10px; border-radius: 8px; }
+/* Your team: dark backing, white text and a team-coloured border and badge,
+   so it reads over a bright sky or a dark alley alike. */
+.team-chip { display: flex; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 0.08em; padding: 2px 10px 2px 3px; border-radius: 999px; background: rgba(18, 8, 28, 0.86); border: 2px solid var(--tc); color: #fff; text-shadow: none; --tc: var(--sol); }
+.team-chip.luna { --tc: var(--luna); }
+.team-chip .tc-icon, .spawn-banner .sbn-icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--tc); color: #1a0d26; font-size: 14px; }
+.hud .mode-chip { display: none; font-size: 12px; letter-spacing: 0.14em; padding: 2px 10px; border-radius: 8px; background: rgba(18, 8, 28, 0.86); border: 1px solid rgba(244, 230, 200, 0.6); text-shadow: none; }
+.hud.campaign .mode-chip { display: block; }
+.hud.campaign .team-chip { display: none; }
+.teamscore.mine { box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgba(18, 8, 28, 0.7); }
+.spawn-banner { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 18px 8px 8px; border-radius: 999px; background: rgba(18, 8, 28, 0.88); border: 3px solid var(--tc); color: #fff; font-size: clamp(16px, 2.2vw, 24px); letter-spacing: 0.06em; text-shadow: none; --tc: var(--sol); animation: sbn-in 0.25s ease-out; }
+.spawn-banner.luna { --tc: var(--luna); }
+.spawn-banner .sbn-icon { width: 32px; height: 32px; font-size: 20px; }
+.spawn-banner:not(.first) { font-size: clamp(14px, 1.7vw, 19px); }
+@keyframes sbn-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+body.reduced-motion .spawn-banner { animation: none; }
 .killfeed { position: absolute; top: calc(12px + var(--safe-t)); right: calc(70px + var(--safe-r)); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 14px; }
 .kf { background: rgba(46, 24, 70, 0.75); padding: 3px 10px; border-radius: 8px; display: flex; gap: 6px; align-items: center; }
 .kf .s { color: var(--sol); }
@@ -188,6 +204,8 @@ table.stats tr.me td { background: rgba(244, 230, 200, 0.1); }
 .net.poor .dot, .net.stalled .dot { background: #ff6a50; }
 .fps { font-size: 12px; opacity: 0.85; }
 .hud-btn { width: 44px; height: 44px; border-radius: 12px; border: 2px solid var(--cream); background: rgba(46, 24, 70, 0.6); font-size: 18px; }
+.hud-btn.menu-btn { width: auto; min-width: 44px; padding: 0 12px; font-size: 15px; background: rgba(46, 24, 70, 0.82); position: relative; z-index: 2; }
+.esc-hint { font-size: 12px; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 6px; background: rgba(20, 10, 30, 0.7); }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; }
 .crosshair .dot { fill: #fff; stroke: var(--ink); stroke-width: 1; }
 .crosshair .lines { stroke: rgba(255, 255, 255, 0.9); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 1px #000); }
@@ -229,11 +247,20 @@ table.stats tr.me td { background: rgba(244, 230, 200, 0.1); }
 .nameplate { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); font-size: 13px; padding: 1px 8px; border-radius: 8px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
 .nameplate.sol { background: rgba(200, 105, 26, 0.88); }
 .nameplate.luna { background: rgba(31, 125, 140, 0.88); }
+/* Role tag: a diamond for teammates, a cross for opponents (shape and
+   word, not only colour). */
+.nameplate .role { font-size: 10px; letter-spacing: 0.1em; padding: 0 5px; border-radius: 5px; text-shadow: none; }
+.nameplate.ally .role { background: #fff; color: #1a0d26; }
+.nameplate.enemy .role { background: #1a0d26; color: #fff; border: 1px solid rgba(255, 255, 255, 0.7); }
+.nameplate.ally { outline: 2px solid #fff; }
 .nameplate .bar { width: 36px; height: 4px; background: rgba(0, 0, 0, 0.4); border-radius: 4px; overflow: hidden; }
 .nameplate .bar i { display: block; height: 100%; background: #9be36a; }
 .float { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); font-family: var(--display); font-weight: 400; font-size: 22px; color: #fff; -webkit-text-stroke: 1px var(--violet-deep); pointer-events: none; }
 .float.head { color: var(--gold); font-size: 26px; }
-.click-to-play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: auto; background: rgba(30, 14, 46, 0.35); }
+.click-to-play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; background: rgba(30, 14, 46, 0.35); }
+/* Only the button takes clicks: the rest passes through to the game (a click
+   there also captures the mouse), and the Menu button above stays reachable. */
+.click-to-play .btn { pointer-events: auto; }
 
 /* ---------- scoreboard ---------- */
 .scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 15; width: min(680px, 94vw); background: rgba(46, 24, 70, 0.94); border: 3px solid var(--cream); border-radius: 18px; padding: 16px 18px; }
@@ -334,3 +361,22 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 @media (max-height: 700px) { .m-obj { max-width: 40vw; } }
 .hud.victory > *:not(.subs):not(.m-hud) { display: none !important; }
 .hud.victory .m-hud > *:not(.m-skip) { display: none !important; }
+/* Online: the match keeps running behind the menu. */
+#pause-note.live { opacity: 1; font-weight: 800; color: #ffd27a; display: flex; align-items: center; gap: 6px; }
+#pause-note.live::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #ff5a4a; box-shadow: 0 0 0 3px rgba(255, 90, 74, 0.3); }
+table.stats tr.team-head th { text-align: left; font-size: 12px; letter-spacing: 0.12em; padding: 8px 6px 4px; color: #fff; }
+table.stats tr.team-head.sol th { border-bottom: 2px solid var(--sol); }
+table.stats tr.team-head.luna th { border-bottom: 2px solid var(--luna); }
+table.stats tr.team-head.mine th { color: #ffe08a; }
+/* "Enable sound": shown only while audio isn't really running (or is muted, on menus). */
+.sound-gate { position: fixed; left: calc(16px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 999px; border: 2px solid #fff; background: #2e1846; color: #fff; font: inherit; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); text-shadow: none; }
+.sound-gate[hidden] { display: none; }
+.sound-gate:hover { background: #4b2a6b; }
+.sound-gate:focus-visible { outline: 3px solid #ffd27a; outline-offset: 2px; }
+.sound-gate[data-state='blocked'] { background: #7a2430; }
+.sound-gate[data-state='muted'] { background: rgba(46, 24, 70, 0.85); font-size: 13px; padding: 6px 12px; }
+.sound-gate[data-state='unsupported'] { cursor: default; opacity: 0.9; }
+.sound-gate.trying { opacity: 0.7; }
+/* In play: top centre, clear of health, weapons and the menu button. */
+.sound-gate.in-game { left: 50%; bottom: auto; top: calc(96px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); }
+.sound-status { margin: 0 0 8px; }

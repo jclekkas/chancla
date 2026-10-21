@@ -185,7 +185,15 @@ export class MissionRuntime implements Controller {
       else if (this.focus.need === 'heavy') this.dialogue.say('heavy_hint');
     }
     music.setIntensity(this.intensity());
+    // Mission 3: the courtyard brightens as each area is finished.
+    const br = this.def.config?.brighten as { from: number; per: number; goals: string[] } | undefined;
+    if (br) {
+      const n = s.goals.filter((g) => g.done && br.goals.includes(g.id)).length + (this.sim.stageDef.id !== this.def.stages[0]!.id ? br.goals.length : 0);
+      const k = Math.min(1.12, br.from + br.per * Math.min(n, br.goals.length));
+      if (k !== this.brightness) { this.brightness = k; e.world.setBrightness(k); }
+    }
   }
+  private brightness = -1;
 
   private intensity(): number {
     const s = this.sim.state;

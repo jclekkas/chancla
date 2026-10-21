@@ -50,6 +50,7 @@ export interface PickupS {
   x: number; y: number; z: number;
   state: 'hidden' | 'falling' | 'free' | 'held' | 'carried' | 'collected' | 'delivered';
   fall: { from: V3; to: V3; t: number } | null;
+  lockUntil: number; // a just-spilled item cannot be grabbed again instantly
 }
 
 export interface TargetS { id: string; hitsLeft: number; done: boolean; enabled: boolean; enabledAt: number; flashMs: number }
@@ -190,7 +191,7 @@ export class MissionSim {
     for (const e of d.entities) {
       switch (e.kind) {
         case 'pickup':
-          st.pickups.push({ id: e.id, item: e.item, variant: e.variant ?? '', x: e.at[0], y: e.at[1], z: e.at[2], state: e.hidden ? 'hidden' : 'free', fall: null });
+          st.pickups.push({ id: e.id, item: e.item, variant: e.variant ?? '', x: e.at[0], y: e.at[1], z: e.at[2], state: e.hidden ? 'hidden' : 'free', fall: null, lockUntil: 0 });
           break;
         case 'target':
           st.targets.push({ id: e.id, hitsLeft: e.hits ?? 1, done: false, enabled: !e.disabled, enabledAt: 0, flashMs: 0 });
@@ -498,7 +499,7 @@ export class MissionSim {
         if (t >= 1) { pk.state = 'free'; pk.fall = null; }
       }
       if (pk.state === 'carried') { pk.x = p.x; pk.y = p.y + 1.1; pk.z = p.z; continue; }
-      if (pk.state !== 'free' || !p.alive) continue;
+      if (pk.state !== 'free' || !p.alive || st.timeMs < pk.lockUntil) continue;
       const spec = this.spec<PickupSpec>(pk.id)!;
       if (!this.inStage(spec)) continue;
       const near = Math.hypot(p.x - pk.x, p.z - pk.z) < CAMPAIGN.collectRadius && pk.y - p.y < 1.9 && p.y - pk.y < 1.2;
@@ -515,6 +516,18 @@ export class MissionSim {
         this.emit({ k: 'collect', id: pk.id, item: pk.item, n, total });
       }
       st.lastProgressMs = st.timeMs;
+    }
+    // Storing a carried prop: a zone named `<id>_zone` flags `<id>_stored`.
+    if (p.carrying) {
+      const c = st.pickups.find((x) => x.id === p.carrying);
+      const z = c ? this.spec(`${c.id}_zone`) as { at: V3; r: number } | undefined : undefined;
+      if (c && z && Math.hypot(p.x - z.at[0], p.z - z.at[2]) < z.r && Math.abs(p.y - z.at[1]) < 1.5) {
+        c.state = 'delivered';
+        c.x = z.at[0] + (this.nextRand() - 0.5) * 0.8; c.y = z.at[1]; c.z = z.at[2] + (this.nextRand() - 0.5) * 0.8;
+        p.carrying = null;
+        this.emit({ k: 'deliver', id: c.id });
+        this.setFlag(`${c.id}_stored`, true);
+      }
     }
     // Deliveries.
     if (p.carrying) {
@@ -589,6 +602,20 @@ export class MissionSim {
       return false;
     };
     const face = () => { a.yaw = Math.atan2(-(p.x - a.x), -(p.z - a.z)); };
+    // Walk the path forward (dir 1, toward the last point) or back home (dir -1),
+    // following its heights (stairs). Returns true at the end.
+    const route = (dir: 1 | -1, speed: number): boolean => {
+      const last = spec.path.length - 1;
+      const target = dir === 1 ? Math.min(last, a.idx + 1) : Math.max(0, a.idx - 1);
+      if ((dir === 1 && a.idx >= last) || (dir === -1 && a.idx <= 0)) { a.vx = a.vz = 0; return true; }
+      const from = spec.path[a.idx]!, to = spec.path[target]!;
+      const seg = Math.hypot(to[0] - from[0], to[2] - from[2]) || 1;
+      const arrived = walkTo(to[0], to[2], speed);
+      const k = Math.min(1, 1 - Math.hypot(to[0] - a.x, to[2] - a.z) / seg);
+      a.y = from[1] + (to[1] - from[1]) * Math.max(0, k);
+      if (arrived) { a.idx = target; a.y = to[1]; }
+      return false;
+    };
     switch (b.type) {
       case 'poser':
         if (a.mode === 'walk') { if (follow(spec.speed)) setMode('pose'); }
@@ -600,17 +627,15 @@ export class MissionSim {
         else if (a.mode === 'spin') { a.vx = a.vz = 0; a.yaw += DT * 12; if (a.modeMs > 900) setMode('drive'); }
         break;
       case 'filmer': {
-        const home = spec.path[0]!;
-        if (a.mode === 'away') { a.vx = a.vz = 0; a.x = home[0]; a.z = home[2]; if (a.modeMs > (a.cycles === 0 ? b.firstMs : b.everyMs)) setMode('walkin'); }
-        else if (a.mode === 'walkin') { if (walkTo(b.spot[0], b.spot[2], spec.speed)) setMode('film'); }
+        if (a.mode === 'away') { a.vx = a.vz = 0; if (a.modeMs > (a.cycles === 0 ? b.firstMs : b.everyMs)) setMode('walkin'); }
+        else if (a.mode === 'walkin') { if (route(1, spec.speed)) setMode('film'); }
         else if (a.mode === 'film') { a.vx = a.vz = 0; face(); }
-        else if (a.mode === 'leave') { if (walkTo(home[0], home[2], spec.speed * 1.6)) { a.cycles++; setMode('away'); } }
+        else if (a.mode === 'leave') { if (route(-1, spec.speed * 1.6)) { a.cycles++; setMode('away'); } }
         break;
       }
       case 'shaker': {
-        const home = spec.path[0]!;
-        if (a.mode === 'away') { a.vx = a.vz = 0; a.x = home[0]; a.z = home[2]; if (a.modeMs > (a.cycles === 0 ? b.firstMs : b.everyMs)) { a.hits = 0; setMode('roll'); } }
-        else if (a.mode === 'roll') { if (walkTo(b.spot[0], b.spot[2], spec.speed)) setMode('warn'); }
+        if (a.mode === 'away') { a.vx = a.vz = 0; if (a.modeMs > (a.cycles === 0 ? b.firstMs : b.everyMs)) { a.hits = 0; setMode('roll'); } }
+        else if (a.mode === 'roll') { if (route(1, spec.speed)) setMode('warn'); }
         else if (a.mode === 'warn') {
           a.vx = a.vz = 0;
           if (a.modeMs > b.warnMs) {
@@ -618,14 +643,14 @@ export class MissionSim {
             const pk = b.drops.map((id) => st.pickups.find((x) => x.id === id)).find((x) => x && x.state === 'collected');
             if (pk) {
               const to = this.spec<PickupSpec>(pk.id)!.recoverAt ?? [a.x, 0, a.z];
-              pk.x = b.spot[0]; pk.y = 1.6; pk.z = b.spot[2];
+              pk.x = b.shelf[0]; pk.y = b.shelf[1]; pk.z = b.shelf[2];
               this.dropPickup(pk, to);
               this.emit({ k: 'knocked', id: pk.id });
             }
             setMode('shake');
           }
         } else if (a.mode === 'shake') { if (a.modeMs > 900) setMode('leave'); }
-        else if (a.mode === 'leave') { if (walkTo(home[0], home[2], spec.speed * 1.5)) { a.cycles++; setMode('away'); } }
+        else if (a.mode === 'leave') { if (route(-1, spec.speed * 1.5)) { a.cycles++; setMode('away'); } }
         break;
       }
       case 'thief': {
@@ -636,11 +661,13 @@ export class MissionSim {
           if (!carrying) setMode('return');
           else {
             walkTo(p.x, p.z, spec.speed);
-            if (Math.hypot(p.x - a.x, p.z - a.z) < 0.95 && p.alive) {
+            // Carts roll on the ground: no bumping Rosa on a terrace or stairs above them.
+            if (Math.hypot(p.x - a.x, p.z - a.z) < 0.95 && Math.abs(p.y - a.y) < 0.6 && p.alive) {
               const c = st.pickups.find((x) => x.id === p.carrying)!;
               c.state = 'free';
               c.x = p.x; c.y = p.y; c.z = p.z;
               settleItem(this.world, c);
+              c.lockUntil = st.timeMs + 1500;
               p.carrying = null;
               this.emit({ k: 'spill', id: c.id });
               setMode('return');
@@ -680,7 +707,7 @@ export class MissionSim {
           ok();
           const pk = st.pickups.find((x) => x.id === a.holds)!;
           pk.x = a.x; pk.y = a.y + 1.7; pk.z = a.z;
-          this.dropPickup(pk, groundNear(this.world, a.x, a.z));
+          this.dropPickup(pk, groundNear(this.world, a.x, a.z, a.y));
           a.holds = null;
           setMode('dizzy');
           return true;
@@ -698,7 +725,7 @@ export class MissionSim {
           if (a.holds) {
             const pk = st.pickups.find((x) => x.id === a.holds)!;
             pk.x = a.x; pk.y = a.y + 0.8; pk.z = a.z;
-            this.dropPickup(pk, groundNear(this.world, a.x, a.z));
+            this.dropPickup(pk, groundNear(this.world, a.x, a.z, a.y));
             a.holds = null;
           }
           setMode('stopped');
@@ -723,21 +750,18 @@ export class MissionSim {
         }
         return true;
       case 'blower':
-        if (a.mode === 'windup') {
-          ok(false);
-          st.hazards = st.hazards.filter((h) => h.src !== a.id);
-          setMode('stunned');
-          return true;
-        }
-        if (a.mode === 'vent') {
+        // Readable rule: hits count while he winds up (which also cancels the
+        // gust) or while the machine vents steam.
+        if (a.mode === 'windup' || a.mode === 'vent') {
           ok(); a.hits++;
+          if (a.mode === 'windup') st.hazards = st.hazards.filter((h) => h.src !== a.id);
           if (a.hits >= b.hits) {
             a.done = true; a.vx = a.vz = 0;
             st.stats.blowerOff = true;
             st.stats.scattersAtBlowerOff = st.stats.scatters;
             this.setFlag(`${a.id}_off`, true);
             setMode('off');
-          }
+          } else if (a.mode === 'windup') setMode('stunned');
           return true;
         }
         this.emit({ k: 'reject', id: a.id, why: 'armor' });
@@ -760,6 +784,7 @@ export class MissionSim {
       const cx = (bl.box[0] + bl.box[3]) / 2, cz = (bl.box[2] + bl.box[5]) / 2;
       const dx = cx - a.x, dz = cz - a.z, d = Math.hypot(dx, dz);
       if (d > range + 2 || (dx * fx + dz * fz) / (d || 1) < Math.cos(half + 0.25)) continue;
+      if (!lineOfSight({ x: a.x, y: 0.8, z: a.z }, { x: cx, y: 0.8, z: cz }, this.world.near(a.x, a.z, cx, cz, 1), (bx) => bx.tag !== 'floor' && !bx.tag.startsWith('blocker'))) continue; // not through walls
       // Not onto the player.
       const p = st.player;
       if (p.x > bl.box[0] - 0.4 && p.x < bl.box[3] + 0.4 && p.z > bl.box[2] - 0.4 && p.z < bl.box[5] + 0.4) continue;
@@ -1051,14 +1076,16 @@ function goalTotal(g: GoalSpec): number {
   }
 }
 
-function groundNear(world: World, x: number, z: number): V3 {
-  const b = newBody(x, 4, z);
+// The walkable surface under (x, fromY, z). The search starts at the item's
+// own height (never from high up, which could land it on a roof).
+function groundNear(world: World, x: number, z: number, fromY: number): V3 {
+  const b = newBody(x, fromY + 0.05, z);
   settle(world, b);
   return [x, b.y, z];
 }
 
 function settleItem(world: World, p: { x: number; y: number; z: number }): void {
-  const g = groundNear(world, p.x, p.z);
+  const g = groundNear(world, p.x, p.z, p.y);
   p.y = g[1];
 }
 

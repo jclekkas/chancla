@@ -64,6 +64,9 @@ export interface PickupSpec extends Base {
 export interface Hint {
   stand: V3; // a good place to stand
   aim: V3; // where to aim from there (for bank shots: the spot on the panel)
+  // Bank shots: the marked panel's face plane. The aim is then solved from
+  // wherever Rosa actually stands by mirroring the target across it.
+  plane?: { axis: 'x' | 'z'; at: number };
 }
 
 export interface TargetSpec extends Base {
@@ -85,10 +88,12 @@ export type Behavior =
   | { type: 'poser'; poseMs: number; holds: string }
   // Drives a loop; each hit slows it briefly; `hits` hits stop it and drop what it holds.
   | { type: 'runner'; hits: number; holds: string }
-  // Walks into a zone to film; while there it disrupts. A hit sends it away.
-  | { type: 'filmer'; zone: string; spot: V3; everyMs: number; firstMs: number }
-  // Rolls to a shelf, warms up its speaker, then shakes an ingredient off.
-  | { type: 'shaker'; spot: V3; everyMs: number; firstMs: number; warnMs: number; hits: number; drops: string[] }
+  // Walks its path (home first, spot last) into a zone to film; while there
+  // it disrupts. A hit sends it back along the path.
+  | { type: 'filmer'; zone: string; everyMs: number; firstMs: number }
+  // Rolls along its path to the last point, warms up its speaker, then the
+  // bass shakes an ingredient off the shelf at `shelf`.
+  | { type: 'shaker'; shelf: V3; everyMs: number; firstMs: number; warnMs: number; hits: number; drops: string[] }
   // Chases the player while they carry `item`; contact spills it.
   | { type: 'thief'; item: ItemKind; delayMs: number }
   // Patrols; winds up a gust (telegraphed cone), blows, then overheats.

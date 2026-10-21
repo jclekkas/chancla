@@ -58,7 +58,7 @@ export const RULEROS: MissionDef = {
     {
       kind: 'target', id: 'wedged', stages: ['hunt', 'cart'], at: [-4, 3.4, -14.75], r: 0.6, need: 'bank', visual: 'wedged',
       on: [{ do: 'drop', id: 'set3', to: [-4, 0, -13.1] }, { do: 'say', line: 'm1_bank' }],
-      hint: { stand: [-4, 0, -13.6], aim: [-4, 2.29, -11.1] },
+      hint: { stand: [-4, 0, -13.6], aim: [-4, 2.29, -11.1], plane: { axis: 'z', at: -11.1 } },
     },
     // Set 4: the influencer wears it for his photo shoot.
     { kind: 'pickup', id: 'set4', stages: ['hunt', 'cart'], item: 'rulero', variant: 'violet', at: [-12.5, 0, -3.5] },

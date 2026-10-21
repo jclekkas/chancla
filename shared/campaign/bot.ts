@@ -7,7 +7,7 @@ import { WEAPONS, type WeaponId } from '../config';
 import { lineOfSight } from '../collision';
 import { buildNavGraph, findPath, nearestNode, walkReaches, type NavGraph } from '../navgraph';
 import type { MapData } from '../map';
-import { missionHints, type MHint } from './hints';
+import { bankAim, missionHints, type MHint } from './hints';
 import type { MissionSim } from './mission';
 import type { PlayerInputM, V3 } from './types';
 
@@ -29,6 +29,7 @@ export class MissionBot {
   private stuckMs = 0;
   private jumpMs = 0;
   private strafe = 1;
+  private lastNode = -1; // last waypoint reached, for dropping links we get stuck on
   hint: MHint | null = null;
 
   constructor(opts: BotOptions = {}) {
@@ -45,7 +46,9 @@ export class MissionBot {
   private nav(sim: MissionSim): NavGraph {
     if (!this.graph || this.graphKey !== sim.collisionKey) {
       this.navMap = { ...sim.map, boxes: [...sim.world.boxes] as MapData['boxes'] };
-      this.graph = buildNavGraph(this.navMap, sim.world);
+      // A private copy: links can be dropped without touching the shared cache.
+      const shared = buildNavGraph(this.navMap, sim.world);
+      this.graph = { nodes: shared.nodes, links: shared.links.map((l) => [...l]) };
       this.graphKey = sim.collisionKey;
       this.path = [];
     }
@@ -102,7 +105,8 @@ export class MissionBot {
     const eye = sim.eye();
     if (h.stand) {
       if (Math.hypot(h.stand[0] - p.x, h.stand[2] - p.z) > 0.6 || Math.abs(h.stand[1] - p.y) > 1) return this.goTo(sim, inp, h.stand, 0.35, h.aim ?? h.pos);
-      return this.fireAt(sim, inp, h.aim ?? h.pos, h);
+      const aim = h.plane ? bankAim(eye, h.pos, h.plane) ?? h.aim ?? h.pos : h.aim ?? h.pos;
+      return this.fireAt(sim, inp, aim, h);
     }
     // Lead moving targets by the flight time.
     const speed = WEAPONS[weapon]!.speed;
@@ -166,11 +170,12 @@ export class MissionBot {
         const a = nearestNode(g, sim.world, p);
         const b = destNode(g, to);
         this.path = findPath(g, a, b);
+        this.lastNode = a;
         this.pathFor = key;
         this.pathAt = sim.state.timeMs;
       }
       // Consume reached nodes; once the last one is reached, go straight.
-      while (this.path.length && Math.hypot(g.nodes[this.path[0]!]!.x - p.x, g.nodes[this.path[0]!]!.z - p.z) < 0.6 && Math.abs(g.nodes[this.path[0]!]!.y - p.y) < 0.8) this.path.shift();
+      while (this.path.length && Math.hypot(g.nodes[this.path[0]!]!.x - p.x, g.nodes[this.path[0]!]!.z - p.z) < 0.6 && Math.abs(g.nodes[this.path[0]!]!.y - p.y) < 0.8) this.lastNode = this.path.shift()!;
       const n = this.path[0] !== undefined ? g.nodes[this.path[0]!]! : null;
       if (n) { tx = n.x; tz = n.z; }
     }
@@ -198,7 +203,13 @@ export class MissionBot {
     const moved = Math.hypot(p.x - this.lastPos[0], p.z - this.lastPos[1]);
     this.lastPos = [p.x, p.z];
     if (moved < 0.02) this.stuckMs += 1000 / 60; else this.stuckMs = Math.max(0, this.stuckMs - 50);
-    if (this.stuckMs > 900) { this.jumpMs = 300; this.stuckMs = 0; this.strafe = -this.strafe; this.path = []; this.pathFor = ''; this.focusSince -= 2000; }
+    if (this.stuckMs > 900) {
+      // A link that looked walkable but is not (it scrapes a corner): drop it
+      // from this bot's own copy of the graph and plan again.
+      const next = this.path[0];
+      if (this.graph && next !== undefined && this.lastNode >= 0) this.graph.links[this.lastNode] = this.graph.links[this.lastNode]!.filter((j) => j !== next);
+      this.jumpMs = 300; this.stuckMs = 0; this.strafe = -this.strafe; this.path = []; this.pathFor = ''; this.focusSince -= 2000; this.lastNode = -1;
+    }
     if (this.jumpMs > 0) { this.jumpMs -= 1000 / 60; inp.jump = true; inp.mx += this.strafe * 0.6; }
     return inp;
   }

@@ -14,6 +14,7 @@ export interface MHint {
   pos: V3;
   stand?: V3; // recommended position (bank shots, high targets)
   aim?: V3; // where to aim from `stand`
+  plane?: { axis: 'x' | 'z'; at: number };
   vel?: [number, number, number]; // moving target velocity, for leading
   need?: 'bank' | 'heavy';
   goal: string;
@@ -93,7 +94,7 @@ function collectHints(sim: MissionSim, item: string, goal: string, out: MHint[],
 
 function targetHint(sim: MissionSim, ts: TargetSpec, goal: string): MHint {
   const t = sim.state.targets.find((x) => x.id === ts.id)!;
-  return { kind: 'shoot', id: ts.id, pos: ts.at, stand: ts.hint?.stand, aim: ts.hint?.aim, need: ts.need, goal, open: sim.targetOpen(t, ts) };
+  return { kind: 'shoot', id: ts.id, pos: ts.at, stand: ts.hint?.stand, aim: ts.hint?.aim, plane: ts.hint?.plane, need: ts.need, goal, open: sim.targetOpen(t, ts) };
 }
 
 function flagHints(sim: MissionSim, g: Extract<GoalSpec, { kind: 'flags' }>, out: MHint[], inStage: (e: { stages?: string[] }) => boolean): void {
@@ -120,7 +121,7 @@ function flagHints(sim: MissionSim, g: Extract<GoalSpec, { kind: 'flags' }>, out
       if (pk.state === 'carried') {
         const zone = sim.def.entities.find((e) => e.kind === 'zone' && e.id === `${pk.id}_zone`) as { at: V3 } | undefined;
         if (zone) out.push({ kind: 'go', id: `${pk.id}_zone`, pos: zone.at, goal: g.id });
-      } else if (pk.state === 'free') out.push({ kind: 'pickup', id: pk.id, pos: [pk.x, pk.y, pk.z], goal: g.id });
+      } else if (pk.state === 'free' && !st.player.carrying) out.push({ kind: 'pickup', id: pk.id, pos: [pk.x, pk.y, pk.z], goal: g.id });
     }
   }
 }
@@ -155,4 +156,17 @@ function bossHints(sim: MissionSim, goal: string, out: MHint[]): void {
   } else {
     out.push({ kind: pin.coreOpen(s) ? 'shoot' : 'wait', id: 'core', pos: [s.x, s.y, s.z], goal, open: pin.coreOpen(s) });
   }
+}
+
+/** Where to aim on a bank panel so a chancla from `eye` reflects onto `target`. */
+export function bankAim(eye: V3, target: V3, plane: { axis: 'x' | 'z'; at: number }, radius = 0.12): V3 | null {
+  const i = plane.axis === 'x' ? 0 : 2;
+  // The chancla's centre turns at the face minus its radius, on the eye's side.
+  const side = Math.sign(eye[i] - plane.at) || 1;
+  const turn = plane.at + side * radius;
+  const mirrored: V3 = [...target];
+  mirrored[i] = 2 * turn - target[i];
+  const k = (turn - eye[i]) / (mirrored[i] - eye[i]);
+  if (!(k > 0 && k < 1)) return null;
+  return [eye[0] + (mirrored[0] - eye[0]) * k, eye[1] + (mirrored[1] - eye[1]) * k, eye[2] + (mirrored[2] - eye[2]) * k];
 }

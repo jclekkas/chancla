@@ -24,7 +24,8 @@
     "music:playlist": "python3 scripts/music/playlist.py",
     "perf:mobile": "node --import tsx scripts/perf-mobile.ts",
     "perf:maps": "node --import tsx scripts/perf-maps.ts",
-    "shots:maps": "node --import tsx scripts/map-shots.ts"
+    "shots:maps": "node --import tsx scripts/map-shots.ts",
+    "smoke:online": "node --import tsx scripts/online-smoke.ts"
   },
   "dependencies": {
     "@fontsource/lilita-one": "5.3.0",

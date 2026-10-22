@@ -1,14 +1,14 @@
 {
-  "at": "2026-10-22T19:27:17.941Z",
+  "at": "2026-10-22T22:17:32.388Z",
   "environment": "Chromium 141 headless (SwiftShader), Linux container, local game server behind a stall/cut relay",
-  "passed": 23,
-  "total": 23,
+  "passed": 30,
+  "total": 30,
   "checks": [
     {
       "name": "server that never answers: the player is told it is unreachable (not stuck on \"Connecting…\")",
       "ok": true,
       "detail": {
-        "afterS": 8.543,
+        "afterS": 8.569,
         "msg": "Could not reach the game server."
       }
     },
@@ -17,10 +17,31 @@
       "ok": true
     },
     {
+      "name": "online, graphics lost: says the match keeps going, does not pause it, releases input, updates keep arriving",
+      "ok": true,
+      "detail": {
+        "paused": false,
+        "held": 0,
+        "tl0": 118217,
+        "tl1": 115867
+      }
+    },
+    {
+      "name": "online, graphics restored: the notice is gone and nothing blocks the screen",
+      "ok": true
+    },
+    {
       "name": "stall: \"Reconnecting…\" shows when the network drops",
       "ok": true,
       "detail": {
         "banner": "Connection lost. Reconnecting…"
+      }
+    },
+    {
+      "name": "stall: the browser's \"online\" signal retries at once instead of waiting out a hung attempt",
+      "ok": true,
+      "detail": {
+        "seconds": 0.212
       }
     },
     {
@@ -34,7 +55,7 @@
       "name": "network never returns: the \"connection lost\" screen with a way home, within the grace period",
       "ok": true,
       "detail": {
-        "afterS": 27.35,
+        "afterS": 26.035,
         "held": 0
       }
     },
@@ -106,10 +127,10 @@
       }
     },
     {
-      "name": "context restored: the notice goes away, Resume returns to a drawing match",
+      "name": "context restored: the notice goes away, Resume returns to a drawing match, nothing blocks the screen",
       "ok": true,
       "detail": {
-        "fps": 22.49718785151858
+        "fps": 21.284829721362332
       }
     },
     {
@@ -122,7 +143,47 @@
       "detail": []
     },
     {
-      "name": "frames keep failing: \"The game stopped\" screen appears (not a silent frozen picture)",
+      "name": "mission, graphics lost: the mission pauses (its clock stops) and the screen says so",
+      "ok": true,
+      "detail": {
+        "clockAdvancedMs": 100.00000000000045
+      }
+    },
+    {
+      "name": "mission, graphics restored: Resume continues the same mission at the same speed as before",
+      "ok": true,
+      "detail": {
+        "before": {
+          "msPerS": 450,
+          "fps": 10
+        },
+        "after": {
+          "msPerS": 500,
+          "fps": 10
+        },
+        "stalls": [
+          "    2069 stall  main thread busy 1925 ms",
+          "    2069 stall  no frame for 1933 ms (mode menu)",
+          "   13147 stall  no frame for 1100 ms (mode controller)"
+        ]
+      }
+    },
+    {
+      "name": "frames keep failing: \"The game stopped\" screen appears, held keys are released",
+      "ok": true,
+      "detail": {
+        "held": 0
+      }
+    },
+    {
+      "name": "frames keep failing: the failing work is halted (no endless error loop behind the screen)",
+      "ok": true,
+      "detail": {
+        "callsDuring1_5s": 0
+      }
+    },
+    {
+      "name": "\"The game stopped\" explains what going back or reloading costs",
       "ok": true
     },
     {
@@ -133,7 +194,7 @@
       "name": "Copy diagnostics: no room code in the report",
       "ok": true,
       "detail": {
-        "code": "ZY3682QB"
+        "code": "9PEP6SNE"
       }
     },
     {

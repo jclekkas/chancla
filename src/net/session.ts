@@ -79,7 +79,10 @@ export interface SessionEvents {
 const DT = 1 / NET.tickRate;
 const DT_MS = 1000 / NET.tickRate;
 // How long a connection attempt may take to be welcomed before it is dropped.
+// Reconnects use a shorter limit: a hung attempt can only be noticed when it
+// times out, and the server holds the slot for NET.reconnectGraceMs.
 export const CONNECT_TIMEOUT_MS = 8000;
+export const RECONNECT_ATTEMPT_MS = 5000;
 
 interface SnapRecord {
   st: number;
@@ -204,7 +207,23 @@ export class GameSession {
       t.onMessage = null;
       t.close();
       this.handleClose(t, 4001);
-    }, CONNECT_TIMEOUT_MS);
+    }, reconnecting ? RECONNECT_ATTEMPT_MS : CONNECT_TIMEOUT_MS);
+  }
+
+  /**
+   * While reconnecting, start a fresh attempt now instead of waiting out a
+   * possibly hung one: the browser just said the network is back, or the
+   * page just became visible again.
+   */
+  retryNow(): void {
+    if (this.state !== 'reconnecting' || this.intentionalClose) return;
+    if (this.now() > this.reconnectDeadline) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.clearAttempt();
+    const t = this.transport;
+    if (t) { t.onClose = null; t.onMessage = null; t.onOpen = null; t.close(); this.transport = null; }
+    this.open(true);
   }
 
   private clearAttempt(): void {
@@ -231,7 +250,7 @@ export class GameSession {
     }
     if (this.now() > this.reconnectDeadline) { this.setState('lost', 'timeout'); return; }
     const delay = Math.min(4000, 400 * 2 ** this.reconnectAttempts++);
-    this.reconnectTimer = setTimeout(() => this.open(true), delay);
+    this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.open(true); }, delay);
   }
 
   private receive(m: ServerMsg): void {

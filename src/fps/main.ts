@@ -1314,9 +1314,11 @@ function bindInput(inp: FpsInput): void {
   // connection survived: a phone may have frozen the page and its socket.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { inp.release(); if (inMatch && base === 'none') openPause(); }
-    else { session?.checkAlive(); engine?.resizeIfNeeded(); render(); }
+    else { session?.checkAlive(); session?.retryNow(); engine?.resizeIfNeeded(); render(); }
   });
-  window.addEventListener('pageshow', () => session?.checkAlive());
+  window.addEventListener('pageshow', () => { session?.checkAlive(); session?.retryNow(); });
+  // The browser says the network is back: don't wait out a hung reconnect attempt.
+  window.addEventListener('online', () => session?.retryNow());
 }
 
 // ---------------------------------------------------------------------

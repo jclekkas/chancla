@@ -18,6 +18,9 @@ interface SandalGeometry {
 
 let geo: SandalGeometry | null = null;
 
+/** Geometry built once and reused by every model: owners must not dispose it. */
+export function markShared(...gs: THREE.BufferGeometry[]): void { for (const g of gs) g.userData.shared = true; }
+
 function soleShape(scale: number): THREE.Shape {
   // Footprint outline in the XY plane: toe at +Y, heel at -Y.
   const s = new THREE.Shape();
@@ -119,7 +122,7 @@ export const GOLD_SKIN: SandalSkin = {
 const goldEmissive = 0x7a5200;
 
 export function buildSandal(skin: SandalSkin = ROSA_SKIN, golden = false): THREE.Group {
-  if (!geo) geo = build();
+  if (!geo) { geo = build(); markShared(...Object.values(geo)); }
   const g = new THREE.Group();
   const em = golden ? goldEmissive : 0;
   const parts: Array<[THREE.BufferGeometry, number]> = [

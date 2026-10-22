@@ -207,7 +207,11 @@ async function main(): Promise<void> {
       growth: { heapMB: +((last.heapMB as number) - (first.heapMB as number)).toFixed(1), geometries: (last.geometries as number) - (first.geometries as number), textures: (last.textures as number) - (first.textures as number), domNodes: (last.domNodes as number) - (first.domNodes as number) },
       samples,
     };
+    // Regression guard: GPU buffers left behind per match (avatars) or per
+    // mission (bank texture) used to grow without bound.
+    if (cycles >= 3 && (report.growth.geometries > 20 || report.growth.textures > 3)) problems.push(`GPU resources grew: ${JSON.stringify(report.growth)}`);
     fs.writeFileSync(path.join(OUT, 'soak.json'), JSON.stringify(report, null, 2));
+    if (problems.length || errs.length) process.exitCode = 1;
     console.log(JSON.stringify({ minutes: report.minutes, cycles, matches, problems, pageErrors: errs.length, growth: report.growth, server: final }, null, 1));
   } finally {
     await browser.close();

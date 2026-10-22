@@ -63,11 +63,13 @@ No keyboard, mouse, fullscreen or pointer lock is needed at any point.
   - the keyboard works in either mode
   - only one set of controls is shown at a time
 
-### Unexpected zoom (fixed)
+### Unexpected zoom (likely mechanisms fixed; the reported cause is unconfirmed)
 
 **Report:** on a phone, the game sometimes zoomed in and the player couldn't zoom back out.
 
-**Causes found** (`scripts/zoom-e2e.ts`; the numbers are from Chromium mobile emulation before the fix):
+**Status:** the report has not been reproduced on the affected device. The mechanisms below were each reproduced in Chromium mobile emulation and fixed, and they would explain the report, but which one (if any) the player hit is unknown until it is checked on a real affected phone. Copy diagnostics (in the menu) now records the page zoom (`visualViewport.scale`), so a report taken while it happens would show whether it is browser zoom.
+
+**Mechanisms reproduced** (`scripts/zoom-e2e.ts`; the numbers are from Chromium mobile emulation before the fix):
 
 1. **The trap: zoom couldn't be undone during play.** The play surface blocks pinch gestures, which is right for play. But any zoom picked up before play (a pinch in a menu, or iOS zooming into a text field) stayed, and the pinch that would undo it was blocked. Measured: zoomed to 5× in a menu, then a pinch-out during play left it at 5×.
 2. **Pinches that started on HUD pieces zoomed the page:**
@@ -82,7 +84,7 @@ No keyboard, mouse, fullscreen or pointer lock is needed at any point.
    Chromium does not reproduce this; it is checked statically.
 4. **Double-tap zoom:** buttons outside the touch controls had no `touch-action: manipulation`.
 
-**Ruled out:**
+**Unlikely, by code inspection (not proven on a device):**
 - The shooter's camera FOV only changes from the settings slider.
 - The Arcade's FOV effects widen the view rather than zoom in: up to 2.4° on a hit, fading within about a quarter of a second, and 4° during La Chancla Legendaria. Both are off with reduced motion.
 - The canvas is sized from the stage element, never from a zoomed measurement.

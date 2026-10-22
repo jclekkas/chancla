@@ -1,9 +1,9 @@
 {
-  "at": "2026-10-22T19:32:05.028Z",
+  "at": "2026-10-22T20:03:43.070Z",
   "environment": "Chromium 141 headless (SwiftShader), Linux container, local game server (25 s matches)",
-  "minutes": 3.5,
-  "cycles": 1,
-  "matches": 4,
+  "minutes": 31.5,
+  "cycles": 10,
+  "matches": 40,
   "problems": [],
   "pageErrors": [],
   "serverAtEnd": {
@@ -11,19 +11,19 @@
     "rooms": 0,
     "players": 0,
     "maxTickMs": 0,
-    "uptimeS": 211
+    "uptimeS": 1891
   },
   "growth": {
-    "heapMB": 0,
-    "geometries": 0,
-    "textures": 0,
+    "heapMB": 2.8,
+    "geometries": 541,
+    "textures": 11,
     "domNodes": 0
   },
   "samples": [
     {
       "cycle": 0,
       "minutes": 0,
-      "heapMB": 10.5,
+      "heapMB": 10.3,
       "geometries": 93,
       "textures": 10,
       "domNodes": 567,
@@ -33,12 +33,120 @@
     {
       "cycle": 1,
       "minutes": 3,
-      "heapMB": 12.7,
+      "heapMB": 12.9,
       "geometries": 178,
       "textures": 21,
       "domNodes": 668,
       "errors": 0,
-      "stalls": 10,
+      "stalls": 8,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 2,
+      "minutes": 6.4,
+      "heapMB": 13.4,
+      "geometries": 238,
+      "textures": 24,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 6,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 3,
+      "minutes": 9.2,
+      "heapMB": 13.8,
+      "geometries": 300,
+      "textures": 25,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 5,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 4,
+      "minutes": 12.5,
+      "heapMB": 14.1,
+      "geometries": 360,
+      "textures": 26,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 5,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 5,
+      "minutes": 15.4,
+      "heapMB": 14.4,
+      "geometries": 419,
+      "textures": 27,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 5,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 6,
+      "minutes": 18.7,
+      "heapMB": 14.7,
+      "geometries": 480,
+      "textures": 28,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 3,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 7,
+      "minutes": 21.4,
+      "heapMB": 15,
+      "geometries": 540,
+      "textures": 29,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 5,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 8,
+      "minutes": 24.8,
+      "heapMB": 15.2,
+      "geometries": 599,
+      "textures": 30,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 3,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 9,
+      "minutes": 27.6,
+      "heapMB": 17.4,
+      "geometries": 660,
+      "textures": 31,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 3,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    },
+    {
+      "cycle": 10,
+      "minutes": 30.9,
+      "heapMB": 15.7,
+      "geometries": 719,
+      "textures": 32,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 6,
       "serverRooms": 0,
       "serverPlayers": 0
     }

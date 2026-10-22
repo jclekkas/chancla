@@ -1,14 +1,14 @@
 Chancla Warfare diagnostics
 {
- "build": "0f5fae2 (local)",
+ "build": "17c324a (local)",
  "page": "shooter",
- "uptimeS": 12,
+ "uptimeS": 13,
  "visibility": "visible",
  "online": true,
  "viewport": "1280x720@1 (visible 1280x720, zoom 1.00)",
  "touch": false,
  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
- "jsHeap": "17 MB of 4096 MB",
+ "jsHeap": "16 MB of 4096 MB",
  "errors": 3,
  "game": {
   "mode": "practice",
@@ -27,8 +27,8 @@ Chancla Warfare diagnostics
  "render": {
   "mode": "match",
   "map": "patio",
-  "msSinceFrame": 1962,
-  "frameErrors": 43,
+  "msSinceFrame": 3489,
+  "frameErrors": 30,
   "fps": 10,
   "contextLost": false,
   "quality": "low",
@@ -44,20 +44,21 @@ Chancla Warfare diagnostics
 }
 
 Recent events (ms since page load):
-      71 life   pageshow
-    2138 screen menu / title
-    2166 stall  main thread busy 2025 ms
-    2166 stall  no frame for 2017 ms (mode menu)
-    4007 screen menu / practice
-    5051 net    connection connecting
-    5052 net    connection online
-    5104 match  room lobby, map patio, 4 players (practice)
-    5293 match  room countdown, map patio, 4 players (practice)
-    5294 screen practice / none
-    6358 stall  no frame for 1050 ms (mode match)
-    6363 stall  main thread busy 1037 ms
-    9242 match  room playing, map patio, 4 players (practice)
-    9879 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:82) | at t (engine-CXKvlaew.js:1:7575)
-   10116 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:82) | at t (engine-CXKvlaew.js:1:7575)
-   10124 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:82) | at t (engine-CXKvlaew.js:1:7575)
-   10777 screen practice / pause
+      77 life   pageshow
+    1976 screen menu / title
+    1998 stall  main thread busy 1870 ms
+    1999 stall  no frame for 1850 ms (mode menu)
+    3807 screen menu / practice
+    4899 net    connection connecting
+    4900 net    connection online
+    4951 match  room lobby, map patio, 4 players (practice)
+    5131 match  room countdown, map patio, 4 players (practice)
+    5132 screen practice / none
+    6240 stall  no frame for 1083 ms (mode match)
+    6245 stall  main thread busy 1087 ms
+    9002 match  room playing, map patio, 4 players (practice)
+    9692 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-91fo6FFV.js:1:7585)
+    9915 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-91fo6FFV.js:1:7585)
+   10258 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-91fo6FFV.js:1:7585)
+   10914 screen game stopped (frames keep failing)
+   10917 screen practice / pause

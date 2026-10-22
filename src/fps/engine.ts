@@ -157,6 +157,10 @@ export class Engine {
       // (main thread blocked, or the browser stopped scheduling frames).
       if (this.lastLoopAt && now - this.lastLoopAt > 1000 && diagVisibleFor() > now - this.lastLoopAt) diagLog('stall', `no frame for ${Math.round(now - this.lastLoopAt)} ms (mode ${this.mode})`);
       this.lastLoopAt = now;
+      // After the stopped-picture screen, stop running the failing frame: no
+      // endless error loop burning the battery behind it. The player's choice
+      // (Back to the menu: clearFatal) starts frames again.
+      if (this.fatalSent) return;
       try {
         this.resizeIfNeeded();
         this.frame(now);

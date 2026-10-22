@@ -73,6 +73,30 @@ describe('mobile connection lifecycle', () => {
     phone.close(); desk.close();
   }, 40000);
 
+  // Real server, close to the edge: the network is gone for 19 s (the
+  // client gives up at 23 s, the server holds the slot for 25 s).
+  it('a network that returns 19 s after the drop still gets the player back into the same slot and team', async () => {
+    const phone = viaProxy(), desk = direct();
+    phone.connect('Phone'); desk.connect('Desk');
+    await until(() => phone.state === 'online' && desk.state === 'online', 5000, 'online');
+    desk.send({ t: 'create' });
+    await until(() => !!desk.room, 5000, 'room');
+    phone.send({ t: 'join', code: desk.room!.code });
+    await until(() => !!phone.room && desk.room!.members.length === 2, 5000, 'joined');
+    const id = phone.id, team = phone.team, code = phone.room!.code;
+    proxy.stall();
+    proxy.interrupt();
+    await new Promise((r) => setTimeout(r, 19000));
+    expect(phone.state).toBe('reconnecting');
+    proxy.unstall();
+    await until(() => phone.state === 'online' && !!phone.room, 12000, 'back online near the boundary');
+    expect(phone.id).toBe(id);
+    expect(phone.team).toBe(team);
+    expect(phone.room!.code).toBe(code);
+    expect(desk.room!.members.filter((m) => !m.bot).length).toBe(2); // no duplicate player
+    phone.close(); desk.close();
+  }, 50000);
+
   it('if the network never returns, the player is told the connection was lost (not stuck reconnecting)', async () => {
     const phone = viaProxy(), desk = direct();
     const details: string[] = [];

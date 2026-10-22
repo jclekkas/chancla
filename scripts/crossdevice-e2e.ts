@@ -13,6 +13,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core';
+import { World } from '../shared/physics';
+import { mapData } from '../shared/maps';
+import { buildNavGraph, findPath, nearestNode, walkReaches } from '../shared/navgraph';
+import { lineOfSight } from '../shared/collision';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const SITE = 'http://localhost:4173/';
@@ -65,36 +69,77 @@ async function deskBurst(c: Client): Promise<void> {
   await c.p.keyboard.up('KeyW'); await c.p.mouse.up();
 }
 
-// Combat: the test points the view at the nearest living enemy (the only
-// scripted part; a player does this with the mouse or the look pad). Moving
-// and throwing go through real input: the desktop holds W and F on the
-// keyboard, the Android phone holds the on-screen stick and Throw button
-// with touch events. The server decides every hit and elimination.
-const startAim = (c: Client) => c.p.evaluate(() => {
-  const w = window as any;
-  w.__aim = setInterval(() => {
-    const f = w.__fps; const s = f.session(); const i = f.input();
-    if (!s?.alive || !s.room) return;
-    const me = s.team; let best: any = null, bd = 1e9;
-    for (const r of s.remotes.values()) {
-      const m = s.room.members.find((x: any) => x.id === r.id);
-      if (!m || m.team === me || !r.alive) continue;
-      const d = Math.hypot(r.x - s.body.x, r.z - s.body.z);
-      if (d < bd) { bd = d; best = r; }
+// Combat. The test steers the VIEW DIRECTION only (in test code; the game
+// has no aim assist): it walks the attacker along the game's own navigation
+// graph towards the nearest enemy and, once there is a clear line, points
+// the view at them. Moving and throwing go through real input: the desktop
+// holds W and F on the keyboard, the Android phone holds the on-screen stick
+// and Throw button with touch events. The server decides every hit and
+// elimination. The targets stand still (nobody is driving them).
+async function pilot(attackers: Client[], map: string, done: () => Promise<boolean>, ms: number): Promise<void> {
+  const md = mapData(map);
+  const world = new World(md.boxes);
+  const g = buildNavGraph(md, world);
+  const end = Date.now() + ms;
+  // Corner clipping: no progress for ~0.6 s means a wall edge; angle off for a moment.
+  const stuck = new Map<Client, { x: number; z: number; at: number; dodgeUntil: number; side: number }>();
+  // Path following like the game's bots: plan on the graph, then head for the
+  // furthest upcoming node that a straight walk actually reaches.
+  type P = { x: number; y: number; z: number };
+  const plans = new Map<Client, { nodes: P[]; idx: number; replanAt: number }>();
+  const nextWaypoint = (c: Client, me: P, t: P): P => {
+    const now = Date.now();
+    let pl = plans.get(c);
+    if (!pl || now > pl.replanAt || pl.idx >= pl.nodes.length) {
+      pl = { nodes: [...findPath(g, nearestNode(g, world, me), nearestNode(g, world, t)).map((i) => g.nodes[i]!), t], idx: 0, replanAt: now + 3000 };
+      plans.set(c, pl);
     }
-    if (!best) return;
-    const eyeY = s.body.y + 1.55, ty = best.y + 1.1, tt = bd / 42;
-    i.yaw = Math.atan2(-(best.x - s.body.x), -(best.z - s.body.z));
-    i.pitch = Math.atan2(ty + 0.5 * 5 * tt * tt - eyeY, bd);
-  }, 40);
-});
-const stopAim = (c: Client) => c.p.evaluate(() => clearInterval((window as any).__aim));
-const scoresOf = (c: Client) => c.p.evaluate(() => (window as any).__fps.session()?.snap?.scores ?? null) as Promise<[number, number] | null>;
+    while (pl.idx < pl.nodes.length - 1 && Math.hypot(pl.nodes[pl.idx]!.x - me.x, pl.nodes[pl.idx]!.z - me.z) < 1.0) pl.idx++;
+    for (let j = Math.min(pl.nodes.length - 1, pl.idx + 3); j > pl.idx; j--) if (walkReaches(world, me, pl.nodes[j]!)) { pl.idx = j; break; }
+    return pl.nodes[pl.idx]!;
+  };
+  let logAt = 0;
+  while (Date.now() < end && !(await done())) {
+    const logNow = Date.now() - logAt > 5000;
+    if (logNow) logAt = Date.now();
+    await Promise.all(attackers.map(async (c) => {
+      const v = await c.p.evaluate(() => {
+        const s = (window as any).__fps.session();
+        if (!s?.alive || !s.room) return null;
+        const enemies = [...s.remotes.values()].filter((r: any) => r.alive && s.room.members.find((m: any) => m.id === r.id)?.team !== s.team).map((r: any) => ({ x: r.x, y: r.y, z: r.z }));
+        return { x: s.body.x, y: s.body.y, z: s.body.z, enemies };
+      });
+      if (logNow) console.log(`  pilot ${c.id}: ${v ? `at ${v.x.toFixed(1)},${v.z.toFixed(1)} enemies ${v.enemies.length}` : 'down or no room'} ${JSON.stringify(await c.p.evaluate(() => { const f = (window as any).__fps; return { en: f.input().enabled, lock: f.input().locked, touch: f.touchMode, held: f.input().heldCount, screen: f.screen, shots: f.session()?.localShot, sc: f.session()?.snap?.sc }; }))}`);
+      if (!v || !v.enemies.length) return;
+      const t = v.enemies.sort((a, b) => Math.hypot(a.x - v.x, a.z - v.z) - Math.hypot(b.x - v.x, b.z - v.z))[0]!;
+      const eye = { x: v.x, y: v.y + 1.55, z: v.z }, chest = { x: t.x, y: t.y + 1.1, z: t.z };
+      const d = Math.hypot(t.x - v.x, t.z - v.z);
+      let yaw: number, pitch = 0;
+      if (d < 26 && lineOfSight(eye, chest, world.near(eye.x, eye.z, chest.x, chest.z, 1), () => true)) {
+        const tt = d / 42;
+        yaw = Math.atan2(-(t.x - v.x), -(t.z - v.z));
+        pitch = Math.atan2(chest.y + 0.5 * 5 * tt * tt - eye.y, d);
+      } else {
+        const wp = nextWaypoint(c, v, t);
+        yaw = Math.atan2(-(wp.x - v.x), -(wp.z - v.z));
+        const now = Date.now();
+        const k = stuck.get(c) ?? { x: v.x, z: v.z, at: now, dodgeUntil: 0, side: 1 };
+        if (Math.hypot(v.x - k.x, v.z - k.z) > 0.4) { k.x = v.x; k.z = v.z; k.at = now; }
+        else if (now - k.at > 600 && now > k.dodgeUntil) { k.dodgeUntil = now + 500; k.side = -k.side; k.at = now; }
+        if (now < k.dodgeUntil) yaw += k.side * 1.2;
+        stuck.set(c, k);
+      }
+      await c.p.evaluate(([y, p]) => { const i = (window as any).__fps.input(); i.yaw = y; i.pitch = p; }, [yaw, pitch] as const);
+    }));
+    await sleep(100);
+  }
+}
+const scoresOf = (c: Client) => c.p.evaluate(() => (window as any).__fps.session()?.snap?.sc ?? null) as Promise<[number, number] | null>;
 
 async function main(): Promise<void> {
   const procs: ChildProcess[] = [];
   try { await fetch(`http://localhost:${PORT}/healthz`); throw new Error(`port ${PORT} is busy`); } catch (e) { if (String(e).includes('busy')) throw e; }
-  procs.push(spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), MATCH_COUNTDOWN_MS: '1500', MATCH_DURATION_MS: '150000', MATCH_SCORE_TO_WIN: '40' }, stdio: 'ignore' }));
+  procs.push(spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), MATCH_COUNTDOWN_MS: '1500', MATCH_DURATION_MS: '270000', MATCH_SCORE_TO_WIN: '40' }, stdio: 'ignore' }));
   if (!(await waitHttp(SITE, 1500))) procs.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', '4173', '--strictPort'], { cwd: ROOT, stdio: 'ignore' }));
   if (!(await waitHttp(`http://localhost:${PORT}/healthz`))) throw new Error('server did not start');
   await waitHttp(SITE);
@@ -176,6 +221,37 @@ async function main(): Promise<void> {
       check(`${map}: no device left with held input`, after.every((a) => a.held === 0), after.map((a) => a.held));
 
       if (mi === 0) {
+        // Combat until the server has scored eliminations (desktop by keyboard, Android by touch).
+        await desktop.p.mouse.click(640, 360); await sleep(400);
+        await desktop.p.keyboard.down('KeyW'); await desktop.p.keyboard.down('KeyF');
+        const vp = DEVICES.android.viewport;
+        const thr = await center(android.p, '#ft-throw');
+        const stick = { x: vp.width * 0.13, y: vp.height * 0.74, id: 11 };
+        await T(android, 'touchStart', [stick]);
+        await T(android, 'touchMove', [{ ...stick, y: stick.y - 45 }]);
+        await T(android, 'touchStart', [{ ...stick, y: stick.y - 45 }, { ...thr, id: 12 }]);
+        const t0 = Date.now();
+        const hits0 = await Promise.all([desktop, android].map((c) => c.p.evaluate(() => (window as any).__fps.engine().stats.get((window as any).__fps.session().id)?.k ?? 0)));
+        const killsNow = () => Promise.all([desktop, android].map((c) => c.p.evaluate(() => (window as any).__fps.engine().stats.get((window as any).__fps.session().id)?.k ?? 0)));
+        // Until BOTH attackers (keyboard and touch) have scored at least once.
+        await pilot([desktop, android], map, async () => { const k = await killsNow(); return k[0]! - hits0[0]! >= 1 && k[1]! - hits0[1]! >= 1; }, 150000);
+        let sc = await scoresOf(desktop);
+        await T(android, 'touchEnd', [{ ...stick, y: stick.y - 45 }, { ...thr, id: 12 }]);
+        await desktop.p.keyboard.up('KeyF'); await desktop.p.keyboard.up('KeyW');
+        await sleep(1500); // let the last snapshots arrive everywhere
+        const all4 = await Promise.all(all.map(scoresOf));
+        const stats = await Promise.all(all.map((c) => c.p.evaluate(() => { const e = (window as any).__fps.engine(); return [...(e?.stats ?? new Map()).entries()].map(([id, v]: any) => `${id}:${v.k ?? v.kills ?? 0}/${v.d ?? v.deaths ?? 0}`).sort().join(' '); })));
+        sc = await scoresOf(desktop);
+        const kills = await Promise.all([desktop, android].map((c) => c.p.evaluate(() => (window as any).__fps.engine().stats.get((window as any).__fps.session().id)?.k ?? 0)));
+        check('combat: the server scored real eliminations (non-zero score) within 150 s', !!sc && sc[0] + sc[1] >= 1, { scores: sc, seconds: Math.round((Date.now() - t0) / 1000) });
+        check('combat: both input types eliminated someone: the desktop by keyboard (W + F), the Android phone by touch (stick + Throw)', kills[0]! - hits0[0]! >= 1 && kills[1]! - hits0[1]! >= 1, { desktop: kills[0]! - hits0[0]!, android: kills[1]! - hits0[1]! });
+        check('combat: all four devices show the same non-null score and the same per-player eliminations', all4.every((x) => !!x && JSON.stringify(x) === JSON.stringify(all4[0])) && stats.every((x) => x === stats[0]) && stats[0] !== '', { scores: all4, stats });
+        await desktop.p.screenshot({ path: path.join(OUT, 'desktop-combat.png') });
+        await android.p.screenshot({ path: path.join(OUT, 'android-combat.png') });
+      }
+
+
+      if (mi === 0) {
         await iphone.p.screenshot({ path: path.join(OUT, 'iphone-match.png') });
         await ipad.p.screenshot({ path: path.join(OUT, 'ipad-match.png') });
         // iPad: a keyboard and mouse connected mid-match (Magic Keyboard), then back to touch.
@@ -189,13 +265,21 @@ async function main(): Promise<void> {
         for (let i = 0; i < 3 && !(await ipad.p.evaluate(() => (window as any).__fps.input().locked || (window as any).__fps.input().fallback)); i++) { await ipad.p.mouse.click(640, 410); await sleep(1700); }
         ip = await st(ipad);
         const mode = ip.locked ? 'pointer lock' : (await ipad.p.evaluate(() => (window as any).__fps.input().fallback)) ? 'drag-to-look fallback (lock refused by the emulator)' : 'none';
+        // The iPad was a target in the combat phase: wait until it is back in play.
+        await ipad.p.waitForFunction(() => (window as any).__fps.session().alive, undefined, { timeout: 15000 });
+        await sleep(2500);
         const b0 = await st(ipad);
         await ipad.p.mouse.move(640, 410); await ipad.p.mouse.down(); await ipad.p.mouse.move(700, 410, { steps: 6 }); await ipad.p.mouse.up();
         await ipad.p.keyboard.down('KeyF');
-        for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) { await ipad.p.keyboard.down(k); await sleep(450); await ipad.p.keyboard.up(k); } // any direction: spawn walls block some
+        let far = 0; // furthest point reached (W then S would otherwise cancel out)
+        for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) {
+          await ipad.p.keyboard.down(k);
+          for (let i = 0; i < 7; i++) { await sleep(100); const q = await st(ipad); far = Math.max(far, Math.hypot(q.x - b0.x, q.z - b0.z)); }
+          await ipad.p.keyboard.up(k);
+        }
         await ipad.p.keyboard.up('KeyF');
         ip = await st(ipad);
-        check(`iPad with keyboard and mouse (${mode}): moves with WASD, aims with the mouse, throws with F`, mode !== 'none' && Math.hypot(ip.x - b0.x, ip.z - b0.z) > 0.5 && ip.shots > b0.shots && Math.abs(ip.yaw - b0.yaw) > 0.02, { mode, moved: +Math.hypot(ip.x - b0.x, ip.z - b0.z).toFixed(2), threw: ip.shots - b0.shots, dYaw: +(ip.yaw - b0.yaw).toFixed(3) });
+        check(`iPad with keyboard and mouse (${mode}): moves with WASD, aims with the mouse, throws with F`, mode !== 'none' && far > 0.5 && ip.shots > b0.shots && Math.abs(ip.yaw - b0.yaw) > 0.02, { mode, furthest: +far.toFixed(2), threw: ip.shots - b0.shots, dYaw: +(ip.yaw - b0.yaw).toFixed(3) });
         // The keyboard is put away: a finger on the screen switches back to touch.
         await T(ipad, 'touchStart', [{ x: 700, y: 400, id: 9 }]); await T(ipad, 'touchEnd', [{ x: 700, y: 400, id: 9 }]);
         await sleep(500);
@@ -223,38 +307,8 @@ async function main(): Promise<void> {
         check('Android: music muted from the menu mid-match; back in play; at most one song plus a fade on every device', (am.bus ?? 1) < 0.001 && am.controls && snd.every((n) => n <= 2), { bus: am.bus, screen: am.screen, controls: am.controls, sounding: snd });
       }
 
-      if (mi === 0) {
-        // Combat until the server has scored eliminations (desktop by keyboard, Android by touch).
-        await desktop.p.mouse.click(640, 360); await sleep(400);
-        await startAim(desktop); await startAim(android);
-        await desktop.p.keyboard.down('KeyW'); await desktop.p.keyboard.down('KeyF');
-        const vp = DEVICES.android.viewport;
-        const thr = await center(android.p, '#ft-throw');
-        const stick = { x: vp.width * 0.13, y: vp.height * 0.74, id: 11 };
-        await T(android, 'touchStart', [stick]);
-        await T(android, 'touchMove', [{ ...stick, y: stick.y - 45 }]);
-        await T(android, 'touchStart', [{ ...stick, y: stick.y - 45 }, { ...thr, id: 12 }]);
-        const t0 = Date.now();
-        let sc: [number, number] | null = [0, 0];
-        while (Date.now() - t0 < 90000) {
-          sc = await scoresOf(desktop);
-          if (sc && sc[0] + sc[1] >= 3) break;
-          await sleep(500);
-        }
-        await T(android, 'touchEnd', [{ ...stick, y: stick.y - 45 }, { ...thr, id: 12 }]);
-        await desktop.p.keyboard.up('KeyF'); await desktop.p.keyboard.up('KeyW');
-        await stopAim(desktop); await stopAim(android);
-        await sleep(1500); // let the last snapshots arrive everywhere
-        const all4 = await Promise.all(all.map(scoresOf));
-        const stats = await Promise.all(all.map((c) => c.p.evaluate(() => { const e = (window as any).__fps.engine(); return [...(e?.stats ?? new Map()).entries()].map(([id, v]: any) => `${id}:${v.k ?? v.kills ?? 0}/${v.d ?? v.deaths ?? 0}`).sort().join(' '); })));
-        check('combat: the server scored real eliminations (non-zero score) within 90 s', !!sc && sc[0] + sc[1] >= 1, { scores: sc, seconds: Math.round((Date.now() - t0) / 1000) });
-        check('combat: all four devices show the same score and the same per-player eliminations', all4.every((x) => JSON.stringify(x) === JSON.stringify(all4[0])) && stats.every((x) => x === stats[0]), { scores: all4, stats });
-        await desktop.p.screenshot({ path: path.join(OUT, 'desktop-combat.png') });
-        await android.p.screenshot({ path: path.join(OUT, 'android-combat.png') });
-      }
-
       // Play out; compare results on all four devices.
-      for (const c of all) await c.p.waitForFunction(() => (window as any).__fps.screen === 'results', undefined, { timeout: 240000 });
+      for (const c of all) await c.p.waitForFunction(() => (window as any).__fps.screen === 'results', undefined, { timeout: 330000 });
       const res = await Promise.all(all.map((c) => c.p.evaluate(() => ({ sol: document.getElementById('res-sol')!.textContent, luna: document.getElementById('res-luna')!.textContent, title: document.getElementById('res-title')!.textContent, rows: [...document.querySelectorAll('#res-table tr')].slice(1).map((r) => r.textContent).sort(), mine: document.querySelector('#res-myteam .tc-text')?.textContent }))));
       const same = res.every((r) => r.sol === res[0]!.sol && r.luna === res[0]!.luna && r.title === res[0]!.title && JSON.stringify(r.rows) === JSON.stringify(res[0]!.rows));
       check(`${map}: identical result, scores and per-player stats on all four devices; each shows its own team`, same && res.every((r, i) => r.mine === `YOUR TEAM: ${teams[i] === 0 ? 'SOL' : 'LUNA'}`), res.map((r) => `${r.sol}-${r.luna} ${r.mine}`));
@@ -272,7 +326,7 @@ async function main(): Promise<void> {
         check('rematch: all four straight back in, same teams', s.every((x, i) => x.team === teams[i]), s.map((x) => x.team));
         const rs = await Promise.all(all.map(scoresOf));
         check('rematch: the score resets to 0-0 on every device', rs.every((x) => !!x && x[0] === 0 && x[1] === 0), rs);
-        for (const c of all) await c.p.waitForFunction(() => (window as any).__fps.screen === 'results', undefined, { timeout: 240000 });
+        for (const c of all) await c.p.waitForFunction(() => (window as any).__fps.screen === 'results', undefined, { timeout: 330000 });
       }
     }
     // Everyone leaves from results; the room empties.

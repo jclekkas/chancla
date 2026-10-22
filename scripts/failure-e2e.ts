@@ -71,6 +71,19 @@ async function startPractice(page: Page): Promise<void> {
   await sleep(300);
 }
 
+const loseGl = (page: Page) => page.evaluate(() => {
+  const c = document.querySelector('#stage canvas') as HTMLCanvasElement;
+  const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGL2RenderingContext;
+  (window as any).__loseExt = gl.getExtension('WEBGL_lose_context');
+  (window as any).__loseExt.loseContext();
+});
+const restoreGl = (page: Page) => page.evaluate(() => (window as any).__loseExt.restoreContext());
+/** True if whatever is at the centre of the screen belongs to an overlay that blocks play. */
+const centreBlocked = (page: Page) => page.evaluate(() => {
+  const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+  return !!el?.closest('#scr-gfx, #scr-crash, #scr-diagbox');
+});
+
 async function main(): Promise<void> {
   const procs: ChildProcess[] = [];
   for (const port of [CLIENT_PORT, GAME_PORT]) {
@@ -125,6 +138,22 @@ async function main(): Promise<void> {
       const playing = await until(guest.page, "(window).__fps.session()?.phase === 'playing'", 15000);
       check('stall: two browsers in an online match', playing);
       await guest.page.click('#stage', { force: true }).catch(() => undefined);
+      // Online: graphics lost mid-match. The match is not paused (it can't be:
+      // others are playing), the screen says so, input is released, and
+      // server updates keep arriving.
+      await guest.page.keyboard.down('w');
+      const tl0 = await guest.page.evaluate(() => (window as any).__fps.session().snap?.tl ?? 0);
+      await loseGl(guest.page);
+      await sleep(1500);
+      const og = await st(guest.page);
+      const ogText = await guest.page.textContent('#gfx-body');
+      const tl1 = await guest.page.evaluate(() => (window as any).__fps.session().snap?.tl ?? 0);
+      check('online, graphics lost: says the match keeps going, does not pause it, releases input, updates keep arriving', og.gfx && /keeps going/.test(ogText ?? '') && !og.paused && og.held === 0 && og.conn === 'online' && tl1 !== tl0, { paused: og.paused, held: og.held, tl0, tl1 });
+      await guest.page.keyboard.up('w');
+      await restoreGl(guest.page);
+      await sleep(1200);
+      check('online, graphics restored: the notice is gone and nothing blocks the screen', !(await st(guest.page)).gfx && !(await centreBlocked(guest.page)));
+      await guest.page.click('#stage', { force: true }).catch(() => undefined);
       await guest.page.keyboard.down('w');
       proxy.stall();
       proxy.interrupt();
@@ -133,7 +162,10 @@ async function main(): Promise<void> {
       check('stall: "Reconnecting…" shows when the network drops', rec && /reconnect/i.test(s1.banner ?? ''), { banner: s1.banner });
       await sleep(9000); // the first reconnect attempt is hung by now
       proxy.unstall();
+      const tBack = Date.now();
+      await guest.page.evaluate(() => window.dispatchEvent(new Event('online'))); // what the browser fires when the network returns
       const back = await until(guest.page, "(window).__fps.session()?.state === 'online' && (window).__fps.inMatch", 20000);
+      check('stall: the browser\'s "online" signal retries at once instead of waiting out a hung attempt', back && Date.now() - tBack < 3000, { seconds: (Date.now() - tBack) / 1000 });
       await guest.page.keyboard.up('w');
       const s2 = await st(guest.page);
       check('stall: when the network returns the player is back in the same match (a hung attempt no longer blocks it)', back && s2.inMatch, { conn: s2.conn });
@@ -228,7 +260,7 @@ async function main(): Promise<void> {
       await page.click('#stage', { force: true }).catch(() => undefined);
       await sleep(500);
       const fps = await page.evaluate(() => (window as any).__fps.engine().fps);
-      check('context restored: the notice goes away, Resume returns to a drawing match', !s2.gfx && fps > 1, { fps });
+      check('context restored: the notice goes away, Resume returns to a drawing match, nothing blocks the screen', !s2.gfx && fps > 1 && !(await centreBlocked(page)) && (await st(page)).screen === 'none', { fps });
       await lose();
       await sleep(9000);
       const s3 = await st(page);
@@ -238,18 +270,63 @@ async function main(): Promise<void> {
     }
 
     // ------------------------------------------------------------------
+    // 6b. Graphics lost during a mission: it pauses, then Resume continues it.
+    {
+      const { ctx, page } = await newPage(browser);
+      await boot(page);
+      await page.click('#btn-campaign');
+      await page.click('.mcard[data-mission="ruleros"] button');
+      await page.click('#btn-mi-start');
+      await until(page, '(window).__fps.campaign().active', 20000);
+      await sleep(3000);
+      const rate = async () => { const a = await page.evaluate(() => (window as any).__fps.campaign().runtime.sim.state.timeMs); await sleep(2000); const b = await page.evaluate(() => (window as any).__fps.campaign().runtime.sim.state.timeMs); return { msPerS: Math.round((b - a) / 2), fps: Math.round(await page.evaluate(() => (window as any).__fps.engine().fps)) }; };
+      const before = await rate();
+      const t0 = await page.evaluate(() => (window as any).__fps.campaign().runtime.sim.state.timeMs);
+      await loseGl(page);
+      await sleep(2000);
+      const t1 = await page.evaluate(() => (window as any).__fps.campaign().runtime.sim.state.timeMs);
+      const text = await page.textContent('#gfx-body');
+      const sm = await st(page);
+      check('mission, graphics lost: the mission pauses (its clock stops) and the screen says so', sm.gfx && sm.screen === 'pause' && Math.abs(t1 - t0) < 200 && /paused/.test(text ?? ''), { clockAdvancedMs: t1 - t0 });
+      await restoreGl(page);
+      await sleep(1200);
+      await page.click('#btn-resume');
+      await page.click('#stage', { force: true }).catch(() => undefined);
+      const samples: number[] = [];
+      for (let i = 0; i < 6; i++) { await sleep(1000); samples.push(await page.evaluate(() => (window as any).__fps.campaign().runtime.sim.state.timeMs)); }
+      const t2 = samples.at(-1)!;
+      const gaps = await page.evaluate(() => (window as any).__fps.diagText().split('\n').filter((l: string) => / stall /.test(l)).slice(-3));
+      // The software renderer recompiles every shader after a restore (a stall of a few
+      // seconds here); the check is that the same mission then runs at full speed.
+      const after = await rate();
+      // Same speed as before the loss (this software renderer is slow in missions either way).
+      check('mission, graphics restored: Resume continues the same mission at the same speed as before', after.msPerS >= before.msPerS * 0.8 && after.msPerS > 0 && !(await st(page)).gfx, { before, after, stalls: gaps });
+      await ctx.close();
+    }
+
+    // ------------------------------------------------------------------
     // 7. Frames that keep throwing: the stopped-picture screen, diagnostics, a way back.
     {
       const { ctx, page } = await newPage(browser, { clipboard: true });
       await boot(page);
       await startPractice(page);
+      await page.keyboard.down('w');
+      await page.keyboard.down('f');
       await page.evaluate(() => {
         const e = (window as any).__fps.engine();
-        (window as any).__realFrame = e.frame;
-        e.frame = () => { throw new Error('injected render failure'); };
+        (window as any).__calls = 0;
+        e.frame = () => { (window as any).__calls++; throw new Error('injected render failure'); };
       });
       const shown = await until(page, "!document.getElementById('scr-crash').hidden", 5000);
-      check('frames keep failing: "The game stopped" screen appears (not a silent frozen picture)', shown);
+      const sc = await st(page);
+      check('frames keep failing: "The game stopped" screen appears, held keys are released', shown && sc.held === 0, { held: sc.held });
+      const c0 = await page.evaluate(() => (window as any).__calls);
+      await sleep(1500);
+      const c1 = await page.evaluate(() => (window as any).__calls);
+      check('frames keep failing: the failing work is halted (no endless error loop behind the screen)', c1 === c0, { callsDuring1_5s: c1 - c0 });
+      const body = await page.textContent('#crash-body');
+      check('"The game stopped" explains what going back or reloading costs', /ends the current match or mission/.test(body ?? '') && /kept/.test(body ?? ''));
+      await page.keyboard.up('w'); await page.keyboard.up('f');
       await page.screenshot({ path: path.join(OUT, 'game-stopped.png') });
       await page.click('#btn-crash-diag');
       await sleep(300);

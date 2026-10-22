@@ -2,7 +2,7 @@
 
 A friend's game froze once during play. Device, browser, mode and steps are unknown, so this is a credible intermittent report, not a reproduced bug. This page records what was checked, what was found and fixed, and how to capture evidence next time.
 
-**Status: the reported freeze has not been reproduced.** Four defects that produce a "frozen" experience were reproduced and fixed. Any of them could explain the report, and so could something not found yet. Passing tests do not prove the report is fixed.
+**Status: the friend's freeze has not been reproduced and remains unconfirmed.** Several defects that produce a "frozen" experience, or could lead to one on a phone, were reproduced and fixed (below). Any of them could explain the report, and so could something not found yet. Passing tests do not prove the report is fixed.
 
 ## If it happens again: copy diagnostics
 
@@ -36,18 +36,20 @@ The Classic Arcade has the same button in its pause menu and settings.
 | Code loading | **Defect 1:** if the engine chunk failed to download at startup, the page said the browser could not do 3D graphics, with no retry. **Defect 2:** if the mission chunk failed (a network blip, or a new deploy replacing the file), Start showed "The connection to the room ended", and pressing Start again could never work, because Chromium remembers a failed module import for the life of the page (measured). The background prefetch also raised an unhandled promise rejection. Fixed (below). |
 | Input | Already released on menu, rotate screen, visibility change, pointer-lock loss, touch cancel and rotation (covered by existing tests). Re-verified: backgrounding with W and D held leaves nothing held. |
 | Menus and overlays | Pointer-lock and overlay traps were fixed earlier (menu-access tests). Re-verified: 12 rapid Esc presses while a mission loads leave a playable state. |
-| Listeners and resources | One engine, one loop, one set of window listeners; mission cards are rebuilt (old listeners go with them); sessions clear their ping and attempt timers on close; the practice host clears its interval on dispose. Measured over a long session (below). |
+| Listeners and resources | One engine, one loop, one set of window listeners; mission cards are rebuilt (old listeners go with them); sessions clear their ping and attempt timers on close; the practice host clears its interval on dispose. **Defect (found by the soak test):** GPU memory grew without bound. Each match left the per-avatar geometry of every player behind (about 28 GPU buffers per practice match: skirt trim, apron, shawl, hair, hat parts), and each mission left its ricochet-surface texture and materials behind. Over 31 minutes the GPU geometry count went from 178 to 719 and textures from 21 to 32, and it would keep growing. On a phone, steadily growing GPU memory ends in the browser resetting the graphics (WebGL context loss: a frozen picture) or killing the tab. Fixed (below). |
 | Audio | Decoding is asynchronous (`decodeAudioData`) and off the main thread; no change. |
 | Main-thread stalls | Measured on the software renderer used for tests: about 2 s at first load and about 1 s at match start (shader compilation). They end on their own, but a slow phone could show a similar pause at match start. Now recorded in diagnostics as "main thread busy" / "no frame for". |
 
 ## Fixes
 
-1. **Connection attempts time out** (`src/net/session.ts`, `CONNECT_TIMEOUT_MS = 8000`). No welcome from the server within 8 s: the attempt is closed and handled as a normal drop. In a match, reconnect attempts continue with backoff until the server's 25 s grace period runs out, then "Connection lost" with Retry, Practice and Main menu. On a first connection the player is told the server is unreachable.
+1. **Connection attempts time out** (`src/net/session.ts`). No welcome within 8 s on a first connection, or 5 s on a reconnect attempt: the attempt is closed (its callbacks detached, so a late reply is ignored) and handled as a normal drop. In a match, attempts continue until the client deadline (2 s inside the server's 25 s grace period), then "Connection lost" with Retry, Practice and Main menu. On a first connection the player is told the server is unreachable. When the browser reports it is back online, or the page becomes visible again, a hung attempt is replaced at once instead of waiting out its timeout. A first version used 8 s for reconnects too; a real-server test then showed a network returning 19 s after a drop still lost the match (the attempt in flight was hung until after the deadline), which is why reconnects use 5 s.
 2. **"Graphics paused" screen** for WebGL context loss: explains what happened in plain words, pauses practice and missions (online keeps going for everyone else and says so), releases held input, and adds "Reloading usually fixes this" after 8 s. Disappears on restore.
-3. **"The game stopped" screen** when 30 frames in a row throw: Copy diagnostics, Back to the menu, Reload page. Every error is recorded in diagnostics and the console; nothing is swallowed.
+3. **"The game stopped" screen** when 30 frames in a row throw: Copy diagnostics, Back to the menu, Reload page, with a sentence saying both end the current match or mission and that campaign progress and settings are kept. The failing frame work is then halted (no endless error loop behind the screen) until the player goes back to the menu. Every error is recorded in diagnostics and the console; nothing is swallowed.
 4. **Load failures say what happened and offer Reload**: engine chunk at startup, and mission chunk at Start (progress is saved; the message says so). No unhandled rejection from the prefetch.
 5. **UI loop survives an exception** (scheduled first).
 6. **Diagnostics and Copy diagnostics** (`src/diag.ts`) in the shooter and the Arcade, with the build commit also shown at the bottom of Settings.
+7. **GPU memory no longer grows with every match and mission.** `Avatar.dispose()` now frees the geometry made for that avatar (shared geometry is marked and kept); `MissionView.dispose()` frees its texture and materials. Measured after the fix: 5 practice matches, 3 missions and 3 online lobbies in a row leave the counts flat (97-108 geometries, 15 textures) instead of +28 per match and +1 texture per mission.
+8. **Every Reload explains what it costs** (shooter screens, and the Arcade's graphics screen: "Reloading ends this run; your best scores and settings are kept").
 
 ## Tests
 

@@ -309,10 +309,11 @@
           <h2 id="mi-title"></h2>
           <p id="mi-premise"></p>
           <p class="mi-obj"><b data-t="camp.objective"></b> <span id="mi-objective"></span></p>
-          <div class="mi-how"><b data-t="mi.how"></b><ol id="mi-how"></ol><p class="note" data-t="mi.controls"></p></div>
+          <div class="mi-how"><b data-t="mi.how"></b><ol id="mi-how"></ol><p class="note" id="mi-controls"></p></div>
           <p class="note" id="mi-est"></p>
           <ul class="ch-list" id="mi-ch"></ul>
           <p class="note" id="mi-status" role="status"></p>
+          <button type="button" class="btn" id="btn-mi-reload" data-t="crash.reload" hidden></button>
           <div class="actions">
             <button type="button" class="btn primary" id="btn-mi-start" data-t="mi.start"></button>
             <button type="button" class="btn ghost" id="btn-mi-back" data-t="camp.back"></button>
@@ -370,6 +371,7 @@
           <button type="button" class="btn" id="btn-pause-restart" data-t="pause.restart" hidden></button>
           <button type="button" class="btn" id="btn-pause-maps" data-t="pause.maps" hidden></button>
           <button type="button" class="btn" id="btn-pause-select" data-t="pause.select" hidden></button>
+          <button type="button" class="btn ghost" id="btn-pause-diag" data-t="diag.copy"></button>
           <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.home"></button>
         </div>
       </section>
@@ -415,6 +417,7 @@
           <p class="note" data-t="settings.voiceNote"></p>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
+          <p class="note build-row"><span id="build-id"></span> <button type="button" class="btn ghost small" id="btn-settings-diag" data-t="diag.copy"></button></p>
         </div>
       </section>
 
@@ -463,6 +466,42 @@
         </div>
       </section>
 
+      <!-- The picture stopped (frames keep failing) -->
+      <section id="scr-crash" class="screen overlay sys" hidden role="alertdialog" aria-modal="true" aria-labelledby="crash-title" aria-describedby="crash-body">
+        <div class="panel">
+          <h2 id="crash-title" data-t="crash.title"></h2>
+          <p id="crash-body" data-t="crash.body"></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-crash-diag" data-t="diag.copy"></button>
+            <button type="button" class="btn" id="btn-crash-home" data-t="crash.home"></button>
+            <button type="button" class="btn ghost" id="btn-crash-reload" data-t="crash.reload"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- WebGL context lost -->
+      <section id="scr-gfx" class="screen overlay sys" hidden role="alertdialog" aria-modal="true" aria-labelledby="gfx-title" aria-describedby="gfx-body">
+        <div class="panel">
+          <h2 id="gfx-title" data-t="gfx.title"></h2>
+          <p id="gfx-body"></p>
+          <p class="note" id="gfx-slow" data-t="gfx.slow" hidden></p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-gfx-reload" data-t="crash.reload"></button>
+            <button type="button" class="btn ghost" id="btn-gfx-diag" data-t="diag.copy"></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Copy fallback: the text, selectable -->
+      <section id="scr-diagbox" class="screen overlay sys" hidden role="dialog" aria-modal="true" aria-labelledby="diagbox-title">
+        <div class="panel wide">
+          <h2 id="diagbox-title" data-t="diag.copy"></h2>
+          <p class="note" data-t="diag.manual"></p>
+          <textarea id="diagbox-text" class="diag-text" readonly rows="12" aria-labelledby="diagbox-title"></textarea>
+          <button type="button" class="btn primary" id="btn-diagbox-close" data-t="settings.close"></button>
+        </div>
+      </section>
+
       <!-- Connection lost -->
       <section id="scr-lost" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="lost-title" aria-describedby="lost-body">
         <div class="panel">
@@ -472,6 +511,7 @@
             <button type="button" class="btn primary" id="btn-lost-retry" data-t="lost.retry"></button>
             <button type="button" class="btn" id="btn-lost-practice" data-t="lost.practice"></button>
             <button type="button" class="btn ghost" id="btn-lost-title" data-t="lost.title2"></button>
+            <button type="button" class="btn ghost" id="btn-lost-diag" data-t="diag.copy"></button>
           </div>
         </div>
       </section>

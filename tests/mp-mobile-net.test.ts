@@ -49,6 +49,57 @@ describe('mobile connection lifecycle', () => {
     phone.close(); desk.close();
   }, 30000);
 
+  // Regression: a reconnect attempt that never opens (the network is gone
+  // but the socket is not refused) used to leave "Reconnecting…" up forever:
+  // the client only moved on when a close event arrived, and Chromium sends
+  // none for over a minute. Attempts now time out and retry.
+  it('a reconnect attempt that hangs is abandoned and retried; the player gets back in', async () => {
+    const phone = viaProxy(), desk = direct();
+    phone.connect('Phone'); desk.connect('Desk');
+    await until(() => phone.state === 'online' && desk.state === 'online', 5000, 'online');
+    desk.send({ t: 'create' });
+    await until(() => !!desk.room, 5000, 'room');
+    phone.send({ t: 'join', code: desk.room!.code });
+    await until(() => !!phone.room && desk.room!.members.length === 2, 5000, 'joined');
+    const id = phone.id, team = phone.team;
+    proxy.stall();
+    proxy.interrupt();
+    await until(() => phone.state === 'reconnecting', 5000, 'reconnecting');
+    await new Promise((r) => setTimeout(r, 7000)); // the first attempt is hung by now
+    proxy.unstall();
+    await until(() => phone.state === 'online' && !!phone.room, 15000, 'back online after the network returned');
+    expect(phone.id).toBe(id);
+    expect(phone.team).toBe(team);
+    phone.close(); desk.close();
+  }, 40000);
+
+  it('if the network never returns, the player is told the connection was lost (not stuck reconnecting)', async () => {
+    const phone = viaProxy(), desk = direct();
+    const details: string[] = [];
+    (phone as unknown as { handlers: { state: (s: string, d?: string) => void } }).handlers.state = (s, d) => { if (s === 'lost') details.push(d ?? ''); };
+    phone.connect('Phone'); desk.connect('Desk');
+    await until(() => phone.state === 'online' && desk.state === 'online', 5000, 'online');
+    desk.send({ t: 'create' });
+    await until(() => !!desk.room, 5000, 'room');
+    phone.send({ t: 'join', code: desk.room!.code });
+    await until(() => !!phone.room, 5000, 'joined');
+    proxy.stall();
+    proxy.interrupt();
+    await until(() => phone.state === 'lost', 40000, 'gave up within the grace period');
+    expect(details).toEqual(['timeout']);
+    proxy.unstall();
+    phone.close(); desk.close();
+  }, 50000);
+
+  it('a first connection that hangs reports the server as unreachable', async () => {
+    proxy.stall();
+    const s = viaProxy();
+    s.connect('Hang');
+    await until(() => s.state === 'lost', 15000, 'gave up');
+    proxy.unstall();
+    s.close();
+  }, 20000);
+
   it('checkAlive() on return to the page only acts after real silence', async () => {
     const s = direct();
     s.connect('Fresh');

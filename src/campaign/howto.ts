@@ -8,7 +8,16 @@ import type { MHint } from '../../shared/campaign/hints';
 import type { ActorSpec, PickupSpec } from '../../shared/campaign/types';
 import { t, hasKey, type Key } from '../fps/strings';
 
-const tk = (k: string, vars?: Record<string, string | number>): string | null => (hasKey(k) ? t(k as Key, vars) : null);
+let touch = false;
+/** The player is on touch controls: name the on-screen buttons, not keys. */
+export function setHowTouch(on: boolean): void { touch = on; }
+export function howTouch(): boolean { return touch; }
+
+/** A string, preferring its touch wording while touch controls are in use. */
+const tk = (k: string, vars?: Record<string, string | number>): string | null => {
+  if (touch && hasKey(`${k}.touch`)) return t(`${k}.touch` as Key, vars);
+  return hasKey(k) ? t(k as Key, vars) : null;
+};
 
 /** One instruction for the current focus hint, or null when there is none. */
 export function howText(sim: MissionSim, h: MHint | null): string | null {
@@ -43,7 +52,7 @@ export function howText(sim: MissionSim, h: MHint | null): string | null {
 
   if (h.kind === 'shoot' && h.open === false) return tk(`how.${m}.${h.id}.closed`) ?? t('how.wait');
   return tk(`how.${m}.${h.id}.${h.kind}`) ?? tk(`how.${m}.${h.id}`)
-    ?? t(h.kind === 'go' ? 'how.go' : h.kind === 'stay' ? 'how.stay' : h.kind === 'wait' ? 'how.wait' : h.need === 'bank' ? 'tip.bank' : h.need === 'heavy' ? 'tip.heavy' : 'how.shoot');
+    ?? tk(h.kind === 'go' ? 'how.go' : h.kind === 'stay' ? 'how.stay' : h.kind === 'wait' ? 'how.wait' : h.need === 'bank' ? 'tip.bank' : h.need === 'heavy' ? 'tip.heavy' : 'how.shoot')!;
 }
 
 /** Why a throw that connected did not count, in words. */

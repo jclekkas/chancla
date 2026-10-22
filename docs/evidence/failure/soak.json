@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-22T19:32:05.028Z",
+  "environment": "Chromium 141 headless (SwiftShader), Linux container, local game server (25 s matches)",
+  "minutes": 3.5,
+  "cycles": 1,
+  "matches": 4,
+  "problems": [],
+  "pageErrors": [],
+  "serverAtEnd": {
+    "ok": true,
+    "rooms": 0,
+    "players": 0,
+    "maxTickMs": 0,
+    "uptimeS": 211
+  },
+  "growth": {
+    "heapMB": 0,
+    "geometries": 0,
+    "textures": 0,
+    "domNodes": 0
+  },
+  "samples": [
+    {
+      "cycle": 0,
+      "minutes": 0,
+      "heapMB": 10.5,
+      "geometries": 93,
+      "textures": 10,
+      "domNodes": 567,
+      "errors": 0,
+      "stalls": 2
+    },
+    {
+      "cycle": 1,
+      "minutes": 3,
+      "heapMB": 12.7,
+      "geometries": 178,
+      "textures": 21,
+      "domNodes": 668,
+      "errors": 0,
+      "stalls": 10,
+      "serverRooms": 0,
+      "serverPlayers": 0
+    }
+  ]
+}

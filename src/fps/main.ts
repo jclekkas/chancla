@@ -5,6 +5,8 @@
 //
 // Menus are plain DOM and work without WebGL. The 3D engine loads after a
 // WebGL check; if that fails the title explains why and play is disabled.
+import { setHowTouch } from '../campaign/howto';
+import { installDiag, diagProvide, diagLog, diagError, diagCopy, diagText, diagBuild } from '../diag';
 import './fps.css';
 import { SafeStorage } from '../persistence/storage';
 import { audio } from '../audio/audio';
@@ -149,7 +151,16 @@ function top(): ScreenId {
   return overlayStack[overlayStack.length - 1] ?? base;
 }
 
+let lastLoggedView = '';
+function modeName(): string {
+  if (campaign?.active) return `campaign ${campaign.missionId}`;
+  if (inMatch) return practice ? 'practice' : 'online';
+  return 'menu';
+}
+
 function render(): void {
+  const view = `${modeName()} / ${[base, ...overlayStack].join('>')}`;
+  if (view !== lastLoggedView) { lastLoggedView = view; diagLog('screen', view); }
   const visible = new Set<ScreenId>([base, ...overlayStack]);
   for (const s of SCREENS) {
     const el = $(`scr-${s}`);
@@ -230,6 +241,7 @@ function rotateBlocked(): boolean {
 
 /** Switches between touch and mouse/keyboard play, from what the player actually used. */
 function setTouchMode(on: boolean): void {
+  setHowTouch(on);
   if (on === touchMode) return;
   touchMode = on;
   if (input) input.touchMode = on;
@@ -282,6 +294,23 @@ function webglAvailable(): boolean {
 }
 
 async function boot(): Promise<void> {
+  installDiag('shooter');
+  diagProvide('game', () => ({
+    mode: modeName(),
+    screen: [base, ...overlayStack].join('>'),
+    map: lastRoom?.map ?? engine?.diag().map,
+    phase: session?.phase,
+    conn: session?.state ?? 'none',
+    msSinceServerMsg: session?.msSinceMsg ?? null,
+    rttMs: session ? Math.round(session.rtt) : null,
+    players: lastRoom?.members.length,
+    input: touchMode ? 'touch' : input?.locked ? 'mouse (locked)' : input?.fallback ? 'mouse (no lock)' : 'mouse',
+    inputEnabled: input?.enabled ?? null,
+    held: input?.heldCount ?? null,
+    lang: getLang(),
+  }));
+  diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
+  diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({
     engine: () => engine,
     input: () => input,
@@ -300,6 +329,9 @@ async function boot(): Promise<void> {
     baseUrl: BASE,
   }, storage);
   const uiTick = () => {
+    // Scheduled first: one exception here used to end this loop for good
+    // (dialogue, victory controls and the touch cooldown ring stopped).
+    requestAnimationFrame(uiTick);
     campaign.tick();
     if (!campaign.active) dialogue.update();
     const s = session;
@@ -307,7 +339,6 @@ async function boot(): Promise<void> {
       const def = WEAPONS[s.weapon];
       touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
     }
-    requestAnimationFrame(uiTick);
   };
   requestAnimationFrame(uiTick);
   music.setPrefs(loadMusicPrefs());
@@ -351,12 +382,17 @@ async function boot(): Promise<void> {
       bindInput(input);
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
-      engine.onContextLost = (lost) => { if (lost) toast(t('status.webgl'), 5000); };
+      engine.onContextLost = (lost) => graphicsLost(lost);
+      engine.onFatal = () => showCrash();
       engine.start();
     } catch (err) {
       console.error(err);
+      diagError('boot', err);
       engine = null;
-      showNoWebgl();
+      // A chunk that failed to download is not a graphics problem: say so,
+      // and offer the reload that fixes it.
+      if (isLoadError(err)) showLoadFailed();
+      else showNoWebgl();
     }
   } else {
     showNoWebgl();
@@ -399,6 +435,74 @@ function needsComputer(): boolean {
   if (!touchOnly) return false;
   toast(t('mobile.pcOnlyToast'), 4200);
   return true;
+}
+
+// ---------------------------------------------------------------------
+// Diagnostics and recovery
+
+/** A dynamic import or module script that failed to download. */
+function isLoadError(err: unknown): boolean {
+  return /dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to fetch/i.test(String((err as Error)?.message ?? err));
+}
+
+function showLoadFailed(): void {
+  const el = $('webgl-status');
+  el.hidden = false;
+  el.textContent = t('load.failed');
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn small';
+  b.textContent = t('crash.reload');
+  b.addEventListener('click', () => location.reload());
+  el.append(' ', b);
+  ($('btn-online') as HTMLButtonElement).disabled = true;
+  ($('btn-practice') as HTMLButtonElement).disabled = true;
+}
+
+async function copyDiagnostics(): Promise<void> {
+  if (await diagCopy()) { toast(t('diag.copied'), 3500); return; }
+  const ta = $('diagbox-text') as HTMLTextAreaElement;
+  ta.value = diagText();
+  $('scr-diagbox').hidden = false;
+  ta.focus();
+  ta.select();
+}
+
+let gfxSlowTimer: ReturnType<typeof setTimeout> | null = null;
+/** WebGL context lost: say what happened, pause solo modes, wait for it to come back. */
+function graphicsLost(lost: boolean): void {
+  if (gfxSlowTimer) clearTimeout(gfxSlowTimer);
+  gfxSlowTimer = null;
+  if (lost) {
+    input?.release();
+    input?.exitLock();
+    if (inMatch && base === 'none' && (practice || campaign.active)) openPause();
+    $('gfx-body').textContent = t(inMatch && !practice && !campaign.active ? 'gfx.bodyOnline' : 'gfx.bodySolo');
+    $('gfx-slow').hidden = true;
+    gfxSlowTimer = setTimeout(() => ($('gfx-slow').hidden = false), 8000);
+  }
+  $('scr-gfx').hidden = !lost;
+  render();
+}
+
+let crashShown = false;
+/** Frames keep failing: the picture has stopped. Never hidden; the player chooses. */
+function showCrash(): void {
+  if (crashShown) return;
+  crashShown = true;
+  diagLog('screen', 'game stopped (frames keep failing)');
+  input?.release();
+  input?.exitLock();
+  $('scr-crash').hidden = false;
+  ($('btn-crash-diag') as HTMLButtonElement).focus();
+}
+
+function crashToMenu(): void {
+  crashShown = false;
+  $('scr-crash').hidden = true;
+  if (campaign.active) campaign.toSelect();
+  endSession('title');
+  engine?.clearFatal();
 }
 
 function showNoWebgl(): void {
@@ -559,6 +663,7 @@ function endSession(to: ScreenId | null): void {
 }
 
 function onState(s: ConnState, detail?: string): void {
+  diagLog('net', `connection ${s}${detail ? ` (${detail})` : ''}`);
   if (s === 'online') { hud.connection(null); $('online-err').textContent = ''; return; }
   if (s === 'reconnecting') { hud.connection(t('hud.reconnecting')); setLobbyStatusOverride(t('hud.reconnecting')); return; }
   if (s === 'lost') {
@@ -596,6 +701,7 @@ function onError(code: ErrorCode): void {
 
 function onRoom(room: RoomView): void {
   const prev = lastRoom;
+  if (prev?.phase !== room.phase || prev?.map !== room.map) diagLog('match', `room ${room.phase}, map ${room.map}, ${room.members.length} players${room.practice ? ' (practice)' : ''}`);
   lastRoom = room;
   if (!room.practice) lastCode = room.code;
   if (room.phase === 'countdown' || room.phase === 'playing') {
@@ -776,6 +882,7 @@ function applyInputSettings(): void {
 }
 
 function renderSettings(): void {
+  $('build-id').textContent = t('diag.build', { id: diagBuild() });
   renderSoundStatus();
   soundtrack?.render();
   const v = store.value;
@@ -1068,6 +1175,12 @@ function bindUi(): void {
   on('btn-res-leave', () => endSession('title'));
 
   on('btn-resume', () => resume(true));
+  for (const id of ['btn-pause-diag', 'btn-settings-diag', 'btn-lost-diag', 'btn-crash-diag', 'btn-gfx-diag']) on(id, () => void copyDiagnostics());
+  on('btn-diagbox-close', () => ($('scr-diagbox').hidden = true));
+  on('btn-crash-home', crashToMenu);
+  on('btn-crash-reload', () => location.reload());
+  on('btn-gfx-reload', () => location.reload());
+  on('btn-mi-reload', () => location.reload());
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
   on('btn-fullscreen', toggleFullscreen);
@@ -1226,6 +1339,7 @@ function debugApi() {
     dialogue: () => dialogue,
     music: () => music,
     audio: () => audio,
+    diagText: () => diagText(),
   };
 }
 

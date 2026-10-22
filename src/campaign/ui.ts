@@ -6,6 +6,8 @@ import type { MissionDef } from '../../shared/campaign/types';
 import type { MissionResult } from '../../shared/campaign/mission';
 import { CampaignProgress } from './progress';
 import { t, hasKey, type Key } from '../fps/strings';
+import { diagError, diagLog } from '../diag';
+import { howTouch } from './howto';
 import { rosaSVG, svgUrl } from '../ui/art';
 import { audio } from '../audio/audio';
 import { music } from '../audio/music';
@@ -49,6 +51,9 @@ export class CampaignUi {
   }
 
   get active(): boolean { return !!this.runtime; }
+
+  /** The mission being played or briefed (diagnostics). */
+  get missionId(): string | null { return this.current?.id ?? null; }
 
   // ---------------------------------------------------- mission select
 
@@ -103,6 +108,7 @@ export class CampaignUi {
     const steps: HTMLElement[] = [];
     for (let k = 1; hasKey(`${m.id}.how${k}`); k++) { const li = document.createElement('li'); li.textContent = t(`${m.id}.how${k}` as Key); steps.push(li); }
     $('mi-how').replaceChildren(...steps);
+    $('mi-controls').textContent = t(howTouch() ? 'mi.controls.touch' : 'mi.controls');
     $('mi-est').textContent = t('mi.est', { a: m.minutes[0], b: m.minutes[1] });
     this.renderChallenges($('mi-ch'), m, this.progress.get(m.id).challenges, []);
     $('mi-status').textContent = '';
@@ -110,8 +116,10 @@ export class CampaignUi {
     this.ctx.show('mintro');
     // Start reading from the title, not wherever focusing Start scrolled to.
     document.querySelector('#scr-mintro .panel')?.scrollTo(0, 0);
+    ($('btn-mi-reload') as HTMLButtonElement).hidden = true;
     // Warm the mission code, its music and its voice lines while the player reads.
-    this.loadingMod ??= import('./runtime');
+    // A failure here is reported when Start is pressed, not as an unhandled error.
+    if (!this.loadingMod) { const p = import('./runtime'); p.catch((err) => diagError('mission prefetch', err)); this.loadingMod = p; }
     music.preload(m.music);
     void this.ctx.dialogue.loadManifest(this.ctx.baseUrl).then(() => this.ctx.dialogue.preload(linesFor(m)));
   }
@@ -135,17 +143,22 @@ export class CampaignUi {
     let mod: typeof import('./runtime');
     try {
       mod = await (this.loadingMod ??= import('./runtime'));
-    } catch {
-      // A failed chunk load leaves the menus usable; offer to try again.
+    } catch (err) {
+      // The browser remembers a failed module download for the life of the
+      // page, so trying Start again can never work (measured in Chromium).
+      // Say what happened and offer the reload that does; progress is saved.
+      diagError('mission load', err);
       this.loadingMod = null;
-      $('mi-status').textContent = t('lost.generic');
+      $('mi-status').textContent = t('mi.loadFailed');
       ($('btn-mi-start') as HTMLButtonElement).disabled = false;
+      ($('btn-mi-reload') as HTMLButtonElement).hidden = false;
       return;
     }
     if (this.ctx.dialogue.voiceFailed) this.ctx.toast(t('mi.voiceFail'), 4000);
     this.stopRuntime();
     this.current = m;
     this.progress.started(m.id);
+    diagLog('match', `mission ${m.id} started`);
     const rt = new mod.MissionRuntime(engine, m, this.ctx.dialogue, {
       complete: (res) => this.finished(res),
       ko: (on) => { $('m-ko').hidden = !on; },
@@ -208,6 +221,7 @@ export class CampaignUi {
 
   private finished(res: MissionResult): void {
     const m = this.current!;
+    diagLog('match', `mission ${m.id} finished`);
     const { newBest, newChallenges } = this.progress.record(m.id, res);
     this.stopRuntime();
     this.ctx.setActive(false);

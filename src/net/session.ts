@@ -78,6 +78,8 @@ export interface SessionEvents {
 
 const DT = 1 / NET.tickRate;
 const DT_MS = 1000 / NET.tickRate;
+// How long a connection attempt may take to be welcomed before it is dropped.
+export const CONNECT_TIMEOUT_MS = 8000;
 
 interface SnapRecord {
   st: number;
@@ -111,6 +113,7 @@ export class GameSession {
   private reconnectAttempts = 0;
   private reconnectDeadline = 0;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private attemptTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private pendingJoin: ClientMsg | null = null;
 
@@ -189,10 +192,29 @@ export class GameSession {
     t.onOpen = () => t.send({ t: 'hello', v: PROTOCOL_VERSION, name: this.name, resume: this.resume || undefined });
     t.onMessage = (m) => this.receive(m);
     t.onClose = (code) => this.handleClose(t, code);
+    // A socket can sit in CONNECTING for minutes with no event at all when
+    // the network is gone but nothing refuses the connection (Chromium: over
+    // a minute, measured). Without this the player waits on "Reconnecting…"
+    // forever. No welcome in time: drop the attempt and take the normal path.
+    this.clearAttempt();
+    this.attemptTimer = setTimeout(() => {
+      this.attemptTimer = null;
+      if (this.transport !== t) return;
+      t.onClose = null;
+      t.onMessage = null;
+      t.close();
+      this.handleClose(t, 4001);
+    }, CONNECT_TIMEOUT_MS);
+  }
+
+  private clearAttempt(): void {
+    if (this.attemptTimer) clearTimeout(this.attemptTimer);
+    this.attemptTimer = null;
   }
 
   private handleClose(t: Transport, code: number): void {
     if (t !== this.transport) return;
+    this.clearAttempt();
     this.stopPing();
     this.transport = null;
     if (this.intentionalClose || this.state === 'lost' || this.state === 'closed') {
@@ -217,6 +239,7 @@ export class GameSession {
     this.lastMsgAt = this.now();
     switch (m.t) {
       case 'welcome': {
+        this.clearAttempt();
         const wasRoom = this.room;
         this.id = m.id;
         this.resume = m.resume;
@@ -263,6 +286,9 @@ export class GameSession {
 
   /** When the last message of any kind arrived (pongs come every 2 s). */
   private lastMsgAt = 0;
+
+  /** Milliseconds since the server last said anything (diagnostics). */
+  get msSinceMsg(): number | null { return this.lastMsgAt ? Math.round(this.now() - this.lastMsgAt) : null; }
 
   /**
    * A phone can freeze a backgrounded page and leave its socket open but
@@ -315,6 +341,7 @@ export class GameSession {
   close(): void {
     this.intentionalClose = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.clearAttempt();
     this.stopPing();
     this.transport?.close();
     this.transport = null;

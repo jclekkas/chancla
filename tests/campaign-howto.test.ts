@@ -7,7 +7,7 @@ import { MissionSim, type MEvent } from '../shared/campaign/mission';
 import { MissionBot } from '../shared/campaign/bot';
 import { MISSIONS } from '../shared/campaign/missions';
 import { missionHints } from '../shared/campaign/hints';
-import { howText, rejectText } from '../src/campaign/howto';
+import { howText, rejectText, setHowTouch } from '../src/campaign/howto';
 import { STRINGS, t } from '../src/fps/strings';
 
 const LIMIT = 10 * 60 * 1000;
@@ -51,6 +51,30 @@ describe('campaign how-to instructions', () => {
       }
     });
   }
+
+  // A touchscreen laptop or an iPad with a keyboard can start a mission and
+  // then play it by touch: instructions must name the on-screen buttons.
+  it('on touch controls, no instruction mentions keys or the mouse', () => {
+    setHowTouch(true);
+    try {
+      const keyish = /\bpress\b|\bclick\b|\(2\)|\bF\b/i;
+      const bad = new Set<string>();
+      for (const def of MISSIONS) {
+        const sim = new MissionSim(def, 1);
+        const bot = new MissionBot({ seed: 5, aimErrorRad: 0.06 });
+        let tick = 0;
+        while (!sim.state.complete && sim.state.timeMs < LIMIT) {
+          sim.step(bot.think(sim));
+          for (const ev of sim.drainEvents() as MEvent[]) if (ev.k === 'reject') { const r = rejectText(ev.why, ev.id); if (r && keyish.test(r)) bad.add(r); }
+          if (++tick % 12) continue;
+          for (const h of missionHints(sim)) { const x = howText(sim, h); if (x && keyish.test(x)) bad.add(x); }
+        }
+      }
+      for (const why of ['bank', 'heavy', 'timing', 'dodge', 'armor']) { const r = rejectText(why, 'x'); if (r && keyish.test(r)) bad.add(r); }
+      expect([...bad]).toEqual([]);
+      expect(t('mi.controls.touch')).not.toMatch(keyish);
+    } finally { setHowTouch(false); }
+  }, 120000);
 
   it('every how-to line is translated (Spanish differs from English)', () => {
     const keys = Object.keys(STRINGS.en).filter((k) => /^how\.|\.how\d|^mi\.(how|controls)$/.test(k)) as (keyof typeof STRINGS.en)[];

@@ -20,6 +20,7 @@ import type { Hud } from './hud';
 import type { FpsInput } from './input';
 import type { FpsSettings, Quality } from './settings';
 import { t } from './strings';
+import { diagError, diagLog, diagVisibleFor } from '../diag';
 
 const DT = 1 / NET.tickRate;
 const PIXEL_CAP: Record<Quality, number> = { low: 1, medium: 1.5, high: 2 };
@@ -117,25 +118,62 @@ export class Engine {
     this.vmScene.add(vmSun, this.vm.root);
 
     const canvas = this.renderer.domElement;
-    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; this.onContextLost?.(true); });
-    canvas.addEventListener('webglcontextrestored', () => { this.contextLost = false; this.onContextLost?.(false); });
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; diagLog('gfx', 'WebGL context lost'); this.onContextLost?.(true); });
+    canvas.addEventListener('webglcontextrestored', () => { this.contextLost = false; diagLog('gfx', 'WebGL context restored'); this.onContextLost?.(false); });
     this.resize();
   }
 
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
 
+  get isContextLost(): boolean { return this.contextLost; }
+
+  /** For the diagnostics report. */
+  diag(): Record<string, unknown> {
+    const now = performance.now();
+    const m = this.renderer.info.memory;
+    return {
+      mode: this.mode, map: this.map.id, msSinceFrame: this.lastGoodFrameAt ? Math.round(now - this.lastGoodFrameAt) : null, frameErrors: this.frameErrors,
+      fps: Math.round(this.fps), contextLost: this.contextLost, quality: this.quality, drawCalls: this.drawCalls, geometries: m.geometries, textures: m.textures, paused: this.paused,
+    };
+  }
+
   get drawCalls(): number { return this.renderer.info.render.calls; }
+
+  /** When the last frame completed without an error (diagnostics). */
+  lastGoodFrameAt = 0;
+  /** Frames in a row that threw. */
+  frameErrors = 0;
+  /** Called once when frames keep failing: the picture has stopped. */
+  onFatal: ((err: unknown) => void) | null = null;
+  private fatalSent = false;
+  private lastLoopAt = 0;
 
   start(): void {
     this.last = performance.now();
     const loop = (now: number) => {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(loop);
-      this.resizeIfNeeded();
-      this.frame(now);
+      // A long gap between frames while the page is visible is a stall
+      // (main thread blocked, or the browser stopped scheduling frames).
+      if (this.lastLoopAt && now - this.lastLoopAt > 1000 && diagVisibleFor() > now - this.lastLoopAt) diagLog('stall', `no frame for ${Math.round(now - this.lastLoopAt)} ms (mode ${this.mode})`);
+      this.lastLoopAt = now;
+      try {
+        this.resizeIfNeeded();
+        this.frame(now);
+        this.lastGoodFrameAt = now;
+        this.frameErrors = 0;
+      } catch (err) {
+        // Recorded, never swallowed silently: one bad frame is logged; a run
+        // of them means the picture has stopped, and the player is told.
+        if (this.frameErrors++ < 3) { diagError('frame', err); console.error(err); }
+        if (this.frameErrors >= 30 && !this.fatalSent) { this.fatalSent = true; this.onFatal?.(err); }
+      }
     };
     this.raf = requestAnimationFrame(loop);
   }
+
+  /** After the player chose to go back to the menu from the error screen. */
+  clearFatal(): void { this.fatalSent = false; this.frameErrors = 0; }
 
   private sizeKey = '';
 

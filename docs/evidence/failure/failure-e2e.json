@@ -1,0 +1,192 @@
+{
+  "at": "2026-10-22T19:27:17.941Z",
+  "environment": "Chromium 141 headless (SwiftShader), Linux container, local game server behind a stall/cut relay",
+  "passed": 23,
+  "total": 23,
+  "checks": [
+    {
+      "name": "server that never answers: the player is told it is unreachable (not stuck on \"Connecting…\")",
+      "ok": true,
+      "detail": {
+        "afterS": 8.543,
+        "msg": "Could not reach the game server."
+      }
+    },
+    {
+      "name": "stall: two browsers in an online match",
+      "ok": true
+    },
+    {
+      "name": "stall: \"Reconnecting…\" shows when the network drops",
+      "ok": true,
+      "detail": {
+        "banner": "Connection lost. Reconnecting…"
+      }
+    },
+    {
+      "name": "stall: when the network returns the player is back in the same match (a hung attempt no longer blocks it)",
+      "ok": true,
+      "detail": {
+        "conn": "online"
+      }
+    },
+    {
+      "name": "network never returns: the \"connection lost\" screen with a way home, within the grace period",
+      "ok": true,
+      "detail": {
+        "afterS": 27.35,
+        "held": 0
+      }
+    },
+    {
+      "name": "network never returns: \"Main menu\" works",
+      "ok": true
+    },
+    {
+      "name": "engine download fails: says it did not load and offers Reload (not \"no 3D graphics\")",
+      "ok": true,
+      "detail": {
+        "msg": "Part of the game did not load. This is usually a brief connection problem, or the site was just updated. Reload the page to try again. Reload page"
+      }
+    },
+    {
+      "name": "engine download fails: Reload brings the game back",
+      "ok": true
+    },
+    {
+      "name": "mission download fails: says so and offers Reload (not \"connection to the room ended\")",
+      "ok": true,
+      "detail": {
+        "msg": "The mission did not load (a connection problem, or the site was just updated). Reload the page to try again. Your progress is saved."
+      }
+    },
+    {
+      "name": "mission download fails: no unhandled error from the background prefetch",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "after Reload the mission starts; 12 rapid menu toggles while loading leave a playable state",
+      "ok": true,
+      "detail": {
+        "screen": "none",
+        "inMatch": true,
+        "conn": null,
+        "held": 0,
+        "enabled": true,
+        "crash": false,
+        "gfx": false,
+        "gfxSlow": false,
+        "lost": false,
+        "diagbox": false,
+        "banner": "",
+        "onlineErr": "",
+        "paused": false,
+        "frameErrors": 0
+      }
+    },
+    {
+      "name": "context lost: \"Graphics paused\" explains it, practice pauses, held keys are released",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "inMatch": true,
+        "conn": "online",
+        "held": 0,
+        "enabled": false,
+        "crash": false,
+        "gfx": true,
+        "gfxSlow": false,
+        "lost": false,
+        "diagbox": false,
+        "banner": "",
+        "onlineErr": "",
+        "paused": true,
+        "frameErrors": 0
+      }
+    },
+    {
+      "name": "context restored: the notice goes away, Resume returns to a drawing match",
+      "ok": true,
+      "detail": {
+        "fps": 22.49718785151858
+      }
+    },
+    {
+      "name": "context not restored: after 8 s the notice adds that reloading usually fixes it",
+      "ok": true
+    },
+    {
+      "name": "context loss: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "frames keep failing: \"The game stopped\" screen appears (not a silent frozen picture)",
+      "ok": true
+    },
+    {
+      "name": "Copy diagnostics: the report has the build, mode, the error and the frame-error count",
+      "ok": true
+    },
+    {
+      "name": "Copy diagnostics: no room code in the report",
+      "ok": true,
+      "detail": {
+        "code": "ZY3682QB"
+      }
+    },
+    {
+      "name": "\"Back to the menu\" leaves the match and the game draws again",
+      "ok": true,
+      "detail": {
+        "screen": "title",
+        "inMatch": false,
+        "conn": null,
+        "held": 0,
+        "enabled": false,
+        "crash": false,
+        "gfx": false,
+        "gfxSlow": false,
+        "lost": false,
+        "diagbox": false,
+        "banner": "",
+        "onlineErr": "",
+        "paused": false,
+        "frameErrors": 0
+      }
+    },
+    {
+      "name": "a new practice match starts normally afterwards",
+      "ok": true
+    },
+    {
+      "name": "backgrounded with W and D held: menu opens, practice pauses, nothing stays held",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "inMatch": true,
+        "conn": "online",
+        "held": 0,
+        "enabled": false,
+        "crash": false,
+        "gfx": false,
+        "gfxSlow": false,
+        "lost": false,
+        "diagbox": false,
+        "banner": "",
+        "onlineErr": "",
+        "paused": true,
+        "frameErrors": 0
+      }
+    },
+    {
+      "name": "clipboard refused: the report is shown in a selectable box instead",
+      "ok": true
+    },
+    {
+      "name": "back from the background and the box: Resume returns to play",
+      "ok": true
+    }
+  ]
+}

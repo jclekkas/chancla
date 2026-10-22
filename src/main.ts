@@ -3,6 +3,9 @@ import { applyDom, detectLang, setLang, t } from './i18n/i18n';
 import type { StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, defaultSettings } from './persistence/storage';
 import { inputProfile } from './ui/device';
+import { installDiag } from './diag';
+
+installDiag('arcade');
 
 // Tiny entry: shows real loading progress, checks WebGL, then loads the
 // engine chunk. Failures land on a friendly, actionable screen.

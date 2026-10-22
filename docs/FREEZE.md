@@ -70,7 +70,7 @@ All browser tests ran in headless Chromium 141 with a software renderer (SwiftSh
 | Run | Build | Duration | Result |
 | --- | --- | --- | --- |
 | 1 | `0f5fae2` plus the uncommitted working tree at 19:28 (bundle `main-NHj2nvJV.js`): connection timeouts, recovery screens, diagnostics, load-failure fixes. Not included: touch wording for campaign instructions, background-gap stall filter, the GPU fixes and later connection changes. | 31.5 min, 10 cycles, 40 matches | No problems, no page errors, server empty at the end. **GPU growth found:** geometries 178 → 719, textures 21 → 32, heap +2.8 MB. Led to fix 7. |
-| 2 | SOAK2_BUILD | SOAK2_RESULT |
+| 2 | `a1b9de9` (build id embedded in the bundle; every fix in this document) | 31.1 min, 10 cycles, 40 matches, then 2 Arcade round trips | No problems, no page errors, server empty at the end (0 rooms, 0 players). GPU resources flat: geometries 119-120 every cycle, textures 22 from cycle 2 on, DOM 668 nodes throughout, heap 12.9 → 14.1 MB (after GC, within noise). |
 
 ### Observations that are not bugs here, but matter on phones
 

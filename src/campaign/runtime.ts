@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { MissionSim, CAMPAIGN, DT, type MEvent, type MissionResult } from '../../shared/campaign/mission';
 import { missionHints, type MHint } from '../../shared/campaign/hints';
+import { howText, rejectText } from './howto';
 import { MissionBot } from '../../shared/campaign/bot';
 import type { ActorSpec, MissionDef } from '../../shared/campaign/types';
 import type { ClientProjectile } from '../net/session';
@@ -189,7 +190,7 @@ export class MissionRuntime implements Controller {
     const showHints = settings.campaignHints !== false;
     this.view.update(this.paused ? 0 : dt, cam, showHints ? this.focus?.id ?? null : null);
     const { w, h } = e.size;
-    this.hud.update(this.sim, this.focus, showHints, cam, w, h, this.view);
+    this.hud.update(this.sim, this.focus, showHints ? howText(this.sim, this.focus) : null, showHints, cam, w, h, this.view);
     e.hud.update({
       hp: p.hp, alive: p.alive, weapon: p.weapon, cooldownMs: p.cooldownMs, switchMs: p.switchMs, respawnInMs: p.koMs, protectedMs: p.invulnMs,
       scores: [0, 0], timeLeftMs: 0, phase: 'campaign', countdownMs: 0, region: '', rtt: 0, quality: 'good', fps: e.fps, showStats: settings.showStats, practice: false, team: null,
@@ -205,7 +206,7 @@ export class MissionRuntime implements Controller {
     // A spoken tip when nothing has moved forward for a while.
     if (showHints && !this.paused && s.timeMs - s.lastProgressMs > CAMPAIGN.hintAfterMs && s.timeMs - this.lastHintLine > CAMPAIGN.hintAfterMs && this.focus) {
       this.lastHintLine = s.timeMs;
-      this.hud.tip(this.focus);
+      this.hud.tip(howText(this.sim, this.focus) ?? '');
       if (this.focus.need === 'bank') this.dialogue.say('bank_hint');
       else if (this.focus.need === 'heavy') this.dialogue.say('heavy_hint');
     }
@@ -267,6 +268,7 @@ export class MissionRuntime implements Controller {
         }
         case 'reject':
           audio.play('blocked');
+          { const why = rejectText(ev.why, ev.id); if (why) this.hud.tip(why); }
           if (ev.why === 'bank') this.dialogue.say('bank_hint');
           else if (ev.why === 'heavy') this.dialogue.say('heavy_hint');
           else if (ev.why === 'timing') this.dialogue.say('timing_hint');

@@ -5,7 +5,7 @@ import { MISSIONS } from '../../shared/campaign/missions';
 import type { MissionDef } from '../../shared/campaign/types';
 import type { MissionResult } from '../../shared/campaign/mission';
 import { CampaignProgress } from './progress';
-import { t, type Key } from '../fps/strings';
+import { t, hasKey, type Key } from '../fps/strings';
 import { rosaSVG, svgUrl } from '../ui/art';
 import { audio } from '../audio/audio';
 import { music } from '../audio/music';
@@ -100,6 +100,9 @@ export class CampaignUi {
     $('mi-title').textContent = t(m.title as Key);
     $('mi-premise').textContent = t(m.premise as Key);
     $('mi-objective').textContent = t(m.objective as Key);
+    const steps: HTMLElement[] = [];
+    for (let k = 1; hasKey(`${m.id}.how${k}`); k++) { const li = document.createElement('li'); li.textContent = t(`${m.id}.how${k}` as Key); steps.push(li); }
+    $('mi-how').replaceChildren(...steps);
     $('mi-est').textContent = t('mi.est', { a: m.minutes[0], b: m.minutes[1] });
     this.renderChallenges($('mi-ch'), m, this.progress.get(m.id).challenges, []);
     $('mi-status').textContent = '';

@@ -59,14 +59,15 @@ export class MissionHud {
     $('m-cp').hidden = false;
   }
 
-  tip(h: MHint): void {
-    const k = h.need === 'bank' ? 'tip.bank' : h.need === 'heavy' ? 'tip.heavy' : h.open === false ? 'tip.timing' : h.kind === 'wait' ? 'tip.wait' : 'tip.default';
-    $('m-tip').textContent = t(k as Key);
+  /** A short-lived callout: why a hit didn't count, or a nudge when stuck. */
+  tip(text: string): void {
+    if (!text) return;
+    $('m-tip').textContent = text;
     $('m-tip').hidden = false;
-    this.tipT = 7;
+    this.tipT = 6;
   }
 
-  update(sim: MissionSim, focus: MHint | null, hints: boolean, cam: THREE.Camera, w: number, h: number, view: MissionView): void {
+  update(sim: MissionSim, focus: MHint | null, next: string | null, hints: boolean, cam: THREE.Camera, w: number, h: number, view: MissionView): void {
     const st = sim.state;
     const sd = sim.stageDef;
     this.set('title', this.def.title, () => ($('m-title').textContent = t(this.def.title as Key)));
@@ -102,6 +103,11 @@ export class MissionHud {
         return li;
       });
       ul.replaceChildren(...rows);
+    });
+    // The concrete next step ("Hit the latch on the balcony pole…").
+    this.set('next', next ?? '', () => {
+      $('m-next').hidden = !next;
+      $('m-next-text').textContent = next ?? '';
     });
     const secs = Math.floor(st.timeMs / 1000);
     this.set('clock', String(secs), () => ($('m-timer').textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`));

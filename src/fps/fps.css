@@ -310,6 +310,8 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .m-goals li.done { opacity: 0.6; text-decoration: line-through; }
 .m-goals li.done::before { background: #4ccf7a; border-color: #4ccf7a; }
 .m-goals b { margin-left: auto; color: var(--marigold); }
+.m-next { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.25); font-size: 13px; line-height: 1.35; max-width: 300px; }
+.m-next b { color: var(--gold); margin-right: 2px; }
 .m-bar { position: relative; flex: 1 1 100%; height: 12px; border-radius: 99px; background: rgba(0, 0, 0, 0.35); border: 2px solid var(--cream); overflow: hidden; }
 .m-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #f2a33a, #ffd27a); }
 .m-bar.warn { border-color: #ff8a6a; animation: m-warn 0.6s ease-in-out infinite alternate; }
@@ -530,3 +532,7 @@ body.touch-input .scoreboard, body.touch-input .toast { pointer-events: none; }
 .zoom-note { position: absolute; inset: 0; z-index: 26; display: grid; place-items: center; background: rgba(30, 14, 46, 0.86); padding: 16px; touch-action: auto; pointer-events: auto; text-shadow: none; }
 .zn-box { position: absolute; display: grid; place-items: center; }
 .zoom-note .panel { text-align: center; max-width: 360px; }
+
+/* Mission briefing: the steps, in order. */
+.mi-how { text-align: left; margin: 8px 0; }
+.mi-how ol { margin: 4px 0 6px; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }

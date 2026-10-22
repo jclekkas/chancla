@@ -252,6 +252,8 @@ Raw data: `docs/evidence/mobile/perf-before.json` and `perf-after.json`.
 
 ## Verification (emulation)
 
+For the four-device mixed match (emulated iPhone, Android, iPad and desktop in one room) and the per-device compatibility matrix, see [COMPATIBILITY.md](COMPATIBILITY.md#cross-device-multiplayer-matrix).
+
 ### Online and practice (shooter)
 
 **`scripts/mobile-mp-e2e.ts`: 43 checks, all passing.**

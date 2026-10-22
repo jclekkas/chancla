@@ -16,7 +16,56 @@ Levels used here:
 | macOS, Safari (campaign and audio) | Unverified | Voice clips are MP3 and the score is pure Web Audio, both of which Safari supports. Audio unlock on the first click and `decodeAudioData` were not tested on Safari. |
 | macOS, Safari | Unverified | WebKit was not run, not even in an automated build. Things to check: pointer lock (Safari requires a click and shows its own banner), `requestPointerLock` without a promise, Web Audio unlock, WebGL2 availability, and fullscreen (`webkitRequestFullscreen` is wired as a fallback). |
 | Firefox (any OS) | Unverified | Not in scope. Expected to work. |
-| iOS and Android | Online, Practice and Arcade: Touch Beta, unverified on hardware | Touch controls for online matches (mixed with computer players), Practice and the Arcade, checked only in Chromium mobile emulation. Story is marked computer only. Device checklist: [MOBILE.md](MOBILE.md). |
+| iOS and Android | Online, Practice and Arcade: Touch Beta, unverified on hardware (see the cross-device matrix below) | Touch controls for online matches (mixed with computer players), Practice and the Arcade, checked only in Chromium mobile emulation. Story is marked computer only. Device checklist: [MOBILE.md](MOBILE.md). |
+
+## Cross-device multiplayer matrix
+
+Every device type uses the same rooms, invite links, maps, teams, scoring and rematches: there is one client build and one server, with no per-device rules. What differs is how much of that has been proven on each device.
+
+Legend:
+
+- **Real**: run on the actual hardware and browser. **No combination has reached this level yet.**
+- **Emu**: run in Chromium (Blink) on Linux, posing as that device (screen size, pixel density, touch, user-agent string). For the Chrome and Edge rows this is the same engine, so it is meaningful but still not Windows or macOS. For the Safari rows it is **not Safari**: it proves the layout and the touch logic, not WebKit.
+- **Untested**: not run in any form.
+
+Source: `npm run e2e:crossdevice` (28/28 checks, [evidence](evidence/crossdevice/crossdevice-e2e.json)). Four separate Chromium instances (emulated iPhone, Android phone, iPad and Windows Edge desktop) played one four-player, two-per-team match against a local server, then a rematch, then plaza and fiesta.
+
+| Feature | iPhone Safari | Android Chrome | iPad Safari (touch) | iPad Safari (keyboard + trackpad/mouse) | Windows Chrome | Windows Edge | macOS Safari | macOS Chrome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Join by invite link / room code | Emu (link) | Emu (link) | Emu (typed code, lowercase) | Emu | Emu | Emu (created the room) | Untested | Emu |
+| Same maps (patio, plaza, fiesta) | Emu | Emu | Emu | Emu (patio only) | Emu | Emu | Untested | Emu |
+| Teams shown, "YOUR TEAM" correct | Emu | Emu | Emu | Emu | Emu | Emu | Untested | Emu |
+| Identical scores and stats on every device | Emu (see note 1) | Emu (note 1) | Emu (note 1) | Emu (note 1) | Emu | Emu | Untested | Emu |
+| Rematch, same teams | Emu | Emu | Emu | Emu | Emu | Emu | Untested | Emu |
+| Touch controls, simultaneous with others | Emu | Emu | Emu | n/a | n/a | n/a | n/a | n/a |
+| Keyboard and mouse | n/a | n/a | n/a | Emu (note 2) | Emu | Emu | Untested | Emu |
+| Switching touch to mouse and back mid-match | n/a | Untested | Emu | Emu | n/a | n/a | n/a | n/a |
+| Audio unlocks on first tap/click, mute mid-match | Emu (note 3) | Emu (note 3) | Emu (note 3) | Emu (note 3) | Emu (note 3) | Emu (note 3) | Untested | Emu (note 3) |
+| Rotation (portrait pauses input, landscape resumes) | Emu (generic phone, `e2e:mobile-mp`) | Emu | Untested | n/a | n/a | n/a | n/a | n/a |
+| Reconnect after a dropped connection | Emu | Emu (generic phone, `e2e:mobile-mp`) | Untested | Untested | Emu in `mp` tests | Emu in `mp` tests | Untested | Emu in `mp` tests |
+| Unexpected zoom fix | Emu in `e2e:zoom` | Emu in `e2e:zoom` | Untested | n/a | n/a | n/a | n/a | n/a |
+
+Notes:
+
+1. The four-device match ended 0 to 0 (the scripted players moved and threw but nobody was eliminated), so on those rows it proves the devices agree, not that non-zero scoring agrees. Non-zero scoring that matches across clients is covered by the desktop four-client run (`e2e:play` / `mp-e2e`) and the server tests, which are device-independent.
+2. The emulated iPad got pointer lock only when emulated as a desktop-class browser (as iPadOS Safari reports itself). Real iPadOS pointer lock with a Magic Keyboard or mouse is untested; if it is refused, the game falls back to drag-to-look.
+3. "Audio" here means the Web Audio context unlocked and the music engine reported the right state. Nobody listened to it, and Safari's own unlock rules were not exercised.
+
+What this does **not** prove: anything about WebKit (iPhone, iPad and Mac Safari), real touch screens, real GPUs and frame rates, iOS backgrounding and Low Power Mode, Android back-button and browser chrome behaviour, Windows pointer lock and DPI scaling, or real mobile networks. Cross-platform support is **not fully verified** until the device run below and the checklist in [MOBILE.md](MOBILE.md#real-device-checklist) are done on hardware.
+
+WebKit could not even be run in emulation here: the Playwright WebKit download hosts (`cdn.playwright.dev`, `playwright.download.prss.microsoft.com`) are blocked by this environment's network policy. Allowing them would let `e2e:crossdevice` run a WebKit client, which is closer to Safari but still not an iPhone.
+
+### Four-player mixed-device run on real hardware
+
+1. Desktop (Windows Chrome or Edge): Online, create a room, copy the invite.
+2. iPhone (Safari) and Android phone (Chrome): open the invite link from a message. iPad: type the code by hand.
+3. Check every screen shows four players, two per team, and its own "YOUR TEAM".
+4. Everyone ready; play patio to the end while all four move and throw at once. On the iPad, plug in or pair a mouse halfway through and continue, then touch the screen again.
+5. On Android, rotate to portrait and back. On the iPhone, switch to another app for 10 seconds and back; it rejoins the same team.
+6. Mute music from the menu on one device. No device plays two songs at once.
+7. Compare the results screen across all four: same scores and stats.
+8. Rematch, then play plaza and fiesta from the lobby. Everyone leaves; nobody is stuck in a room.
+9. Repeat step 1 from a Mac (Safari, then Chrome).
 
 ## Manual checklist for real Windows and Mac machines
 

@@ -1,0 +1,399 @@
+{
+  "at": "2026-10-22T03:27:27.435Z",
+  "environment": "Four Chromium 141 (Blink) instances, headless, SwiftShader, Linux container. Device = viewport + DPR + touch + user-agent string only. No Safari/WebKit, no iOS/Android/Windows/macOS, no real touch hardware. Local game server.",
+  "devices": {
+    "iphone": {
+      "label": "iPhone (emulated)",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "dpr": 3,
+      "touch": true,
+      "mobile": true,
+      "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+    },
+    "android": {
+      "label": "Android phone (emulated)",
+      "viewport": {
+        "width": 915,
+        "height": 412
+      },
+      "dpr": 2.625,
+      "touch": true,
+      "mobile": true,
+      "ua": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"
+    },
+    "ipad": {
+      "label": "iPad (emulated)",
+      "viewport": {
+        "width": 1180,
+        "height": 820
+      },
+      "dpr": 2,
+      "touch": true,
+      "mobile": false,
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+    },
+    "desktop": {
+      "label": "Windows/Mac desktop (emulated)",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "dpr": 1,
+      "touch": false,
+      "mobile": false,
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
+    }
+  },
+  "passed": 28,
+  "total": 28,
+  "checks": [
+    {
+      "name": "iPad (touch only, no mouse yet): gets the touch card and touch mode",
+      "ok": true,
+      "detail": {
+        "card": true,
+        "touch": true
+      }
+    },
+    {
+      "name": "four devices in one room, two per team, the same roster on every device",
+      "ok": true,
+      "detail": [
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "name": "every device unlocked audio with its own gesture (tap or click)",
+      "ok": true,
+      "detail": [
+        "running",
+        "running",
+        "running",
+        "running"
+      ]
+    },
+    {
+      "name": "patio: all four on patio; touch devices show touch controls, the desktop uses the keyboard and mouse",
+      "ok": true,
+      "detail": [
+        {
+          "map": "patio",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "patio",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "patio",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "patio",
+          "controls": false,
+          "touch": false
+        }
+      ]
+    },
+    {
+      "name": "patio: every device shows its own \"YOUR TEAM\"",
+      "ok": true,
+      "detail": [
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL",
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "patio: simultaneous play: every active device moved and threw at the same time",
+      "ok": true,
+      "detail": {
+        "moved": [
+          2.1,
+          3.48,
+          3.51,
+          1.71
+        ],
+        "threw": [
+          16,
+          17,
+          22,
+          5
+        ]
+      }
+    },
+    {
+      "name": "patio: no device left with held input",
+      "ok": true,
+      "detail": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "iPad: a mouse click mid-match switches to keyboard and mouse: touch controls hide",
+      "ok": true,
+      "detail": {
+        "touch": false,
+        "controls": false,
+        "locked": false
+      }
+    },
+    {
+      "name": "iPad with keyboard and mouse (pointer lock): moves with WASD, aims with the mouse, throws with F",
+      "ok": true,
+      "detail": {
+        "mode": "pointer lock",
+        "moved": 0.69,
+        "threw": 6,
+        "dYaw": -0.132
+      }
+    },
+    {
+      "name": "iPad: touching the screen again switches back to touch controls",
+      "ok": true,
+      "detail": {
+        "touch": true,
+        "controls": true,
+        "locked": false
+      }
+    },
+    {
+      "name": "Android: portrait shows the rotate screen (match continues); landscape resumes",
+      "ok": true,
+      "detail": {
+        "portrait": true,
+        "back": true
+      }
+    },
+    {
+      "name": "iPhone: a dropped connection reconnects into the same match and team; the desktop sees four connected",
+      "ok": true,
+      "detail": {
+        "team": 1,
+        "connected": 4
+      }
+    },
+    {
+      "name": "Android: music muted from the menu mid-match; back in play; at most one song plus a fade on every device",
+      "ok": true,
+      "detail": {
+        "bus": 0,
+        "screen": "none",
+        "controls": true,
+        "sounding": [
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "patio: identical result, scores and per-player stats on all four devices; each shows its own team",
+      "ok": true,
+      "detail": [
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL",
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "rematch: all four straight back in, same teams",
+      "ok": true,
+      "detail": [
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "name": "plaza: all four on plaza; touch devices show touch controls, the desktop uses the keyboard and mouse",
+      "ok": true,
+      "detail": [
+        {
+          "map": "plaza",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "plaza",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "plaza",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "plaza",
+          "controls": false,
+          "touch": false
+        }
+      ]
+    },
+    {
+      "name": "plaza: every device shows its own \"YOUR TEAM\"",
+      "ok": true,
+      "detail": [
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL",
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "plaza: simultaneous play: every active device moved and threw at the same time",
+      "ok": true,
+      "detail": {
+        "moved": [
+          7.28,
+          3.74,
+          0,
+          2.62
+        ],
+        "threw": [
+          20,
+          22,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "name": "plaza: no device left with held input",
+      "ok": true,
+      "detail": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "plaza: identical result, scores and per-player stats on all four devices; each shows its own team",
+      "ok": true,
+      "detail": [
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL",
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "fiesta: all four on fiesta; touch devices show touch controls, the desktop uses the keyboard and mouse",
+      "ok": true,
+      "detail": [
+        {
+          "map": "fiesta",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "fiesta",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "fiesta",
+          "controls": true,
+          "touch": true
+        },
+        {
+          "map": "fiesta",
+          "controls": false,
+          "touch": false
+        }
+      ]
+    },
+    {
+      "name": "fiesta: every device shows its own \"YOUR TEAM\"",
+      "ok": true,
+      "detail": [
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL",
+        "YOUR TEAM: LUNA",
+        "YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "fiesta: simultaneous play: every active device moved and threw at the same time",
+      "ok": true,
+      "detail": {
+        "moved": [
+          5.61,
+          5.71,
+          0,
+          3.54
+        ],
+        "threw": [
+          14,
+          17,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "name": "fiesta: no device left with held input",
+      "ok": true,
+      "detail": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "fiesta: identical result, scores and per-player stats on all four devices; each shows its own team",
+      "ok": true,
+      "detail": [
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL",
+        "0-0 YOUR TEAM: LUNA",
+        "0-0 YOUR TEAM: SOL"
+      ]
+    },
+    {
+      "name": "everyone back on the main menu",
+      "ok": true,
+      "detail": [
+        "title",
+        "title",
+        "title",
+        "title"
+      ]
+    },
+    {
+      "name": "the server is empty afterwards (no leaked rooms or connections)",
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "rooms": 0,
+        "players": 0,
+        "maxTickMs": 0,
+        "uptimeS": 765
+      }
+    },
+    {
+      "name": "no page errors on any device",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

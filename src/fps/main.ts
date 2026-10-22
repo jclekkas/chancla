@@ -970,10 +970,14 @@ function toggleFullscreen(): void {
 // menu is cancelled by the browser (pointercancel) and presses nothing.
 function armTouchTaps(): void {
   let down: { id: number; el: HTMLElement } | null = null;
-  let swallow = 0; // until when the browser's own click for the last tap is swallowed
+  // The browser's own click for the last tap, still to come: swallowed when it
+  // arrives, however late (a busy phone can take a while), but never past the
+  // start of the next touch, or a couple of seconds for a click that never comes.
+  let swallow = 0;
   const btnAt = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTMLElement>('button, a.btn') : null);
   document.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return;
+    swallow = 0; // a new touch: the previous tap's click is not coming
     const b = btnAt(e.target);
     down = b && !b.closest('#fps-touch') ? { id: e.pointerId, el: b } : null;
   }, true);
@@ -984,7 +988,7 @@ function armTouchTaps(): void {
     down = null;
     const b = btnAt(document.elementFromPoint(e.clientX, e.clientY));
     if (b !== d.el || (b as HTMLButtonElement).disabled || b.hidden) return;
-    swallow = performance.now() + 700;
+    swallow = performance.now() + 2500;
     b.click();
   }, true);
   // The browser's click for the same tap comes next, and the screen may have
@@ -1168,6 +1172,8 @@ function bindUi(): void {
 function bindInput(inp: FpsInput): void {
   inp.onLockChange = (locked) => {
     if (locked) { lockFailures = 0; render(); return; }
+    // Switching to touch releases the mouse on purpose: that's not "pause".
+    if (touchMode) { render(); return; }
     // Losing the lock mid-match (Esc, alt-tab, a browser prompt) opens the menu.
     if (inMatch && base === 'none') openPause();
     else render();

@@ -53,11 +53,27 @@ The Classic Arcade has the same button in its pause menu and settings.
 
 ## Tests
 
+All browser tests ran in headless Chromium 141 with a software renderer (SwiftShader) in a Linux container, against a local game server (production was never used). None ran on a phone, on Safari or on a real GPU.
+
 | Test | What it proves | Result |
 | --- | --- | --- |
-| `tests/mp-mobile-net.test.ts` (3 new) | A hung reconnect attempt is abandoned and the player gets back in when the network returns; if it never returns, "lost (timeout)" within the grace period; a hung first connection reports unreachable. All three failed before the fix. | 5/5 |
+| `tests/session-timeout.test.ts` | Fake transports and timers: a slow welcome connects once; a first connection that never answers ends "unreachable", a late reply is ignored and no room is created; a hung reconnect attempt is dropped and the next one rejoins with the same resume token, id and team, with at most one live socket and only the original `create` ever sent; a reply just inside the deadline gets back in; past it the player is told and retries stop; "room gone" is reported; `retryNow` replaces a hung attempt and detaches it; closing mid-attempt leaves no timer. | 9/9 |
+| `tests/mp-mobile-net.test.ts` | Real server: frozen socket detected; hung reconnect abandoned and the player gets back in; **network back 19 s after the drop still rejoins the same slot and team, with no duplicate player**; never back: "lost (timeout)"; hung first connection: unreachable. | 6/6 |
 | `tests/diag.test.ts` | Redaction (room codes, invite fragments, tokens, URLs), bounded buffer, provider failure, breadcrumb across a reload, copy failure reported. | 7/7 |
-| `scripts/failure-e2e.ts` (`npm run e2e:failure`) | Real page: server that never answers; network stall mid-match that recovers, and one that does not; engine and mission downloads failing; WebGL context lost and restored, and lost for good; frames that keep throwing; Copy diagnostics with the clipboard allowed and refused; rapid menu toggling while a mission loads; backgrounding with keys held. | 23/23 |
-| `scripts/soak-e2e.ts` (`npm run e2e:soak`) | Long session without reloading, then Arcade round trips. See below. | see below |
+| `tests/campaign-howto.test.ts` | Every hint has a specific instruction; every rejected hit is explained; on touch controls no instruction mentions keys or the mouse. | 10/10 |
+| `scripts/failure-e2e.ts` | Real page. Server that never answers; online graphics loss (match keeps going for others, input released, updates keep arriving, no blocking overlay after restore); network stall that recovers (the browser's "online" signal retries in 0.2 s), and one that doesn't ("Connection lost" in 26 s, way home works); engine and mission downloads failing (honest message, Reload works); practice and mission graphics loss (pause, clock stops, Resume continues at the same speed as before the loss); frames that keep throwing ("The game stopped", held keys released, failing work halted: 0 calls in 1.5 s, wording says what going back costs, Back to the menu works, a new match starts); Copy diagnostics with the clipboard allowed and refused; 12 rapid menu toggles while a mission loads; backgrounding with keys held. | 30/30 |
+| `scripts/soak-e2e.ts` | Long session without reloading (campaign, online with a friend joining and leaving, rematches, map changes, practice with restarts), then two campaign → menu → Arcade → online round trips. Fails if GPU resources grow. | see below |
+| `scripts/crossdevice-e2e.ts` | Four emulated devices; real server-scored eliminations by keyboard and touch; identical results everywhere. | 33/33 |
 
-All browser tests ran in headless Chromium 141 with a software renderer (SwiftShader) in a Linux container, against a local game server. None ran on a phone, on Safari or on a real GPU.
+### Soak runs
+
+| Run | Build | Duration | Result |
+| --- | --- | --- | --- |
+| 1 | `0f5fae2` plus the uncommitted working tree at 19:28 (bundle `main-NHj2nvJV.js`): connection timeouts, recovery screens, diagnostics, load-failure fixes. Not included: touch wording for campaign instructions, background-gap stall filter, the GPU fixes and later connection changes. | 31.5 min, 10 cycles, 40 matches | No problems, no page errors, server empty at the end. **GPU growth found:** geometries 178 → 719, textures 21 → 32, heap +2.8 MB. Led to fix 7. |
+| 2 | SOAK2_BUILD | SOAK2_RESULT |
+
+### Observations that are not bugs here, but matter on phones
+
+- The software renderer runs missions at about 10 fps here. The simulation caps catch-up at 6 steps a frame, so at 10 fps a mission runs at about half speed (slow motion, not a freeze). The same would happen on a phone that drops that low.
+- First load and the start of a match block the main thread for about 1-2 s here (shader compilation). A slow phone may show a similar pause; diagnostics record it as "main thread busy" or "no frame for".
+- The connection's 6 s silence watchdog means a phone whose page was frozen in the background reconnects on return; this is covered, but only in emulation.

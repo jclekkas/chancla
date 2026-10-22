@@ -2,12 +2,15 @@ import * as THREE from 'three';
 import { FixedLoop } from './core/loop';
 import { ListenerBag, liveListenerCount } from './core/listeners';
 import { activeLoopCount } from './core/loop';
-import { Game, emptyInput, type RunResult } from './game/game';
+import { Game, emptyInput, provideMapArena, type RunResult } from './game/game';
 import { InputManager } from './input/input';
 import { TouchControls } from './ui/touch';
 import { Hud } from './ui/hud';
 import { Callouts } from './ui/callouts';
-import { audio } from './audio/audio';
+import { audio, type MusicMode } from './audio/audio';
+import { music, type TrackId } from './audio/music';
+import { loadMusicPrefs } from './audio/prefs';
+import { SoundtrackPanel } from './ui/soundtrackPanel';
 import { applyDom, formatNumber, getLang, onLangChange, quip, setLang, t } from './i18n/i18n';
 import type { Lang, StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, type Settings, type Quality } from './persistence/storage';
@@ -17,6 +20,9 @@ import { rosaSVG, svgUrl } from './ui/art';
 import { copyText, downloadScoreCard, shareScore, shareText, shareUrl } from './ui/share';
 import { PLAYER } from './config';
 import { clamp, damp } from './core/math';
+import { SoundGate } from './ui/soundGate';
+import { renderMapCards, type MapChoice } from './ui/mapSelect';
+import { isMapId, mapEntry, randomMapId, type MapId } from '../shared/maps';
 
 type AppState = 'title' | 'playing' | 'paused' | 'results';
 
@@ -65,7 +71,16 @@ export class App {
   private usingTouch = false;
   private contextLost = false;
   private settingsReturn: 'title' | 'pause' = 'title';
+  private soundGate: SoundGate | null = null;
   private lastCanvasSize = '';
+  /**
+   * Touch devices only: a multiplier on the render resolution that steps down
+   * while frames run slow and back up when there is headroom, so a weaker
+   * phone stays playable. Desktop always renders at its quality setting.
+   */
+  private renderScale = 1;
+  private scaleClock = 0;
+  private appliedQuality: Quality | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private resultsTimer: ReturnType<typeof setTimeout> | null = null;
   private lastFocus: HTMLElement | null = null;
@@ -77,6 +92,12 @@ export class App {
     this.storage = storage;
     this.settings = settings;
     this.progress = progress;
+    // The Arcade's music modes drive the shared soundtrack: its title shares
+    // the menus' songs, a run shuffles the whole playlist, the boss gets the
+    // intense pool. Pausing lowers the song instead of stopping it.
+    const cue: Record<MusicMode, TrackId> = { title: 'menu', game: 'arcade', boss: 'boss', off: 'off' };
+    audio.musicDriver = (mode, held) => { music.play(cue[mode]); music.setHeld(held && mode !== 'off'); };
+    music.setPrefs(loadMusicPrefs());
     const stage = $('stage');
     stage.appendChild(renderer.domElement);
     renderer.domElement.tabIndex = -1;
@@ -120,6 +141,12 @@ export class App {
     // Title music starts on the first eligible click or key press anywhere,
     // and resumes after the tab is hidden or the page returns via Back.
     audio.armLifecycle();
+    this.soundtrack = new SoundtrackPanel($('soundtrack'), { lang: getLang, musicSilenced: () => this.settings.value.muted || this.settings.value.volume <= 0.001 || !this.settings.value.music, onUi: () => audio.play('ui') });
+    this.soundGate = new SoundGate({
+      text: (k) => t(`sound.${k}` as StringKey),
+      inGame: () => this.state === 'playing',
+      openSettings: () => this.openSettings(this.state === 'paused' ? 'pause' : 'title'),
+    });
     this.detectTouch(matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0);
     this.resize();
     this.showTitle();
@@ -138,13 +165,14 @@ export class App {
     audio.setMuted(s.muted);
     audio.setMusic(s.music);
     this.input.sensitivity = s.sensitivity;
+    this.input.touchSensitivity = s.touchSensitivity;
     this.input.invertY = s.invertY;
     this.game.aimAssist = s.aimAssist;
     document.body.classList.toggle('reduced-motion', s.reducedMotion);
     this.callouts.reducedMotion = s.reducedMotion;
     this.game.hazards.reducedMotion = s.reducedMotion;
     const q = QUALITY[s.quality];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+    if (s.quality !== this.appliedQuality) { this.appliedQuality = s.quality; this.renderScale = 1; } // a new choice starts at full scale
     this.renderer.shadowMap.enabled = q.shadows;
     this.game.arena.setShadows(q.shadows, q.shadowSize);
     this.game.particles.density = q.particles;
@@ -160,13 +188,19 @@ export class App {
     this.applySettings(s);
   }
 
+  private soundtrack: SoundtrackPanel | null = null;
+
   private syncSettingsUi(): void {
+    this.soundtrack?.render();
+    if (this.soundGate) $('sound-status').textContent = this.soundGate.describe((k) => t(`sound.status.${k}` as StringKey));
     const s = this.settings.value;
     ($('set-volume') as HTMLInputElement).value = String(Math.round(s.volume * 100));
     ($('set-mute') as HTMLInputElement).checked = s.muted;
     ($('set-music') as HTMLInputElement).checked = s.music;
     ($('set-sens') as HTMLInputElement).value = String(Math.round(s.sensitivity * 100));
     $('out-sens').textContent = `${s.sensitivity.toFixed(2)}×`;
+    ($('set-tsens') as HTMLInputElement).value = String(Math.round(s.touchSensitivity * 100));
+    $('out-tsens').textContent = `${s.touchSensitivity.toFixed(2)}×`;
     ($('set-invert') as HTMLInputElement).checked = s.invertY;
     ($('set-assist') as HTMLInputElement).checked = s.aimAssist;
     ($('set-motion') as HTMLInputElement).checked = s.reducedMotion;
@@ -193,7 +227,13 @@ export class App {
   }
 
   private bindUi(): void {
-    this.click('btn-play', () => this.play(!this.shouldTutorial()));
+    // Play opens the map choice; Start there begins the run.
+    this.click('btn-play', () => this.openMaps());
+    this.click('btn-maps-start', () => void this.startFromMaps());
+    this.click('btn-maps-back', () => this.closeMaps(), 'uiBack');
+    // Change map: from the pause menu the run is in progress, so it asks first.
+    this.click('btn-pause-maps', () => this.openConfirm('confirm.leaveTitle', 'confirm.leaveBody', 'confirm.leaveYes', () => { this.toTitle(); this.openMaps(); }), 'uiBack');
+    this.click('btn-results-maps', () => { this.toTitle(); this.openMaps(); }, 'uiBack');
     this.click('btn-howto', () => {
       this.lastFocus = $('btn-howto');
       $('modal-howto').hidden = false;
@@ -215,15 +255,18 @@ export class App {
     this.click('btn-copy', () => void this.copy());
     this.click('btn-download', () => void this.download());
     this.click('btn-settings-close', () => this.closeSettings(), 'uiBack');
-    this.click('btn-reset', () => this.openConfirm());
-    this.click('btn-confirm-no', () => this.closeConfirm(), 'uiBack');
-    this.click('btn-confirm-yes', () => {
+    this.click('btn-reset', () => this.openConfirm('confirm.resetTitle', 'confirm.resetBody', 'confirm.yes', () => {
       this.progress.reset();
       this.sessionTutorialDone = false;
-      this.closeConfirm();
       this.refreshBest();
       this.toast(t('settings.resetDone'));
-    });
+    }));
+    this.click('btn-confirm-no', () => this.closeConfirm(), 'uiBack');
+    this.click('btn-confirm-yes', () => { const f = this.confirmAction; this.closeConfirm(); f?.(); });
+    // Main menu: the shooter's title page. From the pause menu a run is in
+    // progress, so it asks first; from results the run is already over.
+    this.click('btn-pause-home', () => this.openConfirm('confirm.leaveTitle', 'confirm.leaveBody', 'confirm.leaveYes', () => this.goHome()), 'uiBack');
+    this.click('btn-results-home', () => this.goHome(), 'uiBack');
     this.click('btn-ctx-reload', () => location.reload());
     document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => {
       this.bag.on(b, 'click', () => { audio.unlock(); audio.play('ui'); this.updateSettings({ lang: b.dataset.lang as Lang }); });
@@ -236,6 +279,8 @@ export class App {
     };
     range('set-volume', (v) => this.updateSettings({ volume: v / 100 }));
     range('set-sens', (v) => this.updateSettings({ sensitivity: v / 100 }));
+    range('set-tsens', (v) => this.updateSettings({ touchSensitivity: v / 100 }));
+    this.click('btn-rotate-menu', () => { this.rotateDismissed = true; this.syncTouchVisibility(); }, 'uiBack');
     const check = (id: string, fn: (v: boolean) => void): void => {
       this.bag.on<Event>($(id), 'change', (e) => { audio.play('ui'); fn((e.target as HTMLInputElement).checked); });
     };
@@ -248,7 +293,7 @@ export class App {
     // Keep Tab inside whichever dialog is on top.
     this.bag.on<KeyboardEvent>(document, 'keydown', (e) => {
       if (e.key !== 'Tab') return;
-      const open = ['modal-confirm', 'modal-settings', 'modal-howto', 'screen-results', 'screen-pause', 'screen-ctx']
+      const open = ['modal-confirm', 'modal-settings', 'modal-howto', 'modal-maps', 'screen-results', 'screen-pause', 'screen-ctx']
         .map((id) => $(id))
         .find((el) => !el.hidden);
       if (!open) return;
@@ -263,7 +308,8 @@ export class App {
     // Escape closes dialogs.
     this.bag.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!$('modal-howto').hidden) this.closeHowto();
+      if (!$('modal-maps').hidden) this.closeMaps();
+      else if (!$('modal-howto').hidden) this.closeHowto();
       else if (!$('modal-confirm').hidden) this.closeConfirm();
       else if (!$('modal-settings').hidden) this.closeSettings();
       else if (this.state === 'paused' && $('modal-settings').hidden) { /* stay paused: Resume is explicit */ }
@@ -271,6 +317,10 @@ export class App {
     onLangChange(() => {
       applyDom(document);
       this.hud.invalidate();
+      this.soundGate?.render();
+      this.soundtrack?.render();
+      this.showModeChip();
+      if (!$('modal-maps').hidden) this.renderMaps();
       this.refreshBest();
       this.updateMuteButton();
       if (this.lastResult && this.state === 'results') this.fillResults(this.lastResult, this.lastWasBest);
@@ -313,9 +363,24 @@ export class App {
       this.input.clear();
       this.touch.reset();
     });
-    this.bag.on(window, 'resize', () => this.resize());
-    this.bag.on(window, 'orientationchange', () => setTimeout(() => this.resize(), 120));
-    if (window.visualViewport) this.bag.on(window.visualViewport, 'resize', () => this.resize());
+    // Rotation and viewport changes (browser toolbars, split screen): drop held
+    // touches (a finger mid-rotation must not keep walking), pause a touch run
+    // that turned portrait, and re-lay out.
+    const viewportChanged = (): void => {
+      this.resize();
+      const portrait = window.innerHeight > window.innerWidth;
+      if (portrait !== this.wasPortrait) {
+        this.wasPortrait = portrait;
+        this.rotateDismissed = false;
+        this.input.clear();
+        this.touch.reset();
+        if (portrait && this.usingTouch && this.state === 'playing') this.pause();
+      }
+      this.syncTouchVisibility();
+    };
+    this.bag.on(window, 'resize', viewportChanged);
+    this.bag.on(window, 'orientationchange', () => setTimeout(viewportChanged, 120));
+    if (window.visualViewport) this.bag.on(window.visualViewport, 'resize', viewportChanged);
     this.bag.on<PointerEvent>(window, 'pointerdown', (e) => {
       if (e.pointerType === 'touch' && !this.usingTouch) this.detectTouch(true);
       else if (e.pointerType === 'mouse' && this.usingTouch) this.detectTouch(false);
@@ -346,10 +411,18 @@ export class App {
     this.syncTouchVisibility();
   }
 
+  private wasPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+  private rotateDismissed = false;
+
   private syncTouchVisibility(): void {
     const show = this.usingTouch && this.state === 'playing';
-    $('touch').hidden = !show;
-    $('rotate-hint').hidden = !(this.usingTouch && window.innerHeight > window.innerWidth && this.state === 'playing');
+    const el = $('touch');
+    // The controls are armed each time they appear, so the tap that resumed
+    // or started the run can't also move, aim or throw.
+    if (show && el.hidden) this.touch.arm();
+    el.hidden = !show;
+    const portrait = window.innerHeight > window.innerWidth;
+    $('rotate-hint').hidden = !(this.usingTouch && portrait && !this.rotateDismissed && (this.state === 'playing' || this.state === 'paused'));
   }
 
   // ---------- game events -> audio, HUD, callouts ----------
@@ -473,14 +546,89 @@ export class App {
     $('title-storage').hidden = this.progress.persistent;
   }
 
+  // ---------- map choice ----------
+  private openMaps(): void {
+    this.renderMaps();
+    $('modal-maps').hidden = false;
+    $('arcade-maps').querySelector<HTMLElement>('.map-card.on')?.focus();
+  }
+
+  private closeMaps(): void {
+    $('modal-maps').hidden = true;
+    $('btn-play').focus();
+  }
+
+  private renderMaps(): void {
+    renderMapCards($('arcade-maps'), {
+      selected: this.settings.value.arcadeMap as MapChoice,
+      t: (k) => t(k as StringKey),
+      marks: false, // no teams in the Arcade
+      onPick: (c) => { this.updateSettings({ arcadeMap: c }); this.renderMaps(); $('arcade-maps').querySelector<HTMLElement>('.map-card.on')?.focus(); },
+    });
+  }
+
+  /** Start from the map choice: La Plaza and La Fiesta load their renderer on first use. */
+  private async startFromMaps(): Promise<void> {
+    const id = this.chosenMap();
+    const btn = $('btn-maps-start') as HTMLButtonElement;
+    if (id !== 'patio') {
+      btn.disabled = true;
+      btn.classList.add('loading');
+      try {
+        const mod = await import('./world/mapArena');
+        provideMapArena(mod.buildMapArena);
+        // Build the map now and compile its shaders while the button says
+        // loading: otherwise the run's first frame freezes for that work.
+        if (this.game.mapId !== id) {
+          this.game.setMap(id, this.settings.value.quality);
+          const q = QUALITY[this.settings.value.quality];
+          this.game.arena.setShadows(q.shadows, q.shadowSize);
+          this.renderer.shadowMap.needsUpdate = true;
+          await Promise.race([this.renderer.compileAsync(this.game.scene, this.camera).catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
+        }
+      } catch {
+        // Offline or a failed chunk: stay on the map choice and say so.
+        this.toast(t('map.loadFailed'));
+        return;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+      }
+    }
+    this.closeMaps();
+    this.pendingMap = id;
+    this.play(!this.shouldTutorial());
+  }
+
+  private pendingMap: MapId | null = null;
+
+  /** The saved choice, with Random resolved now (Restart keeps whatever was picked). */
+  private chosenMap(): MapId {
+    const c = this.settings.value.arcadeMap;
+    return c === 'random' ? randomMapId() : isMapId(c) ? c : 'patio';
+  }
+
+  private showModeChip(): void {
+    $('mode-chip').textContent = `${t('hud.mode')} · ${t(mapEntry(this.game.mapId).nameKey as StringKey).toUpperCase()}`;
+  }
+
   play(skipTutorial: boolean): void {
     audio.unlock();
     this.clearTimers();
+    const before = this.game.mapId;
+    this.game.setMap(this.pendingMap ?? this.game.mapId, this.settings.value.quality);
+    this.pendingMap = null;
+    if (this.game.mapId !== before) {
+      const q = QUALITY[this.settings.value.quality];
+      this.game.arena.setShadows(q.shadows, q.shadowSize);
+      this.renderer.shadowMap.needsUpdate = true;
+    }
+    this.showModeChip();
     this.resetRunUi();
     this.game.startRun(skipTutorial);
     this.enterPlaying();
     audio.setMusicMode(skipTutorial ? 'game' : 'title');
-    audio.resume();
+    if (this.state === 'playing') audio.resume(); // a portrait start is paused, and stays quiet
     this.runCount++;
     if (!this.storage.persistent && this.runCount === 1) this.toast(t('toast.storageOff'));
   }
@@ -505,6 +653,9 @@ export class App {
     this.input.enabled = true;
     this.touch.reset();
     this.syncTouchVisibility();
+    // A touch run started (or resumed) in portrait waits behind the rotate
+    // screen instead of playing under it, unless the player chose portrait.
+    if (this.usingTouch && window.innerHeight > window.innerWidth && !this.rotateDismissed) { this.pause(); return; }
     this.shake = 0;
     this.fovPunch = 0;
     if (!this.usingTouch) this.input.requestLock();
@@ -516,6 +667,8 @@ export class App {
     // Drop any charge in progress so Resume never fires a stale throw.
     this.game.charging = false;
     this.game.chargeT = 0;
+    // And her momentum: Resume starts from a standstill, not a glide.
+    this.game.player.vel.set(0, 0, 0);
     this.input.enabled = false;
     this.input.clear();
     this.touch.reset();
@@ -547,7 +700,7 @@ export class App {
     this.game.startRun(true);
     this.enterPlaying();
     audio.setMusicMode('game');
-    audio.resume();
+    if (this.state === 'playing') audio.resume();
   }
 
   toTitle(): void {
@@ -588,14 +741,35 @@ export class App {
     $('btn-howto').focus();
   }
 
-  private openConfirm(): void {
+  private confirmAction: (() => void) | null = null;
+
+  private openConfirm(title: StringKey, body: StringKey, yes: StringKey, action: () => void): void {
+    for (const [id, k] of [['confirm-title', title], ['confirm-body', body], ['btn-confirm-yes', yes]] as const) {
+      const el = $(id);
+      el.dataset.i18n = k;
+      el.textContent = t(k);
+    }
+    this.confirmAction = action;
+    this.confirmReturn = document.activeElement as HTMLElement | null;
     $('modal-confirm').hidden = false;
     $('btn-confirm-no').focus();
   }
 
+  private goHome(): void {
+    this.clearTimers();
+    this.input.clear();
+    this.input.exitLock();
+    audio.setMusicMode('off');
+    location.assign('./');
+  }
+
+  private confirmReturn: HTMLElement | null = null;
+
   private closeConfirm(): void {
     $('modal-confirm').hidden = true;
-    $('btn-reset').focus();
+    const back = this.confirmReturn;
+    this.confirmReturn = null;
+    (back && back.offsetParent !== null ? back : $('btn-reset')).focus();
   }
 
   private onRunEnd(r: RunResult): void {
@@ -718,8 +892,19 @@ export class App {
     if (this.game.player.alive) this.game.player.look(look.dx, look.dy);
   }
 
+  private adaptResolution(frameDt: number): void {
+    if (!this.usingTouch || this.state !== 'playing') { this.scaleClock = 0; return; }
+    this.scaleClock += frameDt;
+    if (this.scaleClock < 3) return;
+    this.scaleClock = 0;
+    const fps = this.loop.fps;
+    const next = fps < 40 ? Math.max(0.6, this.renderScale - 0.15) : fps > 56 ? Math.min(1, this.renderScale + 0.1) : this.renderScale;
+    if (Math.abs(next - this.renderScale) > 0.001) { this.renderScale = +next.toFixed(2); this.resize(); }
+  }
+
   private render(frameDt: number, alpha: number): void {
     if (this.contextLost) return;
+    this.adaptResolution(frameDt);
     this.resizeIfNeeded();
     const w = this.renderer.domElement.clientWidth, h = this.renderer.domElement.clientHeight;
     this.updateCamera(frameDt);
@@ -824,7 +1009,7 @@ export class App {
     const h = Math.max(1, c.clientHeight || window.innerHeight);
     this.lastCanvasSize = `${c.clientWidth}x${c.clientHeight}x${window.devicePixelRatio}`;
     const q = QUALITY[this.settings.value.quality];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr) * (this.usingTouch ? this.renderScale : 1));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -842,7 +1027,8 @@ export class App {
       listeners: liveListenerCount(),
       audioVoices: audio.voices,
       audioContexts: audio.contextCount,
-      musicTimer: audio.musicTimerRunning,
+      musicTimer: audio.musicTimerRunning || music.state().layer !== 'off',
+      music: music.state(),
       audioState: audio.state,
       musicMode: audio.musicMode,
       callouts: this.callouts.activeCount,
@@ -850,6 +1036,7 @@ export class App {
       lock: this.input.lock,
       touch: this.usingTouch,
       fps: Math.round(this.loop.fps),
+      renderScale: this.renderScale,
       score: this.game.scoring.score,
       hp: this.game.player.hp,
       wave: this.game.director.index,

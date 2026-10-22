@@ -4,6 +4,8 @@ import { clamp } from '../core/math';
 import { resolveCircle, type AABB } from '../physics/collision';
 
 export class Player {
+  /** The arena's walkable bounds; the original courtyard when unset. */
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
   readonly pos = new THREE.Vector3();
   readonly vel = new THREE.Vector3();
   readonly knock = new THREE.Vector3();
@@ -73,8 +75,9 @@ export class Player {
     const nz = this.pos.z + (this.vel.z + this.knock.z) * dt;
     resolveCircle(nx, nz, PLAYER.radius, colliders, this.tmp);
     const lim = ARENA.outer - 1;
-    this.tmp.x = clamp(this.tmp.x, -lim, lim);
-    this.tmp.z = clamp(this.tmp.z, -lim, lim);
+    const bd = this.bounds;
+    this.tmp.x = bd ? clamp(this.tmp.x, bd.minX + 1, bd.maxX - 1) : clamp(this.tmp.x, -lim, lim);
+    this.tmp.z = bd ? clamp(this.tmp.z, bd.minZ + 1, bd.maxZ - 1) : clamp(this.tmp.z, -lim, lim);
     this.distanceMoved += Math.hypot(this.tmp.x - this.pos.x, this.tmp.z - this.pos.z);
     this.pos.x = this.tmp.x;
     this.pos.z = this.tmp.z;

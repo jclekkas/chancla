@@ -192,7 +192,7 @@ export class MissionRuntime implements Controller {
     this.hud.update(this.sim, this.focus, showHints, cam, w, h, this.view);
     e.hud.update({
       hp: p.hp, alive: p.alive, weapon: p.weapon, cooldownMs: p.cooldownMs, switchMs: p.switchMs, respawnInMs: p.koMs, protectedMs: p.invulnMs,
-      scores: [0, 0], timeLeftMs: 0, phase: 'campaign', countdownMs: 0, region: '', rtt: 0, quality: 'good', fps: e.fps, showStats: settings.showStats, practice: false,
+      scores: [0, 0], timeLeftMs: 0, phase: 'campaign', countdownMs: 0, region: '', rtt: 0, quality: 'good', fps: e.fps, showStats: settings.showStats, practice: false, team: null,
     }, dt, e.input.yaw);
     e.hud.placeLabels(cam, w, h, [], dt);
     this.dialogue.update();

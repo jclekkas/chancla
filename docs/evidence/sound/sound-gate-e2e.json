@@ -1,0 +1,196 @@
+{
+  "at": "2026-10-21T19:21:23.611Z",
+  "site": "http://localhost:4173/",
+  "headed": true,
+  "passed": 23,
+  "total": 23,
+  "checks": [
+    {
+      "name": "fresh visit: \"Enable sound\" is offered before any interaction",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "enable",
+        "text": "🔈 Enable sound"
+      }
+    },
+    {
+      "name": "clicking it starts audio and the menu theme",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "rosa-theme",
+        "want": "menu"
+      }
+    },
+    {
+      "name": "the control hides once audio is really running",
+      "ok": true,
+      "detail": {
+        "shown": false,
+        "state": "hidden",
+        "text": "🔈 Enable sound"
+      }
+    },
+    {
+      "name": "Practice: its track plays and the control stays hidden",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "bounce-y-joke",
+        "want": "combat"
+      }
+    },
+    {
+      "name": "no music or voice request failed, no page errors",
+      "ok": true,
+      "detail": {
+        "bad": [],
+        "errors": []
+      }
+    },
+    {
+      "name": "fresh visit, first click on Story: audio starts, no extra step",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "rosa-theme",
+        "want": "select"
+      }
+    },
+    {
+      "name": "campaign mission: its track plays",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "ruleros",
+        "want": "ruleros"
+      }
+    },
+    {
+      "name": "back home: the menu theme, control hidden",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "rosa-theme",
+        "want": "menu"
+      }
+    },
+    {
+      "name": "[simulated block] after a click that could not start audio, the control says blocked",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "blocked",
+        "text": "🔇 Sound is blocked. Tap to try again"
+      }
+    },
+    {
+      "name": "[simulated block] clicking it while still blocked keeps it offered (not shown as enabled)",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "blocked",
+        "text": "🔇 Sound is blocked. Tap to try again"
+      }
+    },
+    {
+      "name": "[simulated block] the game stays playable: menus still work",
+      "ok": true
+    },
+    {
+      "name": "[simulated block] once the browser allows it, the button starts audio and hides",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "rosa-theme",
+        "want": "select"
+      }
+    },
+    {
+      "name": "muted on purpose: the control says muted, not blocked",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "muted",
+        "text": "🔇 Sound muted in Settings"
+      }
+    },
+    {
+      "name": "the Settings status line names the mute",
+      "ok": true,
+      "detail": "Sound is off because the volumes below are at zero."
+    },
+    {
+      "name": "mute is kept (music bus at zero)",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "track failure: the built-in score plays, the control is not shown as an error",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "synth",
+        "rec": null,
+        "want": "menu"
+      }
+    },
+    {
+      "name": "track failure: the Settings status line explains the fallback",
+      "ok": true,
+      "detail": "Sound is on. The music track didn't load, so the built-in score is playing. Retrying automatically."
+    },
+    {
+      "name": "Arcade fresh visit: \"Enable sound\" is offered",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "enable",
+        "text": "🔈 Enable sound"
+      }
+    },
+    {
+      "name": "Arcade: the button starts audio and its title music",
+      "ok": true,
+      "detail": {
+        "audio": "running",
+        "timer": true
+      }
+    },
+    {
+      "name": "Arcade run: the control stays hidden",
+      "ok": true
+    },
+    {
+      "name": "Arcade -> Main menu: a new page, so sound waits for a gesture and says so",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "state": "enable",
+        "text": "🔈 Enable sound"
+      }
+    },
+    {
+      "name": "one click on the main menu brings the theme back",
+      "ok": true,
+      "detail": {
+        "ctx": "running",
+        "layer": "recorded",
+        "rec": "rosa-theme",
+        "want": "menu"
+      }
+    },
+    {
+      "name": "Arcade: no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

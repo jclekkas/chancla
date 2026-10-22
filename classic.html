@@ -78,7 +78,9 @@
           <div class="score"><span class="score-label" data-i18n="hud.score"></span><span id="score">0</span></div>
           <div class="combo" id="combo" hidden><span class="mult" id="mult">x1</span><span class="combo-n" id="combo-n"></span><div class="combo-timer"><div id="combo-timer"></div></div></div>
           <div class="fps" id="fps" hidden></div>
-          <button type="button" class="hud-btn" id="btn-pause" data-i18n-aria="hud.pause" title="Esc">❚❚</button>
+          <button type="button" class="hud-btn menu-btn" id="btn-pause" data-i18n-aria="hud.pause" title="Esc"><span aria-hidden="true">❚❚</span> <span data-i18n="hud.pause"></span></button>
+          <div class="esc-hint" aria-hidden="true" data-i18n="hud.escHint"></div>
+          <div class="mode-chip" id="mode-chip" data-i18n="hud.mode"></div>
         </div>
         <div class="crosshair" id="crosshair" aria-hidden="true">
           <svg viewBox="0 0 80 80" width="80" height="80">
@@ -121,7 +123,15 @@
           <button type="button" class="tbtn tbtn-throw" id="t-throw" data-i18n-aria="touch.throw"><span class="tbtn-chancla" aria-hidden="true"></span></button>
         </div>
       </div>
-      <div class="rotate-hint" id="rotate-hint" data-i18n="touch.rotate" hidden></div>
+      <!-- Portrait during a touch run: the run pauses and asks for landscape. -->
+      <section class="rotate-screen" id="rotate-hint" hidden role="dialog" aria-modal="true" aria-labelledby="rotate-title">
+        <div class="rotate-card">
+          <div class="rotate-icon" aria-hidden="true"><span class="phone"></span></div>
+          <h2 id="rotate-title" data-i18n="touch.rotateTitle"></h2>
+          <p data-i18n="touch.rotate"></p>
+          <button type="button" class="btn-ghost" id="btn-rotate-menu" data-i18n="touch.rotateMenu"></button>
+        </div>
+      </section>
 
       <!-- Title -->
       <section id="screen-title" class="screen title" hidden aria-labelledby="logo">
@@ -152,6 +162,17 @@
         </div>
       </section>
 
+      <section id="modal-maps" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="maps-title">
+        <div class="panel wide maps-panel">
+          <h2 id="maps-title" data-i18n="map.choose"></h2>
+          <div id="arcade-maps"></div>
+          <div class="results-actions">
+            <button type="button" class="btn-play small" id="btn-maps-start" data-i18n="map.start"></button>
+            <button type="button" class="btn-ghost" id="btn-maps-back" data-i18n="map.back"></button>
+          </div>
+        </div>
+      </section>
+
       <section id="modal-howto" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="howto-title">
         <div class="panel controls-card" id="controls-card">
           <h2 id="howto-title" data-i18n="controls.heading"></h2>
@@ -177,7 +198,9 @@
           <button type="button" class="btn-play small" id="btn-resume" data-i18n="pause.resume"></button>
           <button type="button" class="btn-ghost wide" id="btn-restart" data-i18n="pause.restart"></button>
           <button type="button" class="btn-ghost wide" id="btn-pause-settings" data-i18n="pause.settings"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-maps" data-i18n="pause.maps"></button>
           <button type="button" class="btn-ghost wide" id="btn-to-title" data-i18n="pause.toTitle"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-home" data-i18n="title.mainMenu"></button>
           <p class="note" id="pause-lock-note" data-i18n="pause.lockNote"></p>
         </div>
       </section>
@@ -207,7 +230,9 @@
             <button type="button" class="btn-ghost" id="btn-share" data-i18n="results.share"></button>
             <button type="button" class="btn-ghost" id="btn-copy" data-i18n="results.copy"></button>
             <button type="button" class="btn-ghost" id="btn-download" data-i18n="results.download"></button>
+            <button type="button" class="btn-ghost" id="btn-results-maps" data-i18n="pause.maps"></button>
             <button type="button" class="btn-ghost" id="btn-results-title" data-i18n="results.toTitle"></button>
+            <button type="button" class="btn-ghost" id="btn-results-home" data-i18n="title.mainMenu"></button>
           </div>
           <textarea class="share-fallback" id="share-fallback" readonly hidden aria-label="Share text"></textarea>
         </div>
@@ -217,6 +242,7 @@
       <section id="modal-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="panel settings">
           <h2 id="settings-title" data-i18n="settings.title"></h2>
+          <p class="note sound-status" id="sound-status" role="status"></p>
           <div class="field">
             <span class="label" id="lbl-lang" data-i18n="settings.language"></span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">
@@ -227,7 +253,9 @@
           <label class="field"><span class="label" data-i18n="settings.volume"></span><input type="range" min="0" max="100" step="1" id="set-volume" /></label>
           <label class="field check"><input type="checkbox" id="set-mute" /><span data-i18n="settings.mute"></span></label>
           <label class="field check"><input type="checkbox" id="set-music" /><span data-i18n="settings.music"></span></label>
+          <div class="field" id="soundtrack"></div>
           <label class="field"><span class="label" data-i18n="settings.sensitivity"></span><input type="range" min="20" max="300" step="5" id="set-sens" /><output id="out-sens"></output></label>
+          <label class="field"><span class="label" data-i18n="settings.touchSensitivity"></span><input type="range" min="30" max="300" step="5" id="set-tsens" /><output id="out-tsens"></output></label>
           <label class="field check"><input type="checkbox" id="set-invert" /><span data-i18n="settings.invertY"></span></label>
           <label class="field check"><input type="checkbox" id="set-assist" /><span data-i18n="settings.aimAssist"></span></label>
           <label class="field check"><input type="checkbox" id="set-motion" /><span data-i18n="settings.reducedMotion"></span></label>

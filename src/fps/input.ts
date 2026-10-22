@@ -2,6 +2,13 @@
 // click; losing it (Esc, alt-tab, a browser prompt) opens the menu. Every
 // held key is dropped when focus or visibility changes so nothing sticks.
 //
+// Escape is handled here whether or not the pointer is locked. Browsers
+// differ: most release the lock themselves and swallow the key, some
+// deliver the key while the lock is still held (headless Chromium, some
+// fullscreen setups), and some deliver it just after releasing. So Escape
+// releases the lock itself and asks for the menu, and the menu ignores a
+// second Escape that belongs to the same press.
+//
 // Shortcut safety: Ctrl and Cmd combinations are never captured (Ctrl+W
 // would close the tab), so crouch is C or Shift rather than Ctrl.
 import { ListenerBag } from '../core/listeners';
@@ -44,6 +51,11 @@ export class FpsInput {
   onScoreboard: ((open: boolean) => void) | null = null;
   onSwitch: (() => void) | null = null;
   lookEvents = 0;
+  /** performance.now() when the menu was last requested from the keyboard or a lost lock. */
+  lastMenuAt = -1e9;
+  /** performance.now() when the pointer lock was last released (browsers refuse re-locking for ~1 s). */
+  unlockedAt = -1e9;
+  private lockedAt = -1e9;
 
   constructor(private canvas: HTMLElement) {
     const doc = document;
@@ -62,6 +74,8 @@ export class FpsInput {
     });
     this.bag.on<MouseEvent>(doc, 'mousedown', (e) => {
       if (!this.locked || !this.enabled) return;
+      // The click that re-captured the mouse must never also throw.
+      if (performance.now() - this.lockedAt < 200) return;
       if (e.button === 0) this.mouseFire = true;
       else if (e.button === 2) this.toggleWeapon();
     });
@@ -76,8 +90,9 @@ export class FpsInput {
     }, { passive: true });
     this.bag.on(doc, 'pointerlockchange', () => {
       const locked = doc.pointerLockElement === this.canvas;
+      if (locked === this.locked) return;
       this.locked = locked;
-      if (!locked) this.release();
+      if (locked) { this.lockedAt = performance.now(); this.fallback = false; } else { this.unlockedAt = performance.now(); this.release(); }
       this.onLockChange?.(locked);
     });
     this.bag.on(doc, 'pointerlockerror', () => { this.locked = false; this.onLockError?.(); });
@@ -91,7 +106,15 @@ export class FpsInput {
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (!this.enabled) { if (!down) this.keys.delete(e.code); return; }
-    if (e.code === 'Escape') { if (down && !this.locked) this.onMenu?.(); return; }
+    if (e.code === 'Escape') {
+      if (!down || e.repeat) return;
+      // In play: free the mouse ourselves (if the browser didn't) and open the menu.
+      this.lastMenuAt = performance.now();
+      if (this.locked) this.exitLock();
+      this.release();
+      this.onMenu?.();
+      return;
+    }
     if (e.code === 'Tab') {
       e.preventDefault();
       if (this.scoreboard !== down) { this.scoreboard = down; this.onScoreboard?.(down); }
@@ -107,7 +130,7 @@ export class FpsInput {
     if (e.code === 'Digit1') this.setWeapon(0);
     else if (e.code === 'Digit2') this.setWeapon(1);
     else if (e.code === 'KeyQ') this.toggleWeapon();
-    else if (e.code === 'KeyP') this.onMenu?.();
+    else if (e.code === 'KeyP') { this.lastMenuAt = performance.now(); if (this.locked) this.exitLock(); this.release(); this.onMenu?.(); }
   }
 
   private setWeapon(w: WeaponId): void {

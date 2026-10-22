@@ -1,7 +1,7 @@
 // Every multiplayer balancing and networking value lives here. The server,
 // the in-browser practice host and the client all read the same numbers.
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4; // 4: rooms carry a map
 
 export const NET = {
   tickRate: 60, // authoritative simulation steps per second

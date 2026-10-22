@@ -4,15 +4,133 @@
 
 | Part | State |
 | --- | --- |
-| Music | **Recorded soundtrack integrated:** five Suno tracks chosen by the project owner, prepared as seamless loops (see [Recorded soundtrack](#recorded-soundtrack)). **The original synthesized score stays** as the loading and failure fallback, and plays any cue without a recording. Nobody has done a listening pass of the loops or transitions yet; everything below was measured, not heard. |
+| Music | **The full Suno playlist is in:** all 11 songs, with automatic per-scene rotation, Shuffle all, or one chosen song (see [The full soundtrack](#the-full-soundtrack)). The five curated seamless loops prepared earlier stay, for repeating one song. **The original synthesized score stays** as the loading and failure fallback. **Nobody has listened** to the songs, the rotation or the transitions in the game; everything below was measured or tested by script, not heard. |
 | Sound effects | Finished as synthesized effects (`src/audio/audio.ts`), the same as the shooter's. |
 | Dialogue system | Finished: event triggers, cooldowns, repetition avoidance, priorities, no overlaps, ducking, banter mute, subtitles in English or Spanish, multiplayer rules. |
 | Spoken lines (script) | Finished: 79 lines (66 for Rosa, 13 for the opponents), written in Spanish first, with English subtitles. See [VOICE_SCRIPT.md](VOICE_SCRIPT.md). |
 | **Voice recordings** | **Missing.** The shipped clips are temporary synthetic placeholders (see below). They are clearly robotic, the Rosa voice is Castilian rather than the intended character, and they are not finished voice acting. **All 79 lines still need recorded performances** (or a commercially licensed, natural Spanish neural voice). |
 
-## Recorded soundtrack
+## The full soundtrack
 
-Five instrumental tracks made with Suno and chosen by the project owner. The assignments came with the tracks (`assets/music/originals/SOURCE-NOTES.txt`). They are applied in `assets/music/loops.json`:
+The eleven songs of the Suno playlist, all in the game. Songs are identified by Suno id, never by title. Full ids, source links and checksums are in `assets/music/playlist.json`.
+
+| # | Song | Suno id | Length | Size | Loudness / true peak | Player gain | Automatic pools | Curated loop |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Guerra de Vecinos | `36b2c7ad` | 3:02.8 | 2.8 MB | -17.2 LUFS / -4.0 dBTP | +1.2 dB | intense, action | no |
+| 2 | Festive Boss Battle | `d4b3fb6f` | 2:10.8 | 2.0 MB | -17.2 LUFS / -5.1 dBTP | +1.2 dB | intense, action | no |
+| 3 | No Manches | `b5a37a72` | 2:11.2 | 2.0 MB | -16.5 LUFS / -4.3 dBTP | +0.5 dB | intense, action | no |
+| 4 | Fricas y Fricas | `72898684` | 2:46.5 | 2.5 MB | -16.7 LUFS / -3.6 dBTP | +0.7 dB | chores, action | no |
+| 5 | Bounce y Joke | `d5ece162` | 1:08.0 | 1.0 MB | -16.5 LUFS / -3.9 dBTP | +0.5 dB | chores, action | yes (`bounce-y-joke`) |
+| 6 | Juego de Barrio | `4c389fba` | 1:11.2 | 1.1 MB | -16.6 LUFS / -4.2 dBTP | +0.6 dB | chores, action | no |
+| 7 | Ruleros | `66be822e` | 2:26.9 | 2.2 MB | -16.5 LUFS / -3.1 dBTP | +0.5 dB | exploration, action | yes (`ruleros`) |
+| 8 | Sueño de Cumbia | `91dee4c5` | 2:23.1 | 2.2 MB | -16.5 LUFS / -2.8 dBTP | +0.5 dB | menu, exploration, action | no |
+| 9 | Sobrescuro | `a5773b78` | 1:18.0 | 1.2 MB | -16.5 LUFS / -2.5 dBTP | +0.5 dB | exploration, action | no |
+| 10 | Grojo Curioso | `6265def8` | 1:03.5 | 1.0 MB | -16.7 LUFS / -2.7 dBTP | +0.7 dB | menu, exploration, action | no |
+| 11 | Groquo de diversión | `036c0292` | 2:01.9 | 1.9 MB | -17.4 LUFS / -3.4 dBTP | +1.4 dB | menu, action | yes (`rosa-theme`) |
+
+**Two more recordings are kept, separately:** the earlier **Guerra de Vecinos** and **Fricas y Fricas** first integrated as loops. They are different recordings from playlist songs 1 and 4: their waveforms correlate at about 0 with the new versions. They appear in the song list as "(earlier version)" and play only when chosen. They are not counted in "all eleven".
+
+The other three earlier loops are the *same* recordings as playlist songs 11, 7 and 5. Their waveforms correlate at 0.99, at zero offset. So they are not separate songs: each serves as that song's seamless loop when it is chosen to repeat.
+
+### Where each song plays (Automatic)
+
+These pools are editorial starting points taken from the brief. **They were not chosen by listening.**
+
+| Scenes | Pool | First song the first time |
+| --- | --- | --- |
+| Title, mission select, online lobby, results; the Arcade title | **menu**: Groquo de diversión, Sueño de Cumbia, Grojo Curioso | Groquo de diversión |
+| Mission 1, Operación Ruleros | **exploration**: Ruleros, Sueño de Cumbia, Sobrescuro, Grojo Curioso | Ruleros |
+| Mission 2 (kitchen) and Mission 3 (patio) | **chores**: Fricas y Fricas, Juego de Barrio, Bounce y Joke | Fricas y Fricas |
+| Practice, online matches, Arcade runs | **action**: all eleven | (shuffled) |
+| Mission 4 (piñata finale), the Arcade boss | **intense**: Guerra de Vecinos, Festive Boss Battle, No Manches | Guerra de Vecinos |
+
+Every song is in the selector and in at least one pool besides "action".
+
+### Settings: Soundtrack
+
+The Soundtrack section is on both the main page and the Arcade, in English and Spanish. It never appears on the combat HUD.
+
+- **Automatic** (the default): each scene draws from its own pool.
+- **Shuffle all**: all eleven, in random order, carrying on across scenes.
+- **One song**: the chosen song repeats. Picking a song from the list switches to this mode.
+- **Next song**: skips to another song of the pool. In One song mode, it moves the choice to the next song in the list.
+- **Now playing**: the title. It also says when the built-in score is covering for a song that's loading, and when music is muted.
+
+The choice is stored on this device (`chancla.music.v1`) and shared by both pages. It never changes volume or mute. Music is local to each player: nothing is sent to other online players, and there's no Suno login or API at runtime. Files are served from this site, not hotlinked.
+
+### How songs play
+
+- **Whole songs.** In Automatic and Shuffle all, each song plays to its natural end. Then the next one crossfades in over 3 s. Next uses a 1 s crossfade, and a scene change 1.5 s.
+- **Shuffle bags.** A pool plays every song once before any repeats. A new round never starts with the song that just ended. When a pool starts for the first time in a session, its first song plays first (Groquo for the menus).
+- **Continuity.** Screens that share a pool (title, then mission select, then results) keep the same song going, so it doesn't restart. Pause, rendering and minor navigation don't restart it either. In Shuffle all, scene changes don't change the song at all.
+- **One song.** With a curated loop, it repeats seamlessly using that loop (sample-accurate loop points, baked seam). Without one, it crosses from its end back to its start over 3 s.
+- **Arcade.** The Arcade now uses the same controller as the main page; its private groove is no longer used. Pausing a run lowers the song to 45% instead of stopping it, and Resume brings it back.
+- **Two songs at most.** Two songs sound together only during a crossfade. When a new change comes while one fade is still running, the older fading song is cut in 0.12 s.
+- **Late downloads.** Every request carries a generation number. A download for a scene that has since been left never starts playing.
+- **Unchanged:** the mix and the in-game EQ dip, dialogue ducking, the Enable sound recovery, mute and volume, and the bounded retries (a failed download is retried after 4 s and 15 s, then given up).
+- **Failure handling.**
+  - If a song fails to download or decode, the next song in the pool is tried.
+  - If none can play, the synthesized score plays.
+
+### Files, loudness and memory
+
+- **Files:** the eleven MP3s are served **byte for byte as supplied** (128 kbps, 48 kHz stereo, no embedded art, SHA-256 as in the supplier's `tracks.json`). They are not re-encoded.
+- **Loudness:** matched by a playback gain (+0.5 to +1.4 dB) to the -16 LUFS of the curated loops. The true peak stays at or below -2 dBTP after gain.
+- **Build:** `python3 scripts/music/playlist.py <unzipped playlist>` checks, measures, copies and writes `assets/music/playlist.json` and `src/audio/playlist-data.ts`.
+- **Kept out of the repository:** the ZIP and the original full-size downloads.
+- **Size:** the playlist adds 20 MB to the deployment, so `public/music` totals 29.4 MB.
+- **Loading:**
+  - Nothing is downloaded before the page asks for music.
+  - A fresh visit fetches only the opening song.
+  - Only the current song is downloaded and decoded, plus the next one from 25 s before the end.
+  - Everything else is released, including the compressed bytes once a song is decoded.
+- **Memory:**
+  - A decoded song costs its length × 48,000 × 2 channels × 4 bytes. That's 23 MB for Grojo Curioso and 67 MB for Guerra de Vecinos.
+  - Measured in headed Chromium across the browser checks: **49 MB at rest with one song, 67 MB at the peak of a crossfade**.
+  - The worst case, the two longest songs crossfading (Guerra de Vecinos and Fricas y Fricas), is about 128 MB.
+  - **Not measured on a phone.** That is the main risk on low-memory phones (the Arcade's Touch Beta).
+
+### Verified, and not
+
+All of this ran in this Linux container. "Headed" means a real Chromium window under Xvfb, which enforces the gesture rule for audio.
+
+- `npm test` adds:
+  - `tests/playlist.test.ts`: all 11 ids, checksums of the shipped files, pools and assignments, and shuffle-bag rules over 200 random seeds.
+  - 8 controller tests in `tests/music-lifecycle.test.ts`:
+    - the natural-end handover, with two songs only in the fade and two decoded at most
+    - Shuffle all plays 11 before any repeat, never twice in a row
+    - pools per scene, with continuity
+    - Next
+    - One song with and without a loop
+    - the earlier recordings
+    - 24 rapid scene and mode changes, ending on the right song
+    - mute untouched
+- `npm run e2e:music`: 44 checks, headless. They include each of the 11 songs fetched from its deployed path and decoded by the browser at the measured length, and a natural ending in Mission 1 handing over to the next exploration song.
+- `scripts/playlist-e2e.ts`: 23 checks, headed. They cover:
+  - a fresh visit (no audio and at most one song fetched before a gesture), then the first gesture
+  - the Settings section in English and Spanish, and the 13-song list
+  - Next, a natural ending in Shuffle all, and One song both ways
+  - after a reload, One song and mute are still in effect
+  - tab hidden and back
+  - six fast mission and menu switches (never more than two songs)
+  - main menu, then Arcade, pause, resume, home
+  - a missing opening song (404), which another menu song covers
+- **Not verified:**
+  - **No one has listened.** The pools, the crossfades and the songs' endings may not sound right.
+  - Not tested on real Safari, Firefox, Windows, Mac, iPhone or Android.
+  - Memory limits on phones are not tested.
+
+Listening material in `evidence/music/transitions/`, recorded from the game's own mix with music at 100%. **Nobody has listened to these yet:**
+
+- `next-button.webm`: the menu song, then Next pressed at 0:05, with a 1 s crossfade.
+- `natural-ending-shuffle.webm`: Bounce y Joke 10 s from its end. The next song crossfades in from 0:07 to 0:10.
+- `one-song-repeat.webm`: Festive Boss Battle 7 s from its end, then back to its start, crossfading from 0:04.
+- `scene-change-menu-to-mission.webm`: a menu song, then Mission 1 starting at about 0:05, crossfading to the exploration pool. Mission 1's spoken intro follows, so it is louder.
+- `arcade-pause-resume.webm`: an Arcade run, paused at 0:04 (the song carries on, lower), resumed at about 0:09.
+
+## Curated loops (the first five recordings)
+
+These five recordings were the first integration, as seamless loops, one per scene. **Scene assignment now comes from the playlist pools above.** The loops are used when a player picks one of these songs to repeat: rosa-theme for Groquo de diversión, plus ruleros and bounce-y-joke. The two earlier Guerra and Fricas versions are only heard this way. The table below is how they were first assigned and prepared:
 
 | Track | Plays in | Loop | Browser file | Seam similarity | Seam check: novelty / beat |
 | --- | --- | --- | --- | --- | --- |
@@ -74,6 +192,33 @@ Regression coverage:
 
 - `tests/music-lifecycle.test.ts`: 8 tests with a fake audio context.
 - `npm run e2e:music-lifecycle`: 27 browser checks. Headless Chromium doesn't enforce the gesture rule, so the script enforces it from trusted input events, in a Chrome-like mode and a strict Safari-like mode.
+
+### The "Enable sound" control
+
+A visitor reported no audio on production. In this environment, a first visit to the exact production build (`45900d0`) in a real, headed Chromium with an empty profile started audio on the first click every time. All music and voice files loaded with status 200. So the report is **not reproduced here**. The likely causes are ones this environment can't exercise:
+
+- the visitor never clicked: the page gave no sign that a click turns sound on
+- an iPhone or iPad with the silent switch on, which mutes Web Audio
+- a browser stricter than Chromium
+
+`src/ui/soundGate.ts` (main game and Arcade) shows a button whenever audio is not actually running:
+
+| State | What it says | What it means |
+| --- | --- | --- |
+| enable | Enable sound / Activar sonido | No gesture yet. Clicking it, or anything else, starts audio. |
+| blocked | Sound is blocked. Tap to try again | A gesture was made but the browser still won't play. Its hint mentions tab mute and the iPhone silent switch. |
+| unsupported | This browser can't play sound | No Web Audio. The game works without it. |
+| muted (menus only) | Sound muted in Settings | The player turned it down to zero. Clicking opens Settings. |
+
+- The button calls `audio.unlockFromGesture()` directly from its own click. It hides only when the audio context reports `running`, never just because it was clicked.
+- A music track that fails to download is not shown as a sound problem, because the built-in score plays. The Settings panel's status line says which state applies, including "the music track didn't load; the built-in score is playing; retrying".
+- iPhone and iPad: the page asks for a "playback" audio session (Safari 16.4+), and plays 50 ms of silence through a media element on the first gesture, so the silent switch doesn't mute the game. **Not tested on a real device.**
+- Play is never blocked: menus and play work while sound loads or stays unavailable.
+
+Checks:
+
+- `xvfb-run -a node --import tsx scripts/sound-gate-e2e.ts` runs 23 checks in headed Chromium with its real autoplay policy. They cover a fresh visit, Practice, campaign and back home, mute, a failed track, and the Arcade and back to the main menu. The "blocked" case is simulated, by stubbing `AudioContext.resume()`.
+- 3 unit tests in `tests/music-lifecycle.test.ts`.
 
 ### Verified, and not
 

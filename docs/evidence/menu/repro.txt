@@ -1,0 +1,13 @@
+Reproduction, 2026-10-21T22:25:03Z. Chromium 141 headed under Xvfb (Linux), real pointer lock. Practice, 1280x720.
+
+== production code (main @ 45900d0, the commit production was last deployed from; the live site itself is not reachable from this environment)
+after click to play { lock: true, screen: 'none', menuVisible: false }
+menu button box { x: 1224, y: 10, width: 44, height: 44 } hint visible false
+after clicking the menu icon while aiming { lock: true, screen: 'none', menuVisible: false }
+after Escape { lock: true, screen: 'none', menuVisible: false }
+
+== this preview
+after click to play { lock: true, screen: 'none', menuVisible: false }
+menu button box { x: 1181.046875, y: 10, width: 86.953125, height: 44 } hint visible true
+after clicking the menu icon while aiming { lock: true, screen: 'none', menuVisible: false }
+after Escape { lock: false, screen: 'pause', menuVisible: true }

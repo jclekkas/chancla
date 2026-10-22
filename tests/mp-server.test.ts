@@ -44,6 +44,28 @@ afterAll(() => {
 });
 
 describe('game server', () => {
+  it('the host picks the map; everyone in the room sees it, and only the host can change it', async () => {
+    const host = client('Host');
+    await host.connect();
+    host.send({ t: 'create', map: 'fiesta' });
+    await until(() => !!host.room, 4000, 'room');
+    expect(host.room!.map).toBe('fiesta');
+    const guest = client('Guest');
+    await guest.connect();
+    guest.send({ t: 'join', code: host.room!.code });
+    await until(() => guest.room?.map === 'fiesta', 4000, 'guest sees the host\'s map');
+    guest.send({ t: 'map', map: 'patio' });
+    await until(() => guest.errors.includes('not_owner'), 4000, 'guest refused');
+    host.send({ t: 'map', map: 'plaza' });
+    await until(() => guest.room?.map === 'plaza' && host.room?.map === 'plaza', 4000, 'both see the new map');
+    guest.send({ t: 'ready', ready: true });
+    await until(() => host.room!.members.every((m) => m.ready), 4000, 'ready');
+    host.send({ t: 'start' });
+    await until(() => guest.room?.phase === 'playing' || guest.room?.phase === 'countdown', 6000, 'match on the chosen map');
+    expect(guest.room!.map).toBe('plaza');
+    host.send({ t: 'leave' }); guest.send({ t: 'leave' });
+  }, 20000);
+
   it('serves health and readiness', async () => {
     const h = await (await fetch(`http://127.0.0.1:${PORT}/healthz`)).json();
     expect(h.ok).toBe(true);

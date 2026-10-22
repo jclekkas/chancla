@@ -1,0 +1,83 @@
+{
+  "env": {
+    "at": "2026-10-21T20:59:14.335Z",
+    "browser": "Chromium 141 headless, SwiftShader (software GL)",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4,
+    "os": "Linux 6.18.44-fc-v140"
+  },
+  "rows": [
+    {
+      "mode": "practice",
+      "map": "patio",
+      "loadMs": 3249,
+      "jsFrameMs": 43.8,
+      "fps": 10.3,
+      "drawCalls": 22,
+      "triangles": 1720,
+      "geometries": 137,
+      "textures": 14,
+      "worldDrawCalls": 39,
+      "heapMB": 17
+    },
+    {
+      "mode": "arcade",
+      "map": "patio",
+      "loadMs": 69,
+      "fps": 7.1,
+      "drawCalls": 217,
+      "triangles": 27058,
+      "geometries": 96,
+      "textures": 5,
+      "heapMB": 12
+    },
+    {
+      "mode": "practice",
+      "map": "plaza",
+      "loadMs": 2814,
+      "jsFrameMs": 35.8,
+      "fps": 10.3,
+      "drawCalls": 22,
+      "triangles": 1720,
+      "geometries": 149,
+      "textures": 20,
+      "worldDrawCalls": 44,
+      "heapMB": 19
+    },
+    {
+      "mode": "arcade",
+      "map": "plaza",
+      "loadMs": 1253,
+      "fps": 4.5,
+      "drawCalls": 193,
+      "triangles": 34656,
+      "geometries": 116,
+      "textures": 13,
+      "heapMB": 17
+    },
+    {
+      "mode": "practice",
+      "map": "fiesta",
+      "loadMs": 2940,
+      "jsFrameMs": 24.7,
+      "fps": 10.3,
+      "drawCalls": 22,
+      "triangles": 1720,
+      "geometries": 133,
+      "textures": 16,
+      "worldDrawCalls": 40,
+      "heapMB": 22
+    },
+    {
+      "mode": "arcade",
+      "map": "fiesta",
+      "loadMs": 1033,
+      "fps": 4.3,
+      "drawCalls": 163,
+      "triangles": 30356,
+      "geometries": 110,
+      "textures": 12,
+      "heapMB": 14
+    }
+  ]
+}

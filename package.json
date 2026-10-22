@@ -15,7 +15,17 @@
     "start:server": "node dist-server/index.js",
     "e2e:music": "node --import tsx scripts/music-e2e.ts",
     "music:prepare": "python3 scripts/music/prepare.py && python3 scripts/music/check-seams.py",
-    "e2e:music-lifecycle": "node --import tsx scripts/music-lifecycle-e2e.ts"
+    "e2e:music-lifecycle": "node --import tsx scripts/music-lifecycle-e2e.ts",
+    "e2e:sound": "node --import tsx scripts/sound-gate-e2e.ts",
+    "e2e:play": "node --import tsx scripts/play-e2e.ts",
+    "e2e:touch": "node --import tsx scripts/touch-e2e.ts",
+    "e2e:playlist": "node --import tsx scripts/playlist-e2e.ts",
+    "e2e:menu": "node --import tsx scripts/menu-access-e2e.ts",
+    "music:playlist": "python3 scripts/music/playlist.py",
+    "perf:mobile": "node --import tsx scripts/perf-mobile.ts",
+    "perf:maps": "node --import tsx scripts/perf-maps.ts",
+    "shots:maps": "node --import tsx scripts/map-shots.ts",
+    "smoke:online": "node --import tsx scripts/online-smoke.ts"
   },
   "dependencies": {
     "@fontsource/lilita-one": "5.3.0",

@@ -25,7 +25,11 @@ export interface HudFrame {
   fps: number;
   showStats: boolean;
   practice: boolean;
+  team: number | null; // the local player's team
 }
+
+const teamName = (team: number) => t(team === 0 ? 'hud.sol' : 'hud.luna');
+const teamIcon = (team: number) => (team === 0 ? '☀' : '☾');
 
 const pesadaIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"><g transform="rotate(-18 60 40)"><path d="M16 46 C16 30 34 22 60 24 C92 26 106 34 106 46 L106 54 C106 60 92 64 60 64 C30 64 16 60 16 54 Z" fill="#9a6a3e"/><path d="M16 54 C16 60 30 64 60 64 C92 64 106 60 106 54 L106 58 C106 66 90 70 60 70 C30 70 16 66 16 58 Z" fill="#5e3b25"/><path d="M58 26 C80 24 92 34 92 44 C80 46 68 46 56 44 C54 36 54 30 58 26 Z" fill="#6a3a8c"/><g fill="#f5c542"><circle cx="62" cy="30" r="3"/><circle cx="72" cy="28" r="3"/><circle cx="82" cy="31" r="3"/><circle cx="88" cy="38" r="3"/></g></g></svg>`;
 
@@ -38,7 +42,11 @@ export class Hud {
     region: $('region'), hp: $('hp'), hpFill: $('hp-fill'), hpNum: $('hp-num'), protect: $('protect'),
     slots: Array.from(document.querySelectorAll<HTMLElement>('.wslot')), conn: $('banner-conn'),
     vigHurt: $('vig-hurt'), vigLow: $('vig-low'), names: $('names'), sb: $('scoreboard'), sbBody: $('sb-body'),
+    chip: $('team-chip'), chipIcon: $('team-chip-icon'), chipText: $('team-chip-text'),
+    banner: $('spawn-banner'), bannerIcon: $('spawn-banner-icon'), bannerText: $('spawn-banner-text'),
+    scoreSol: document.querySelector<HTMLElement>('.teamscore.sol'), scoreLuna: document.querySelector<HTMLElement>('.teamscore.luna'),
   };
+  private bannerT = 0;
   private hitT = 0;
   private hurtT = 0;
   private centerT = 0;
@@ -149,6 +157,18 @@ export class Hud {
       this.el.timer.classList.toggle('low', secs <= 30);
     });
     this.set('practice', String(f.practice), () => (this.el.practice.hidden = !f.practice));
+    // Which team you are on, always visible, matching the score blocks and the scoreboard.
+    this.set('team', String(f.team), () => {
+      const tm = f.team;
+      this.el.chip.hidden = tm === null;
+      this.el.scoreSol?.classList.toggle('mine', tm === 0);
+      this.el.scoreLuna?.classList.toggle('mine', tm === 1);
+      if (tm === null) return;
+      this.el.chip.className = `team-chip ${tm === 0 ? 'sol' : 'luna'}`;
+      this.el.chipIcon.textContent = teamIcon(tm);
+      this.el.chipText.textContent = t('hud.yourTeam', { team: teamName(tm).toUpperCase() });
+    });
+    if (this.bannerT > 0 && (this.bannerT -= dt) <= 0) this.el.banner.hidden = true;
     const hp = Math.max(0, Math.round(f.hp));
     this.set('hp', `${hp}`, () => {
       this.el.hpFill.style.width = `${(hp / MATCH.maxHealth) * 100}%`;
@@ -187,11 +207,23 @@ export class Hud {
     this.set('fps', `${f.showStats}:${Math.round(f.fps)}`, () => { this.el.fps.hidden = !f.showStats; this.el.fps.textContent = t('fps', { fps: Math.round(f.fps) }); });
   }
 
-  // Name tags above players, plus floating damage numbers.
+  /** At spawn and respawn: a short reminder of the player's team. */
+  spawnBanner(team: number, first: boolean): void {
+    this.el.banner.className = `spawn-banner ${team === 0 ? 'sol' : 'luna'}${first ? ' first' : ''}`;
+    this.el.bannerIcon.textContent = teamIcon(team);
+    this.el.bannerText.textContent = t('hud.youAre', { team: teamName(team).toUpperCase() });
+    this.el.banner.hidden = false;
+    this.bannerT = first ? 2.8 : 1.6;
+  }
+
+  // Name tags above players, plus floating damage numbers. Teammates and
+  // opponents differ by a role tag and its shape, not only by team colour.
+  // Visibility rules are the caller's: opponents only in plain sight.
   placeLabels(
     camera: THREE.Camera, w: number, h: number,
     players: Array<{ id: number; name: string; team: number; pos: THREE.Vector3; hp: number; visible: boolean; bot: boolean }>,
     dt: number,
+    myTeam: number | null = null,
   ): void {
     const seen = new Set<number>();
     const v = new THREE.Vector3();
@@ -200,7 +232,7 @@ export class Hud {
       if (!el) {
         el = document.createElement('div');
         el.className = 'nameplate';
-        el.innerHTML = '<span class="n"></span><span class="bar"><i></i></span>';
+        el.innerHTML = '<span class="role"></span><span class="n"></span><span class="bar"><i></i></span>';
         this.el.names.appendChild(el);
         this.nameEls.set(p.id, el);
       }
@@ -209,8 +241,12 @@ export class Hud {
       const on = p.visible && v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
       el.style.display = on ? 'flex' : 'none';
       if (!on) continue;
-      el.className = `nameplate ${p.team === 0 ? 'sol' : 'luna'}`;
-      const n = el.firstElementChild as HTMLElement;
+      const ally = myTeam !== null && p.team === myTeam;
+      el.className = `nameplate ${p.team === 0 ? 'sol' : 'luna'} ${ally ? 'ally' : 'enemy'}`;
+      const role = el.querySelector('.role') as HTMLElement;
+      const roleText = ally ? `◆ ${t('hud.ally')}` : `✖ ${t('hud.enemy')}`;
+      if (role.textContent !== roleText) role.textContent = roleText;
+      const n = el.querySelector('.n') as HTMLElement;
       const label = `${p.team === 0 ? '☀' : '☾'} ${p.name}${p.bot ? ` · ${t('lobby.bot')}` : ''}`;
       if (n.textContent !== label) n.textContent = label;
       (el.querySelector('i') as HTMLElement).style.width = `${Math.max(0, p.hp)}%`;
@@ -243,7 +279,20 @@ export class Hud {
       head.appendChild(th);
     }
     table.appendChild(head);
+    const myTeam = room.members.find((m) => m.id === me)?.team ?? null;
+    let lastTeam = -1;
     for (const m of rows) {
+      if (m.team !== lastTeam) {
+        // Team header: the same icon, colour and wording as the HUD chip.
+        lastTeam = m.team;
+        const hr = document.createElement('tr');
+        hr.className = `team-head ${m.team === 0 ? 'sol' : 'luna'}${m.team === myTeam ? ' mine' : ''}`;
+        const th = document.createElement('th');
+        th.colSpan = 4;
+        th.textContent = `${teamIcon(m.team)} ${teamName(m.team).toUpperCase()} · ${m.team === myTeam ? t('score.yourTeam') : t('score.opponents')}`;
+        hr.appendChild(th);
+        table.appendChild(hr);
+      }
       const tr = document.createElement('tr');
       tr.className = `${m.team === 0 ? 'sol' : 'luna'}${m.id === me ? ' me' : ''}`;
       const s = stats.get(m.id) ?? { k: 0, d: 0 };

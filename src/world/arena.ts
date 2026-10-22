@@ -35,6 +35,10 @@ export interface Arena {
   speakerCones: THREE.Object3D[];
   update(t: number, beat: number): void;
   setShadows(on: boolean, size: number): void;
+  /** Where the player may walk (defaults to the original courtyard's square). */
+  bounds?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** La Fiesta's piñata: hit it for fun (no score, no effect on play). */
+  pinata?: { x: number; y: number; z: number; r: number; hit(): void };
 }
 
 class Batch {

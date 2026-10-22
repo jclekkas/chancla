@@ -26,7 +26,12 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import type { Browser, Page } from 'playwright-core';
 // @ts-expect-error plain ESM helper without types
 import { launch } from './browser.mjs';
-import { RECORDED, ASSIGN } from '../src/audio/soundtrack';
+import { RECORDED } from '../src/audio/soundtrack';
+import { PLAYLIST } from '../src/audio/playlist-data';
+import { CUE_POOL, POOLS } from '../src/audio/library';
+
+/** The songs a cue can draw in Automatic mode. */
+const POOL = (cue: string): readonly string[] => POOLS[CUE_POOL[cue]!]!.songs;
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const OUT = path.join(ROOT, 'artifacts/music');
@@ -44,13 +49,13 @@ async function waitHttp(url: string): Promise<boolean> {
   return false;
 }
 
-type MState = { cue: string; layer: string; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[] };
+type MState = { cue: string; layer: string; recording: string | null; position: number | null; duration: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; sounding: number };
 const state = (page: Page): Promise<MState> => page.evaluate(() => (window as any).__fps.music().state());
-async function waitLayer(page: Page, rec: string | null, layer: string, ms = 15000): Promise<MState> {
+async function waitLayer(page: Page, rec: string | readonly string[] | null, layer: string, ms = 15000): Promise<MState> {
   const end = Date.now() + ms;
   for (;;) {
     const s = await state(page);
-    if (s.layer === layer && (rec === null || s.recording === rec)) return s;
+    if (s.layer === layer && (rec === null || (typeof rec === 'string' ? s.recording === rec : rec.includes(s.recording ?? '')))) return s;
     if (Date.now() > end) return s;
     await page.waitForTimeout(100);
   }
@@ -136,6 +141,23 @@ async function main(): Promise<void> {
         check(`decode ${t.id}: length matches the prepared file`, Math.abs(r.decodedSamples - r.expected) <= 2, { decoded: r.decodedSamples, expected: r.expected });
         check(`seam ${t.id}: jump no larger than the track's own 99.9th percentile step`, r.seamJump <= r.p999, { seamJump: +r.seamJump.toFixed(5), p999: +r.p999.toFixed(5) });
       }
+      // The eleven playlist songs: each fetched from its deployed path and decoded by the browser.
+      const pl = await page.evaluate(async (songs) => {
+        const out: Record<string, { status: number; type: string; duration: number; rate: number; channels: number } | { error: string }> = {};
+        for (const t of songs) {
+          try {
+            const r = await fetch(t.file);
+            const buf = await new OfflineAudioContext(2, 48000, 48000).decodeAudioData(await r.arrayBuffer());
+            out[t.id] = { status: r.status, type: r.headers.get('content-type') ?? '', duration: buf.duration, rate: buf.sampleRate, channels: buf.numberOfChannels };
+          } catch (e) { out[t.id] = { error: String(e) }; }
+        }
+        return out;
+      }, PLAYLIST.map((t) => ({ id: t.id, file: t.file })));
+      report.playlistDecode = pl;
+      for (const t of PLAYLIST) {
+        const r = pl[t.id] as { status: number; type: string; duration: number; error?: string };
+        check(`playlist ${t.id} (${t.title}): served and decoded in the browser, length as measured`, !r.error && r.status === 200 && /audio\/mpeg/.test(r.type) && Math.abs(r.duration - t.duration) < 0.1, r);
+      }
       await close();
     }
 
@@ -143,15 +165,15 @@ async function main(): Promise<void> {
     {
       const { page, errors, close } = await openPage(browser);
       await page.mouse.click(5, 5); // user gesture: unlocks audio
-      const menu = await waitLayer(page, ASSIGN.menu!, 'recorded');
-      check('menu plays Rosa\'s theme recording', menu.layer === 'recorded' && menu.recording === ASSIGN.menu, menu);
+      const menu = await waitLayer(page, '036c0292', 'recorded');
+      check('the menu opens with Groquo de diversión (036c0292)', menu.layer === 'recorded' && menu.recording === '036c0292', menu);
       await page.waitForTimeout(1500);
       const p0 = (await state(page)).position!;
       await page.click('#btn-campaign');
       await page.waitForFunction(() => (window as any).__fps.screen === 'campaign');
       await page.waitForTimeout(600);
       const sel = await state(page);
-      check('mission select continues the same recording without restarting', sel.recording === ASSIGN.select && sel.cue === 'select' && sel.position! > p0, { before: p0, after: sel.position });
+      check('mission select continues the same song without restarting', sel.recording === menu.recording && sel.cue === 'select' && sel.position! > p0, { before: p0, after: sel.position });
       // Unlock all missions through the save, then play each one's opening.
       await page.evaluate(() => {
         const d = Object.fromEntries(['ruleros', 'cocina', 'patio', 'pinata'].map((id) => [id, { completed: true, bestMs: null, challenges: { complete: true, time: false, skill: false }, plays: 1 }]));
@@ -161,7 +183,7 @@ async function main(): Promise<void> {
       await page.waitForFunction(() => (window as any).__fps?.screen === 'title');
       await page.click('#btn-campaign');
       await page.waitForFunction(() => (window as any).__fps.screen === 'campaign');
-      await waitLayer(page, ASSIGN.select!, 'recorded');
+      await waitLayer(page, POOL('select'), 'recorded');
       const switches: Record<string, unknown> = {};
       for (const id of ['ruleros', 'cocina', 'patio', 'pinata']) {
         if (!(await page.isVisible('#scr-campaign'))) await page.evaluate(() => (window as any).__fps.campaign().openSelect());
@@ -171,18 +193,20 @@ async function main(): Promise<void> {
         await page.click('#btn-mi-start');
         await page.waitForFunction(() => (window as any).__fps.campaign().active);
         const t0 = Date.now();
-        const s = await waitLayer(page, ASSIGN[id]!, 'recorded');
+        const s = await waitLayer(page, POOL(id), 'recorded');
         switches[id] = { ms: Date.now() - t0, ...s };
-        check(`mission ${id} plays ${ASSIGN[id]}`, s.recording === ASSIGN[id] && s.cue === id, { ms: Date.now() - t0, layer: s.layer });
+        check(`mission ${id} plays a song from its pool (${CUE_POOL[id]})`, POOL(id).includes(s.recording ?? '') && s.cue === id, { ms: Date.now() - t0, recording: s.recording, layer: s.layer });
+        if (id === 'ruleros') check('Operación Ruleros opens with Ruleros (66be822e)', s.recording === '66be822e', s.recording);
         // Crossfade: the outgoing recording fades rather than cutting (gain mid-fade).
         await page.waitForTimeout(2500);
         if (id === 'ruleros') {
-          // Loop wrap: jump near the end and watch the position come back round.
+          // A song's natural end: jump close to it and watch the next one of the pool take over.
           const st = await state(page);
-          await page.evaluate((sec) => (window as any).__fps.music().seek(sec), st.loop![1] - 2);
-          await page.waitForTimeout(3500);
+          await page.evaluate((sec) => (window as any).__fps.music().seek(sec), st.duration! - 6);
+          let peak = 0;
+          for (let i = 0; i < 40; i++) { await page.waitForTimeout(250); peak = Math.max(peak, (await state(page)).sounding); }
           const after = await state(page);
-          check('a playing recording wraps from loopEnd to loopStart', after.position! >= st.loop![0] && after.position! < st.loop![0] + 3, { loop: st.loop, position: after.position });
+          check('at a song\'s natural end the next song of the pool takes over, two sounding only in the crossfade', after.recording !== st.recording && POOL('ruleros').includes(after.recording ?? '') && peak <= 2 && after.sounding === 1, { from: st.recording, to: after.recording, peak, now: after.sounding });
           // Ducking under dialogue.
           const duck = await page.evaluate(async () => {
             const w = window as any;
@@ -214,19 +238,20 @@ async function main(): Promise<void> {
         await page.evaluate(() => (window as any).__fps.campaign().toSelect());
         await page.waitForTimeout(300);
         if (!(await page.isVisible('#scr-campaign'))) await page.evaluate(() => (window as any).__fps.campaign().openSelect());
-        const back = await waitLayer(page, ASSIGN.select!, 'recorded');
-        check(`leaving ${id} returns to Rosa's theme`, back.recording === ASSIGN.select, back);
+        const back = await waitLayer(page, POOL('select'), 'recorded');
+        check(`leaving ${id} returns to a menu song`, POOL('select').includes(back.recording ?? ''), back.recording);
       }
       report.switches = switches;
-      check('only two recordings stay decoded', (await state(page)).loaded.length <= 2, (await state(page)).loaded);
+      check('at most two songs stay decoded (the current one and the next)', (await state(page)).loaded.length <= 2, (await state(page)).loaded);
       // Practice: the action cue.
       await page.keyboard.press('Escape');
       await page.waitForTimeout(300);
       await page.click('#btn-practice');
       await page.waitForTimeout(800);
       await page.click('#btn-practice-start');
-      const pr = await waitLayer(page, ASSIGN.combat!, 'recorded', 25000);
-      check('practice match plays the action cue (bounce-y-joke)', pr.recording === ASSIGN.combat && pr.cue === 'combat', pr);
+      await page.waitForFunction(() => (window as any).__fps.music().state().cue === 'combat', undefined, { timeout: 25000 });
+      const pr = await waitLayer(page, POOL('combat'), 'recorded', 25000);
+      check('practice plays a song from the whole playlist', POOL('combat').length === 11 && POOL('combat').includes(pr.recording ?? '') && pr.cue === 'combat', pr.recording);
       check('no page errors during the run', errors.length === 0, errors.slice(0, 5));
       if (CALIBRATE) {
         const cal: Record<string, unknown> = {};
@@ -249,7 +274,7 @@ async function main(): Promise<void> {
 
     // 3. Fallback: music files blocked.
     {
-      const { page, errors, close } = await openPage(browser, (p) => p.route('**/music/*.mp3', (r) => r.abort()));
+      const { page, errors, close } = await openPage(browser, (p) => p.route('**/music/**/*.mp3', (r) => r.abort()));
       await page.mouse.click(5, 5);
       const s = await waitLayer(page, null, 'synth', 5000);
       check('with the recordings blocked, the menu plays the synthesized score', s.layer === 'synth' && s.cue === 'menu', s);
@@ -265,11 +290,11 @@ async function main(): Promise<void> {
 
     // 4. Slow download: synthesized first, then the recording takes over.
     {
-      const { page, close } = await openPage(browser, (p) => p.route('**/music/*.mp3', async (r) => { await new Promise((res) => setTimeout(res, 4000)); await r.continue(); }));
+      const { page, close } = await openPage(browser, (p) => p.route('**/music/**/*.mp3', async (r) => { await new Promise((res) => setTimeout(res, 8000)); await r.continue(); })); // longer than the prefetch head start
       await page.mouse.click(5, 5);
       const first = await waitLayer(page, null, 'synth', 3000);
       check('slow download: the synthesized menu plays while the recording loads', first.layer === 'synth', first);
-      const later = await waitLayer(page, ASSIGN.menu!, 'recorded', 20000);
+      const later = await waitLayer(page, POOL('menu'), 'recorded', 30000);
       check('slow download: the recording takes over once it arrives', later.layer === 'recorded', later);
       await close();
     }
@@ -284,7 +309,7 @@ async function main(): Promise<void> {
       await page.reload();
       await page.waitForFunction(() => (window as any).__fps?.screen === 'title');
       await page.mouse.click(5, 5);
-      await waitLayer(page, ASSIGN.menu!, 'recorded');
+      await waitLayer(page, POOL('menu'), 'recorded');
       await page.evaluate(() => {
         const w = window as any;
         const rec = new MediaRecorder(w.__fps.audio().captureStream(), { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 160000 });
@@ -306,7 +331,7 @@ async function main(): Promise<void> {
       await page.waitForTimeout(9000);
       await page.evaluate(() => (window as any).__fps.dialogue().say('m1_courtyard')); mark('a line of dialogue: music ducks');
       await page.waitForTimeout(6000);
-      await page.evaluate(() => (window as any).__fps.music().seek((window as any).__fps.music().state().loop[1] - 6)); mark('jump to 6 s before the loop seam');
+      await page.evaluate(() => (window as any).__fps.music().seek((window as any).__fps.music().state().duration - 8)); mark('jump to 8 s before the song ends: crossfade into the next');
       await page.waitForTimeout(10000);
       await page.evaluate(() => (window as any).__fps.campaign().toSelect()); mark('leave: back to Rosa theme');
       await page.waitForTimeout(6000);

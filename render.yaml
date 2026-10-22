@@ -1,0 +1,29 @@
+# Proposed paid deployment; applying this Blueprint provisions billable compute.
+# One process owns all rooms. Do not enable autoscaling without room routing.
+services:
+  - type: web
+    name: chanclawarfare-game-server
+    runtime: docker
+    repo: https://github.com/jclekkas/chancla
+    branch: codex/online-production
+    region: virginia
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: "off"
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /readyz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8787"
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MAX_ROOMS
+        value: "20"
+      - key: MAX_CONN_PER_IP
+        value: "12"
+      - key: ALLOWED_ORIGINS
+        value: https://chanclawarfare.fun,https://www.chanclawarfare.fun,https://chancla.vercel.app,https://chanclawarfare.vercel.app,https://chancla-git-multiplayer-jclekkas.vercel.app

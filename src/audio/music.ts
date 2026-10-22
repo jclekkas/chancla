@@ -1,11 +1,21 @@
 // The soundtrack has two layers.
 //
-// Recorded: the Suno tracks in public/music (prepared from the untouched
-// originals by scripts/music/prepare.py, which bakes each loop seam and
-// matches loudness). Cue-to-recording assignments live in soundtrack.ts.
-// A recording loops sample-accurately between its loop points, and changing
-// cues crossfades equal-power over 1.5 s. Recordings load on demand; at most
-// two stay decoded.
+// Recorded: the eleven Suno playlist songs (public/music/playlist, served as
+// supplied) plus the five curated seamless loops prepared earlier
+// (public/music, scripts/music/prepare.py). library.ts lists the songs and the
+// pools each scene draws from. Three modes, chosen in Settings:
+//   auto     each scene draws from its own pool (menus, exploration, chores,
+//            action, intense); songs play whole and hand over at their
+//            natural ending with a short crossfade; a shuffle bag plays the
+//            whole pool before any song repeats
+//   shuffle  all eleven, whatever the scene, carrying on across scenes
+//   one      the chosen song repeats: through its curated seamless loop if it
+//            has one, otherwise from the top with a crossfade
+// Related screens that share a pool (title, mission select, results) keep the
+// same song going. Only the current song and, near its end, the next one are
+// downloaded and decoded; everything else is released. Every request carries
+// a generation number, so a late download for a scene that has been left
+// never starts playing. Two songs sound together only during a crossfade.
 //
 // Synthesized: the original score below, composed in code and played live
 // with Web Audio. It plays for cues without a recording, and it is the
@@ -25,14 +35,18 @@
 //   patio     afternoon: squeezebox-style lead, whistled answer
 //   pinata    the finale: brass, full percussion, faster
 //   select    mission select: harp-like plucks, motif in slow values
+// (The Arcade's cues, arcade and boss, fall back to combat and pinata.)
 // Loops are scheduled ahead on the audio clock, so they are seamless;
 // switching tracks crossfades on the next bar line. Intensity (0-1) adds
 // percussion and counter-lines without restarting the loop (synthesized
 // layer only: the recordings have no stems).
 import { audio } from './audio';
-import { ASSIGN, RECORDED, type RecordedTrack } from './soundtrack';
+import { ALL, CUE_POOL, DEFAULT_PREFS, POOLS, song as songById, type MusicPrefs, type PoolId, type Song } from './library';
+import { ShuffleBag } from './shuffle';
 
-export type TrackId = 'menu' | 'lobby' | 'combat' | 'results' | 'ruleros' | 'cocina' | 'patio' | 'pinata' | 'select' | 'off';
+export type TrackId = 'menu' | 'lobby' | 'combat' | 'results' | 'ruleros' | 'cocina' | 'patio' | 'pinata' | 'select' | 'arcade' | 'boss' | 'off';
+type Arrangement = Exclude<TrackId, 'off' | 'arcade' | 'boss'>;
+const ARRANGEMENT: Record<Exclude<TrackId, 'off'>, Arrangement> = { menu: 'menu', lobby: 'lobby', combat: 'combat', results: 'results', ruleros: 'ruleros', cocina: 'cocina', patio: 'patio', pinata: 'pinata', select: 'select', arcade: 'combat', boss: 'pinata' };
 type Stinger = 'objective' | 'setback' | 'phase' | 'complete' | 'fail';
 
 interface Track {
@@ -57,7 +71,7 @@ const MINOR = [0, 2, 3, 5, 7, 8, 10];
 const MOTIF_A: Array<[number, number, number]> = [[0, 5, 2], [2, 3, 2], [4, 5, 2], [6, 6, 3], [10, 5, 4], [16, 3, 2], [19, 2, 3], [24, 1, 2], [26, 2, 2], [28, 3, 2], [30, 5, 2]];
 const MOTIF_B: Array<[number, number, number]> = [[0, 3, 6], [8, 2, 2], [10, 3, 2], [12, 4, 4], [16, 3, 3], [19, 2, 3], [22, 1, 6]];
 
-const TRACKS: Record<Exclude<TrackId, 'off'>, Track> = {
+const TRACKS: Record<Arrangement, Track> = {
   menu: { bpm: 96, root: 55, prog: [1, 5, 6, 4, 1, 5, 4, 5], lead: 'marimba', leadOctave: 1, comp: 'cumbia', bass: true, perc: 0.5, gain: 1, motifEvery: 0b01010101 },
   lobby: { bpm: 96, root: 55, prog: [1, 4, 5, 1, 6, 4, 5, 5], lead: 'none', leadOctave: 1, comp: 'cumbia', bass: true, perc: 0.35, gain: 0.85 },
   combat: { bpm: 100, root: 50, minor: true, prog: [1, 6, 7, 5, 1, 6, 4, 5], lead: 'none', leadOctave: 0, comp: 'pad', bass: true, perc: 0.3, gain: 0.7, lowpass: 1300 },
@@ -71,26 +85,40 @@ const TRACKS: Record<Exclude<TrackId, 'off'>, Track> = {
 
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
-// Recorded layer. The prepared files are all -16 LUFS; this level puts them
-// at about the synthesized score's loudness on the music bus (measured in the
-// browser by scripts/music-e2e.ts --calibrate; see docs/AUDIO.md).
+// Recorded layer. Songs are matched to -16 LUFS (the prepared loops by their
+// files, the playlist by a playback gain); this level puts them at about the
+// synthesized score's loudness on the music bus (measured in the browser by
+// scripts/music-e2e.ts --calibrate; see docs/AUDIO.md).
 const REC_LEVEL = 0.52;
-const REC_XFADE = 1.5; // seconds, between cues
+const REC_XFADE = 1.5; // seconds, between scenes and modes
+const END_XFADE = 3; // between songs at a natural ending, and when one song repeats
+const NEXT_XFADE = 1; // the player pressed Next
+const PREFETCH_S = 25; // start loading the next song this long before the end
 const REC_GRACE_MS = 1200; // wait this long for a recording before falling back
-const REC_KEEP = 2; // decoded recordings kept in memory
+const HOLD_LEVEL = 0.45; // under a paused Arcade run
 // In play, a gentle dip in the 2-3 kHz band leaves room for footsteps, hit
 // cues and voices. Menus get the full mix.
-const IN_GAME_EQ_DB: Partial<Record<TrackId, number>> = { combat: -4, ruleros: -2.5, cocina: -2.5, patio: -2.5, pinata: -2.5 };
+const IN_GAME_EQ_DB: Partial<Record<TrackId, number>> = { combat: -4, arcade: -4, ruleros: -2.5, cocina: -2.5, patio: -2.5, pinata: -2.5, boss: -2.5 };
+// Matches and Arcade runs sit lower, so incoming throws stay audible.
+const CUE_DB: Partial<Record<TrackId, number>> = { combat: -3, arcade: -3 };
 // Dialogue ducks a dense recording further than the sparse synthesized score.
 const DUCK_SYNTH = 0.55;
 const DUCK_RECORDED = 0.42;
 // A failed download is retried twice, after 4 s and then 15 s (sooner if the
-// browser reports it is back online). The synthesized score plays meanwhile.
-// A file that downloads but won't decode is not retried.
+// browser reports it is back online). Meanwhile another song from the pool
+// plays, or the synthesized score. A file that won't decode is not retried.
 const RETRY_MS = [4000, 15000];
 const BASE = (() => { try { return import.meta.env.BASE_URL || '/'; } catch { return '/'; } })();
 
-interface RecLane { rec: RecordedTrack; src: AudioBufferSourceNode; eq: BiquadFilterNode; gain: GainNode; startedAt: number; offset: number }
+/** What a scene's music should be: a pool to draw from, or one chosen song. */
+interface Program { key: string; pool: string | null; one: Song | null }
+interface RecLane {
+  song: Song; file: string; key: string; looped: boolean;
+  src: AudioBufferSourceNode; eq: BiquadFilterNode; trim: GainNode; gain: GainNode;
+  startedAt: number; offset: number; endsAt: number; tag: { id: string; gain: GainNode };
+}
+const dbToGain = (db: number) => Math.pow(10, db / 20);
+const fileFor = (s: Song, repeat: boolean) => (repeat && s.loop ? s.loop.file : s.file);
 
 function equalPower(from: number, to: number, n = 32): Float32Array {
   const c = new Float32Array(n);
@@ -106,7 +134,7 @@ class Lane {
   filter: BiquadFilterNode;
   step = 0;
   next = 0;
-  constructor(public id: Exclude<TrackId, 'off'>, ctx: AudioContext, dest: AudioNode, public startAt: number) {
+  constructor(public id: Arrangement, ctx: AudioContext, dest: AudioNode, public startAt: number) {
     this.gain = ctx.createGain();
     this.filter = ctx.createBiquadFilter();
     this.filter.type = 'lowpass';
@@ -126,15 +154,33 @@ export class Music {
   private ks = new Map<string, AudioBuffer>();
   private live = 0;
   private seed = 12345;
-  private synthId: TrackId = 'off';
+  private synthId: Arrangement | 'off' = 'off';
   private rec: RecLane | null = null;
+  private fading: RecLane[] = [];
   private bytes = new Map<string, Promise<ArrayBuffer | null>>();
   private decoding = new Map<string, Promise<AudioBuffer | null>>();
-  private buffers = new Map<string, AudioBuffer>(); // insertion order = least recently used first
+  private buffers = new Map<string, AudioBuffer>();
   private failed = new Map<string, { attempts: number; retryAt: number; permanent: boolean }>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private recLive = 0; // recording sources still sounding (including ones fading out)
+  // Recording sources still sounding, including ones fading out (debug and tests).
+  private recLive = new Set<{ id: string; gain: GainNode }>();
   private grace: ReturnType<typeof setTimeout> | null = null;
+  private prefs: MusicPrefs = { ...DEFAULT_PREFS };
+  private bags = new Map<string, ShuffleBag<string>>();
+  /** The program being carried out (playing, loading or in fallback); null for the synthesized score only. */
+  private playingKey: string | null = null;
+  /** Bumped by every new request: async work for an older one is dropped. */
+  private gen = 0;
+  /** The song after this one, picked ahead so it can load in time. */
+  private upNext: { key: string; song: Song } | null = null;
+  /** A song being downloaded or decoded to start, and the request it belongs to. */
+  private loading: { key: string; gen: number } | null = null;
+  /** A first pick made before audio could start, so its download can begin. */
+  private pending: { key: string; song: Song } | null = null;
+  private ticker: ReturnType<typeof setInterval> | null = null;
+  private bus: GainNode | null = null;
+  private held = false;
+  private listeners = new Set<() => void>();
 
   constructor() {
     // Start the intended cue as soon as audio can play, and pick up again
@@ -157,65 +203,191 @@ export class Music {
 
   play(id: TrackId): void {
     this.want = id;
-    const recId = this.recordingFor(id);
-    if (recId) void this.fetchBytes(recId); // downloading needs no audio context
-    const n = audio.nodes;
-    if (!n) return; // audio not unlocked yet: started on the next call after unlock
-    if (id === this.current) { if (this.synthId !== 'off') this.ensureTimer(); return; }
+    const prog = this.program(id);
+    if (!audio.nodes) { this.prefetchFirst(prog); return; } // audio not unlocked yet: started after unlock
+    if (id === this.current && (prog?.key ?? null) === this.playingKey) { if (this.synthId !== 'off') this.ensureTimer(); return; }
     this.current = id;
-    if (this.grace) { clearTimeout(this.grace); this.grace = null; }
-    if (recId && this.rec?.rec.id === recId) {
-      // Same recording under another cue (menu and mission select): keep it going.
-      this.setEq(this.rec, id);
-      return;
-    }
-    const buf = recId ? this.buffers.get(recId) : undefined;
-    if (recId && buf) { this.startRecorded(recId, buf, id); return; }
-    if (recId) {
-      // Not decoded yet: fade out the previous recording (it belongs to another
-      // scene), wait a moment, then fall back to the synthesized arrangement.
-      // Switch over whenever the recording is ready.
-      this.fadeRecorded(n.ctx.currentTime, 0.8);
-      const ready = this.decode(recId);
-      this.grace = setTimeout(() => { this.grace = null; if (this.current === id && !this.rec) this.synth(id); }, REC_GRACE_MS);
-      void ready.then((b) => {
-        if (!b || this.current !== id || this.want !== id || this.rec?.rec.id === recId) {
-          if (!b && this.current === id && !this.rec) { if (this.grace) { clearTimeout(this.grace); this.grace = null; } this.synth(id); }
-          return;
-        }
-        if (this.grace) { clearTimeout(this.grace); this.grace = null; }
-        this.startRecorded(recId, b, id);
-      });
-      return;
-    }
-    this.fadeRecorded(n.ctx.currentTime, REC_XFADE);
-    this.synth(id);
+    this.apply(prog, REC_XFADE);
   }
 
-  /** Starts downloading and decoding a cue's recording ahead of time. */
+  /** Starts downloading a cue's first song ahead of time (a mission briefing, the practice setup). */
   preload(id: TrackId): void {
-    const recId = this.recordingFor(id);
-    if (!recId) return;
-    void this.fetchBytes(recId);
-    if (audio.nodes) void this.decode(recId);
+    const prog = this.program(id);
+    if (!prog || (this.rec && this.rec.key === prog.key)) return;
+    this.prefetchFirst(prog);
+    if (audio.nodes && this.pending) void this.decode(fileFor(this.pending.song, !!prog.one));
   }
 
-  private recordingFor(id: TrackId): string | null {
-    if (!this.recordings || id === 'off') return null;
-    const r = ASSIGN[id];
-    if (!r || !RECORDED.some((t) => t.id === r)) return null;
-    const f = this.failed.get(r);
-    // Waiting for a retry, or given up: the synthesized score plays.
-    if (f && (f.permanent || Date.now() < f.retryAt)) return null;
-    return r;
+  /** Soundtrack preferences (Settings). Changing them takes effect at once, with a crossfade. */
+  setPrefs(p: MusicPrefs): void {
+    const s = songById(p.song) ? p.song : DEFAULT_PREFS.song;
+    if (p.mode === this.prefs.mode && s === this.prefs.song) return;
+    this.prefs = { mode: p.mode, song: s };
+    this.dropPending();
+    if (!audio.nodes) { this.prefetchFirst(this.program(this.want)); this.emit(); return; }
+    if (this.want !== 'off') { this.current = this.want; this.apply(this.program(this.want), REC_XFADE); }
+    this.emit();
   }
 
-  private noteFailure(recId: string, permanent: boolean): void {
-    const f = this.failed.get(recId) ?? { attempts: 0, retryAt: 0, permanent: false };
+  getPrefs(): MusicPrefs { return { ...this.prefs }; }
+
+  /** Skips to the next song of the current pool (Automatic and Shuffle). */
+  next(): void {
+    const prog = this.program(this.want);
+    if (!prog || prog.one || !audio.nodes) return;
+    const s = this.upNext?.key === prog.key ? this.upNext.song : this.pick(prog);
+    this.upNext = null;
+    if (!s) return;
+    this.current = this.want;
+    this.playingKey = prog.key;
+    this.startSong(s, prog, NEXT_XFADE);
+  }
+
+  /** Lowers the music while a solo run is paused (the song carries on), and restores it. */
+  setHeld(held: boolean): void {
+    this.held = held;
+    const ctx = audio.nodes?.ctx;
+    if (this.bus && ctx) this.bus.gain.setTargetAtTime(held ? HOLD_LEVEL : 1, ctx.currentTime, 0.15);
+  }
+
+  /** The song playing now, for the Settings line. */
+  nowPlaying(): { id: string; title: string; earlier: boolean } | null {
+    const r = this.rec;
+    return r ? { id: r.song.id, title: r.song.title, earlier: !!r.song.earlier } : null;
+  }
+
+  /** Called when the song or the preferences change. Returns an unsubscribe function. */
+  onChange(f: () => void): () => void { this.listeners.add(f); return () => this.listeners.delete(f); }
+  private emit(): void { for (const f of this.listeners) { try { f(); } catch { /* a listener's problem */ } } }
+
+  // ---------------------------------------------------------------- programs
+
+  private program(cue: TrackId): Program | null {
+    if (!this.recordings || cue === 'off') return null;
+    if (this.prefs.mode === 'one') {
+      const s = songById(this.prefs.song) ?? songById(DEFAULT_PREFS.song)!;
+      return { key: `one:${s.id}`, pool: null, one: s };
+    }
+    const pool = this.prefs.mode === 'shuffle' ? 'all' : CUE_POOL[cue];
+    return pool ? { key: `pool:${pool}`, pool, one: null } : null;
+  }
+
+  private bag(pool: string): ShuffleBag<string> {
+    let b = this.bags.get(pool);
+    if (!b) {
+      const def = pool === 'all' ? { songs: ALL } : POOLS[pool as PoolId];
+      b = new ShuffleBag(def.songs, () => this.rand());
+      if ('lead' in def && def.lead) b.lead(def.lead);
+      this.bags.set(pool, b);
+    }
+    return b;
+  }
+
+  private unavailable(file: string): boolean {
+    const f = this.failed.get(file);
+    return !!f && (f.permanent || Date.now() < f.retryAt);
+  }
+
+  /** Draws the next song for a program, skipping songs that can't load right now. */
+  private pick(prog: Program): Song | null {
+    if (prog.one) return prog.one;
+    if (this.pending?.key === prog.key) { const s = this.pending.song; this.pending = null; return s; }
+    const id = this.bag(prog.pool!).next((x) => this.unavailable(songById(x)!.file));
+    return id ? songById(id)! : null;
+  }
+
+  private prefetchFirst(prog: Program | null): void {
+    if (!prog || this.pending?.key === prog.key) return;
+    this.dropPending();
+    const s = this.pick(prog);
+    if (!s) return;
+    this.pending = { key: prog.key, song: s };
+    void this.fetchBytes(fileFor(s, !!prog.one));
+  }
+
+  private dropPending(): void {
+    if (this.pending) {
+      const [kind, pool] = this.pending.key.split(':');
+      if (kind === 'pool') this.bag(pool!).putBack(this.pending.song.id);
+      this.pending = null;
+    }
+  }
+
+  private dropUpNext(): void {
+    if (this.upNext) {
+      const [kind, pool] = this.upNext.key.split(':');
+      if (kind === 'pool') this.bag(pool!).putBack(this.upNext.song.id);
+      this.upNext = null;
+    }
+  }
+
+  /** Makes a program the one playing: carries on if it already is, otherwise starts its next song. */
+  private apply(prog: Program | null, xfade: number): void {
+    const n = audio.nodes!;
+    if (this.grace) { clearTimeout(this.grace); this.grace = null; }
+    if (!prog) {
+      this.gen++;
+      this.playingKey = null;
+      this.dropUpNext();
+      this.fadeRecorded(n.ctx.currentTime, xfade);
+      this.synth(this.current);
+      this.emit();
+      return;
+    }
+    const r = this.rec;
+    // The same pool, or the chosen song already playing: keep it going.
+    if (r && (r.key === prog.key || (prog.one && r.song.id === prog.one.id && !r.looped))) {
+      if (r.key !== prog.key) { r.key = prog.key; this.dropUpNext(); }
+      this.playingKey = prog.key;
+      this.gen++; // anything still loading for an earlier request is no longer wanted
+      this.setEq(r, this.current);
+      return;
+    }
+    // Its song is still loading (title, then mission select): let that finish.
+    if (!r && this.loading && this.loading.key === prog.key && this.loading.gen === this.gen) { this.playingKey = prog.key; return; }
+    this.playingKey = prog.key;
+    this.dropUpNext();
+    const s = this.pick(prog);
+    if (!s) { this.gen++; this.fadeRecorded(n.ctx.currentTime, xfade); this.synth(this.current); this.emit(); return; }
+    this.startSong(s, prog, xfade);
+  }
+
+  private startSong(s: Song, prog: Program, xfade: number, tries = 0): void {
+    const gen = ++this.gen;
+    const file = fileFor(s, !!prog.one);
+    const buf = this.buffers.get(file);
+    if (buf) { this.startRecorded(s, file, buf, prog.key, xfade); return; }
+    const n = audio.nodes!;
+    // Not decoded yet: fade out the previous song (it belongs to another
+    // scene, or Next was pressed), wait a moment, then fall back to the
+    // synthesized arrangement. Switch over whenever the song is ready.
+    this.fadeRecorded(n.ctx.currentTime, 0.8);
+    this.loading = { key: prog.key, gen };
+    if (this.grace) clearTimeout(this.grace);
+    this.grace = setTimeout(() => { this.grace = null; if (this.gen === gen && !this.rec) this.synth(this.current); }, REC_GRACE_MS);
+    void this.decode(file).then((b) => {
+      if (this.gen !== gen) return; // a newer request took over
+      this.loading = null;
+      if (this.grace) { clearTimeout(this.grace); this.grace = null; }
+      if (b) { this.startRecorded(s, file, b, prog.key, xfade); return; }
+      // This song can't load: another from the pool, or the synthesized score.
+      if (prog.pool && tries < 12) {
+        const alt = this.pick(prog);
+        if (alt && alt.id !== s.id) { this.startSong(alt, prog, xfade, tries + 1); return; }
+      }
+      if (!this.rec) this.synth(this.current);
+      this.emit();
+    });
+  }
+
+  // ---------------------------------------------------------------- loading
+
+  private noteFailure(file: string, permanent: boolean): void {
+    const f = this.failed.get(file) ?? { attempts: 0, retryAt: 0, permanent: false };
     f.attempts++;
     f.permanent = permanent || f.attempts > RETRY_MS.length;
     f.retryAt = f.permanent ? Infinity : Date.now() + RETRY_MS[f.attempts - 1]!;
-    this.failed.set(recId, f);
+    this.failed.set(file, f);
     if (!f.permanent) this.scheduleRetry();
   }
 
@@ -234,109 +406,140 @@ export class Music {
     this.retryDue();
   }
 
-  /** Retries the intended cue's recording if it is due; hands over from the fallback when it arrives. */
+  /** If the scene is on the synthesized fallback because of a failed download, tries its music again. */
   private retryDue(): void {
-    const cue = this.want;
-    const recId = this.recordingFor(cue);
-    if (recId && this.failed.has(recId) && audio.nodes) {
-      void this.decode(recId).then((b) => {
-        if (b && this.want === cue && this.current === cue && this.rec?.rec.id !== recId) this.startRecorded(recId, b, cue);
-      });
+    const prog = this.program(this.want);
+    if (prog && !this.rec && audio.nodes && this.current === this.want && this.playingKey === prog.key) {
+      const s = this.pick(prog);
+      if (s && !this.unavailable(fileFor(s, !!prog.one))) this.startSong(s, prog, REC_XFADE);
+      else if (s && prog.pool) this.bag(prog.pool).putBack(s.id);
     }
     this.scheduleRetry(); // others still waiting
   }
 
-  private fetchBytes(recId: string): Promise<ArrayBuffer | null> {
-    let p = this.bytes.get(recId);
+  private fetchBytes(file: string): Promise<ArrayBuffer | null> {
+    let p = this.bytes.get(file);
     if (!p) {
-      const rec = RECORDED.find((t) => t.id === recId)!;
-      p = fetch(`${BASE}${rec.file}`)
+      p = fetch(`${BASE}${file}`)
         .then((r) => (r.ok ? r.arrayBuffer() : null))
         .catch(() => null)
         .then((b) => {
-          if (!b) { this.bytes.delete(recId); this.noteFailure(recId, false); } else if (this.failed.has(recId)) this.failed.delete(recId);
+          if (!b) { this.bytes.delete(file); this.noteFailure(file, false); } else if (this.failed.has(file)) this.failed.delete(file);
           return b;
         });
-      this.bytes.set(recId, p);
+      this.bytes.set(file, p);
     }
     return p;
   }
 
-  private decode(recId: string): Promise<AudioBuffer | null> {
-    const have = this.buffers.get(recId);
+  private decode(file: string): Promise<AudioBuffer | null> {
+    const have = this.buffers.get(file);
     if (have) return Promise.resolve(have);
-    let p = this.decoding.get(recId);
+    let p = this.decoding.get(file);
     if (!p) {
-      p = this.fetchBytes(recId).then(async (bytes) => {
+      p = this.fetchBytes(file).then(async (bytes) => {
         const n = audio.nodes;
-        if (!bytes || !n) { this.decoding.delete(recId); return null; } // a later retry starts afresh
+        if (!bytes || !n) { this.decoding.delete(file); return null; } // a later retry starts afresh
+        // decodeAudioData detaches its input, and the compressed copy isn't
+        // kept: a later re-decode downloads again (from the browser cache).
+        this.bytes.delete(file);
         try {
-          // decodeAudioData detaches its input, so keep the download for a later re-decode.
-          const buf = await n.ctx.decodeAudioData(bytes.slice(0));
-          this.buffers.set(recId, buf);
+          const buf = await n.ctx.decodeAudioData(bytes);
+          this.buffers.set(file, buf);
           this.evict();
           return buf;
         } catch {
-          this.noteFailure(recId, true); // it downloaded but this browser can't decode it
+          this.noteFailure(file, true); // it downloaded but this browser can't decode it
           return null;
         } finally {
-          this.decoding.delete(recId);
+          this.decoding.delete(file);
         }
       });
-      this.decoding.set(recId, p);
+      this.decoding.set(file, p);
     }
     return p;
   }
 
+  /** Keeps decoded only the song playing and the one coming next. */
   private evict(): void {
-    for (const key of [...this.buffers.keys()]) {
-      if (this.buffers.size <= REC_KEEP) break;
-      if (key !== this.rec?.rec.id) this.buffers.delete(key);
-    }
+    const keep = new Set<string>();
+    if (this.rec) keep.add(this.rec.file);
+    if (this.upNext) keep.add(fileFor(this.upNext.song, this.upNext.key.startsWith('one:')));
+    if (this.pending) keep.add(fileFor(this.pending.song, this.pending.key.startsWith('one:')));
+    for (const p of this.decoding.keys()) keep.add(p);
+    for (const key of [...this.buffers.keys()]) if (!keep.has(key)) this.buffers.delete(key);
   }
 
-  private startRecorded(recId: string, buf: AudioBuffer, cue: TrackId): void {
+  // ---------------------------------------------------------------- playback
+
+  private outBus(): GainNode {
+    const n = audio.nodes!;
+    if (!this.bus || this.bus.context !== n.ctx) {
+      this.bus = n.ctx.createGain();
+      this.bus.gain.value = this.held ? HOLD_LEVEL : 1;
+      this.bus.connect(n.music);
+    }
+    return this.bus;
+  }
+
+  private startRecorded(s: Song, file: string, buf: AudioBuffer, key: string, xfade: number, offset = 0): void {
     const n = audio.nodes!;
     const ctx = n.ctx;
     const now = ctx.currentTime;
-    const rec = RECORDED.find((t) => t.id === recId)!;
-    this.fadeRecorded(now, REC_XFADE);
-    this.fadeSynth(now, REC_XFADE);
+    this.fadeRecorded(now, xfade);
+    this.fadeSynth(now, xfade);
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.loop = true;
-    src.loopStart = rec.loopStart;
-    src.loopEnd = Math.min(rec.loopEnd, buf.duration);
+    const looped = key.startsWith('one:') && !!s.loop && file === s.loop.file;
+    if (looped) {
+      src.loop = true;
+      src.loopStart = s.loop!.start;
+      src.loopEnd = Math.min(s.loop!.end, buf.duration);
+    }
     const eq = ctx.createBiquadFilter();
     eq.type = 'peaking';
     eq.frequency.value = 2600;
     eq.Q.value = 0.8;
+    const trim = ctx.createGain();
     const gain = ctx.createGain();
-    src.connect(eq); eq.connect(gain); gain.connect(n.music);
-    const level = REC_LEVEL * Math.pow(10, rec.gainDb / 20);
+    src.connect(eq); eq.connect(trim); trim.connect(gain); gain.connect(this.outBus());
+    const level = REC_LEVEL * dbToGain(file === s.file ? s.gainDb : 0);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.setValueCurveAtTime(equalPower(0, level), now + 0.02, REC_XFADE);
-    src.start(now + 0.02);
-    this.recLive++;
-    src.onended = () => { this.recLive--; };
-    // LRU: the playing recording becomes the most recent.
-    this.buffers.delete(recId); this.buffers.set(recId, buf);
-    this.rec = { rec, src, eq, gain, startedAt: now + 0.02, offset: 0 };
-    this.setEq(this.rec, cue);
+    gain.gain.setValueCurveAtTime(equalPower(0, level), now + 0.02, xfade);
+    src.start(now + 0.02, offset);
+    const tag = { id: s.id, gain };
+    this.recLive.add(tag);
+    src.onended = () => { this.recLive.delete(tag); };
+    const endsAt = looped ? Infinity : now + 0.02 + Math.min(s.end, buf.duration) - offset;
+    this.rec = { song: s, file, key, looped, src, eq, trim, gain, startedAt: now + 0.02, offset, endsAt, tag };
+    this.setEq(this.rec, this.current);
     audio.duckDepth = DUCK_RECORDED;
     this.evict();
+    this.ensureTicker();
+    this.emit();
   }
 
   private setEq(lane: RecLane, cue: TrackId): void {
     const ctx = audio.nodes?.ctx;
-    if (ctx) lane.eq.gain.setTargetAtTime(IN_GAME_EQ_DB[cue] ?? 0, ctx.currentTime, 0.3);
+    if (!ctx) return;
+    lane.eq.gain.setTargetAtTime(IN_GAME_EQ_DB[cue] ?? 0, ctx.currentTime, 0.3);
+    lane.trim.gain.setTargetAtTime(dbToGain(CUE_DB[cue] ?? 0), ctx.currentTime, 0.3);
   }
 
   private fadeRecorded(now: number, dur: number): void {
+    // Only one song fades out at a time: anything older is cut quickly, so
+    // at most two songs ever sound together.
+    for (const old of this.fading) this.stopLane(old, now, 0.12);
+    this.fading = [];
     const r = this.rec;
     if (!r) return;
     this.rec = null;
     audio.duckDepth = DUCK_SYNTH;
+    this.stopLane(r, now, dur);
+    this.fading.push(r);
+  }
+
+  private stopLane(r: RecLane, now: number, dur: number): void {
     const g = r.gain.gain;
     const from = Math.max(0.0001, g.value);
     g.cancelScheduledValues(now);
@@ -344,7 +547,41 @@ export class Music {
     g.setValueCurveAtTime(equalPower(from, 0), now, dur);
     try { r.src.stop(now + dur + 0.05); } catch { /* already stopped */ }
     const src = r.src;
-    src.onended = () => { this.recLive--; for (const node of [src, r.eq, r.gain]) { try { node.disconnect(); } catch { /* gone */ } } };
+    src.onended = () => {
+      this.recLive.delete(r.tag);
+      this.fading = this.fading.filter((x) => x !== r);
+      for (const node of [src, r.eq, r.trim, r.gain]) { try { node.disconnect(); } catch { /* gone */ } }
+    };
+  }
+
+  private ensureTicker(): void {
+    if (this.ticker) return;
+    this.ticker = setInterval(() => this.tick(), 250);
+  }
+
+  /** Near a song's natural end: load the next one, then crossfade into it. */
+  private tick(): void {
+    const r = this.rec;
+    const n = audio.nodes;
+    if (!r || !n) { if (!r && this.ticker && !this.grace) { clearInterval(this.ticker); this.ticker = null; } return; }
+    if (r.looped) return;
+    const left = r.endsAt - n.ctx.currentTime;
+    if (left > PREFETCH_S) return;
+    const prog = this.program(this.want);
+    if (!prog || prog.key !== r.key || this.current !== this.want) return; // a change is under way
+    if (!this.upNext || this.upNext.key !== prog.key) {
+      this.dropUpNext();
+      const s = prog.one ?? this.pick(prog);
+      if (!s) return;
+      this.upNext = { key: prog.key, song: s };
+    }
+    const nx = this.upNext.song;
+    const file = fileFor(nx, !!prog.one);
+    const ready = this.buffers.has(file);
+    if (!ready) void this.decode(file);
+    if (left > END_XFADE || (!ready && left > 0.05)) return;
+    this.upNext = null;
+    this.startSong(nx, prog, Math.max(0.3, Math.min(END_XFADE, left)));
   }
 
   private fadeSynth(now: number, dur: number): void {
@@ -358,9 +595,10 @@ export class Music {
     this.synthId = 'off';
   }
 
-  private synth(id: TrackId): void {
+  private synth(cue: TrackId): void {
     const n = audio.nodes;
     if (!n) return;
+    const id: Arrangement | 'off' = cue === 'off' ? 'off' : ARRANGEMENT[cue];
     if (id === this.synthId) { this.ensureTimer(); return; }
     const ctx = n.ctx;
     const now = ctx.currentTime;
@@ -381,7 +619,7 @@ export class Music {
     }
     this.synthId = id;
     if (id === 'off') return;
-    const lane = new Lane(id, ctx, n.music, at);
+    const lane = new Lane(id, ctx, this.outBus(), at);
     lane.gain.gain.setValueAtTime(0.0001, now);
     lane.gain.gain.linearRampToValueAtTime(TRACKS[id].gain, at + 0.5);
     this.lanes.push(lane);
@@ -392,49 +630,81 @@ export class Music {
   resume(): void {
     const w = this.want;
     this.current = 'off'; this.synthId = 'off'; this.lanes = [];
+    this.playingKey = null;
     if (this.rec) { try { this.rec.src.stop(); } catch { /* gone */ } this.rec = null; }
+    for (const f of this.fading) { try { f.src.stop(); } catch { /* gone */ } }
+    this.fading = [];
+    this.bus = null;
     this.play(w);
   }
 
+  /** The recorded soundtrack for the intended cue: playing, loading, or replaced by the built-in score. */
+  status(): 'ok' | 'loading' | 'fallback' | 'failed' {
+    const prog = this.program(this.want);
+    if (!prog) return 'ok';
+    if (this.rec && this.rec.key === prog.key) return 'ok';
+    const files = prog.one ? [fileFor(prog.one, true)] : (prog.pool === 'all' ? ALL : POOLS[prog.pool as PoolId].songs).map((id) => songById(id)!.file);
+    const f = files.map((x) => this.failed.get(x));
+    if (f.every((x) => x?.permanent)) return 'failed';
+    if (f.every((x) => x)) return 'fallback';
+    return 'loading';
+  }
+
   /** What is playing, for tests and the debug API. */
-  state(): { cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; recording: string | null; position: number | null; loop: [number, number] | null; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number } {
+  state(): {
+    cue: TrackId; want: TrackId; layer: 'recorded' | 'synth' | 'off'; mode: MusicPrefs['mode']; program: string | null;
+    recording: string | null; title: string | null; file: string | null; position: number | null; duration: number | null; loop: [number, number] | null;
+    upNext: string | null; bagLeft: readonly string[]; loaded: string[]; failed: string[]; retrying: string[]; context: string; sounding: number; sources: Array<{ id: string; gain: number }>;
+  } {
     const r = this.rec;
     let position: number | null = null;
     if (r && audio.nodes) {
       const t = audio.nodes.ctx.currentTime - r.startedAt + r.offset;
-      const len = r.rec.loopEnd - r.rec.loopStart;
-      position = t < r.rec.loopEnd ? t : r.rec.loopStart + ((t - r.rec.loopEnd) % len);
+      if (r.looped) {
+        const len = r.src.loopEnd - r.src.loopStart;
+        position = t < r.src.loopEnd ? t : r.src.loopStart + ((t - r.src.loopEnd) % len);
+      } else position = t;
     }
+    const pool = this.playingKey?.startsWith('pool:') ? this.playingKey.slice(5) : null;
     return {
       cue: this.current,
       want: this.want,
       layer: r ? 'recorded' : this.synthId !== 'off' ? 'synth' : 'off',
-      recording: r?.rec.id ?? null,
+      mode: this.prefs.mode,
+      program: this.playingKey,
+      recording: r?.song.id ?? null,
+      title: r?.song.title ?? null,
+      file: r?.file ?? null,
       position,
-      loop: r ? [r.rec.loopStart, r.rec.loopEnd] : null,
+      duration: r ? (r.looped ? null : Math.min(r.song.end, r.src.buffer?.duration ?? r.song.end)) : null,
+      loop: r?.looped ? [r.src.loopStart, r.src.loopEnd] : null,
+      upNext: this.upNext?.song.id ?? null,
+      bagLeft: pool ? this.bag(pool).remaining() : [],
       loaded: [...this.buffers.keys()],
       failed: [...this.failed].filter(([, f]) => f.permanent).map(([k]) => k),
       retrying: [...this.failed].filter(([, f]) => !f.permanent).map(([k]) => k),
       context: audio.state,
-      sounding: this.recLive,
+      sounding: this.recLive.size,
+      sources: [...this.recLive].map((s) => ({ id: s.id, gain: +s.gain.gain.value.toFixed(4) })),
     };
   }
 
-  /** Test hook: restarts the playing recording at `sec` (to hear a loop seam soon). */
+  /** Test hook: restarts the playing song at `sec` (to hear a loop seam or a song's ending soon). */
   seek(sec: number): void {
     const r = this.rec;
     const n = audio.nodes;
     if (!r || !n) return;
     const src = n.ctx.createBufferSource();
     src.buffer = r.src.buffer;
-    src.loop = true; src.loopStart = r.src.loopStart; src.loopEnd = r.src.loopEnd;
+    src.loop = r.src.loop; src.loopStart = r.src.loopStart; src.loopEnd = r.src.loopEnd;
     src.connect(r.eq);
     const now = n.ctx.currentTime;
+    r.src.onended = null; // the replacement carries on under the same tag
     try { r.src.stop(now); } catch { /* gone */ }
     src.start(now, sec);
-    this.recLive++;
-    src.onended = () => { this.recLive--; };
+    src.onended = () => { this.recLive.delete(r.tag); };
     r.src = src; r.startedAt = now; r.offset = sec;
+    if (!r.looped) r.endsAt = now + Math.min(r.song.end, src.buffer?.duration ?? r.song.end) - sec;
   }
 
   setIntensity(k: number): void { this.intensity = Math.max(0, Math.min(1, k)); }
@@ -708,10 +978,10 @@ export class Music {
     if (!n || n.ctx.state !== 'running') return;
     const ctx = n.ctx;
     const t = ctx.currentTime + 0.02;
-    const out = n.music;
+    const out = this.outBus();
     // In the key of what is playing: the recording's if there is one.
-    const base = TRACKS[(this.synthId === 'off' ? 'menu' : this.synthId) as Exclude<TrackId, 'off'>];
-    const tr: Track = this.rec ? { ...base, root: this.rec.rec.key.root, minor: this.rec.rec.key.minor } : base;
+    const base = TRACKS[this.synthId === 'off' ? 'menu' : this.synthId];
+    const tr: Track = this.rec ? { ...base, root: this.rec.song.key.root, minor: this.rec.song.key.minor } : base;
     const f = (d: number, o = 1) => mtof(this.deg(tr, d, o));
     switch (kind) {
       case 'objective':

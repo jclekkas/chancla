@@ -24,9 +24,10 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | Story campaign (4 missions) | **Works**, fully in the browser |
 | Practice with bots | **Works**, fully in the browser |
 | Classic solo arcade (`/classic.html`) | Works |
+| **Phones and tablets** | **Touch Beta (experimental).** The Arcade plays by touch, on all three maps. Story, Practice and Online are marked computer only. Checked only in mobile emulation, never on a real phone. Please try it on yours and use the device checklist in [MOBILE.md](MOBILE.md). |
 | **Online multiplayer** | **Not available.** No game server is hosted yet. The title screen says "Online play is not set up on this deployment yet." Hosting one is a separate step that may cost money; it is waiting on your approval. |
 | **Voices** | **Temporary.** Every line is spoken by a clearly synthetic placeholder voice (offline text-to-speech, Castilian Spanish). They show when and how lines play, not how the final performance should sound. Please judge the writing and timing, not the voices. |
-| Music | **The five Suno tracks**: Rosa's theme on the menus, Ruleros in Mission 1, Fricas y Fricas in Missions 2 and 3, Guerra de Vecinos in the piñata finale, and Bounce y Joke in practice. Each one loops. The loop points were chosen by analysis and nobody has listened to them yet, so you will be the first. If a track is slow to download, the old synthesized music plays until it arrives. |
+| Music | **All 11 Suno playlist songs.** By default, each part of the game draws from its own songs (menus, exploration, chores, action, the finale), plays them whole, and crossfades at the end. **Settings → Soundtrack** can switch to Shuffle all or One song, skip with Next, and show what's playing. Nobody has listened to the rotation or the crossfades yet, so you'll be the first. Please note any song that feels wrong for its scene. If a song is slow to download, the old synthesized music plays until it arrives. |
 | Effects | Synthesized in the browser. |
 
 ## How to play
@@ -38,7 +39,7 @@ Use a computer with a mouse or trackpad. This release does not support phones an
 | Throw | Left click or F |
 | Weapons | 1 / 2: La Chancla / La Pesada |
 | Jump / crouch | Space / C |
-| Menu | Esc: pause, retry from checkpoint, restart, settings, leave |
+| Menu | **Esc or P** (shown on screen while you aim): opens the menu and frees the mouse in one press. Solo play pauses; an online match keeps going, and the menu says so. To get back in, click Resume. |
 
 Settings include music, effects and dialogue volume, subtitles (menu language, Spanish, English, off), automatic banter on or off, objective markers, mouse sensitivity and invert Y.
 
@@ -83,6 +84,7 @@ Please note your computer, browser, and whether you used a mouse or a trackpad. 
 - [ ] Loops: stay in a mission for 2 minutes or more (Missions 1-3), or leave the menu running. Does the music jump or stutter when it repeats? Note roughly when.
 - [ ] Transitions: menu to mission select, mission start, leaving a mission. Is each change smooth, with no gap or clash?
 - [ ] Volume: Settings → Music at 0 silences it; other levels scale it
+- [ ] First visit (a private window): is there an "Enable sound" button at the bottom left? Does one click on it, or anywhere, start the music and make it disappear? On iPhone, try with the silent switch on.
 - [ ] Menus: open the page, click once. Is music playing? Try Main menu → Arcade → Main menu, switching tabs and back, and a mission then back to the menu. Music should be playing every time, without a refresh.
 - [ ] Nothing grates after several minutes
 

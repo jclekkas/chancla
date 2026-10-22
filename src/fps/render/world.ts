@@ -1,10 +1,10 @@
-// Visual build of El Patio from the authoritative map. Solid boxes become
+// Visual build of a map from its authoritative data (El Patio by default). Solid boxes become
 // houses, stairs, planters and props with the same footprint; decoration is
 // either flush with walls (<0.1 m) or above head height, so it never blocks
 // movement or hides an opponent unexpectedly.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { EL_PATIO, type MapBox } from '../../../shared/map';
+import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
 import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import type { Quality } from '../settings';
@@ -16,6 +16,8 @@ export interface WorldView {
   drawCalls: number;
   // Campaign: lift the ambient light (the patio brightening as it is cleaned).
   setBrightness(k: number): void;
+  /** La Fiesta's piñata: where it hangs, and a playful reaction when a chancla hits it. */
+  pinata?: { x: number; y: number; z: number; r: number; hit(): void };
 }
 
 export type ThemeName = 'afternoon' | 'morning' | 'noon' | 'dusk';
@@ -37,7 +39,8 @@ export const THEMES: Record<ThemeName, Theme> = {
 };
 
 export interface WorldOptions {
-  boxes?: readonly MapBox[]; // a campaign layout instead of the base map
+  map?: MapData; // which arena (El Patio when omitted)
+  boxes?: readonly MapBox[]; // a campaign layout instead of the map's own boxes
   theme?: ThemeName;
   teamDecor?: boolean; // Sol/Luna banners and emblems (multiplayer only)
 }
@@ -77,8 +80,11 @@ const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
   const th = THEMES[opts.theme ?? 'afternoon'];
+  const map = opts.map ?? EL_PATIO;
+  const decor = map.decor ?? EL_PATIO.decor!;
+  const bd = map.bounds;
   const group = new THREE.Group();
-  group.name = 'el-patio';
+  group.name = `map-${map.id ?? 'patio'}`;
   const batch = new GeoBatch();
   const stucco = stuccoTexture();
   const wood = woodTexture();
@@ -112,7 +118,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   sun.position.set(...th.sunPos);
   sun.target.position.set(0, 0, 0);
   const sc = sun.shadow.camera;
-  sc.left = -32; sc.right = 32; sc.top = 26; sc.bottom = -26; sc.near = 1; sc.far = 100;
+  sc.left = bd.minX - 5; sc.right = bd.maxX + 5; sc.top = bd.maxZ + 7; sc.bottom = bd.minZ - 7; sc.near = 1; sc.far = 100;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.04;
   const shadowSize = quality === 'high' ? 2048 : 1024;
@@ -122,7 +128,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------------- ground
   const gtex = groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(54, 38), toon(0xffffff, { map: gtex }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: gtex }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
@@ -138,7 +144,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   const signs: Array<{ text: string; x: number; y: number; z: number; ry: number; w: number; bg: string; fg: string }> = [];
 
-  for (const bx of opts.boxes ?? EL_PATIO.boxes) addBox(bx);
+  for (const bx of opts.boxes ?? map.boxes) addBox(bx);
 
   function addBox(b: MapBox): void {
     const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
@@ -222,6 +228,41 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       case 'crate':
         batch.add(woodMat, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0.8));
         batch.add(toon(COLORS.woodDark), boxGeo(b.minX - 0.01, b.maxY * 0.45, b.minZ - 0.01, b.maxX + 0.01, b.maxY * 0.55, b.maxZ + 0.01, 1, 63 & ~12));
+        return;
+      case 'table': {
+        // Party table: a long cloth in alternating colours, a white top.
+        const cloth = Math.round(cx + cz) % 2 ? COLORS.pink : COLORS.turquoise;
+        batch.add(toon(cloth), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.04, b.maxZ, 1));
+        batch.add(toon(0xffffff), boxGeo(b.minX - 0.04, b.maxY - 0.04, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 1));
+        for (let x = b.minX + 0.5; x < b.maxX - 0.2; x += 0.9) if (w >= d) pots.add(x, b.maxY + 0.08, cz, 0.18, 0.16, 0.18, 0, COLORS.gold);
+        for (let z = b.minZ + 0.5; z < b.maxZ - 0.2; z += 0.9) if (d > w) pots.add(cx, b.maxY + 0.08, z, 0.18, 0.16, 0.18, 0, COLORS.gold);
+        return;
+      }
+      case 'hedge': {
+        batch.add(toon(COLORS.leafDark), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.15, b.maxZ, 1));
+        const long = Math.max(w, d), alongX = w >= d;
+        for (let i = 0, n = Math.max(2, Math.round(long / 0.55)); i < n; i++) {
+          const tt = (i + 0.5) / n;
+          bushes.add(alongX ? b.minX + w * tt : cx, b.maxY - 0.2, alongX ? cz : b.minZ + d * tt, alongX ? 0.62 : Math.min(d, 0.7), 0.42, alongX ? Math.min(d, 0.7) : 0.62, i, i % 2 ? COLORS.leaf : COLORS.leafDark);
+          if (i % 3 === 1) flowers.add(alongX ? b.minX + w * tt : cx, b.maxY + 0.02, alongX ? cz : b.minZ + d * tt, 0.16, 0.16, 0.16, i, i % 2 ? COLORS.pink : COLORS.marigold);
+        }
+        return;
+      }
+      case 'gift': {
+        // A stack of presents with ribbons, inside the box's footprint.
+        const cs = [COLORS.pink, COLORS.turquoise, COLORS.marigold, COLORS.violet];
+        const k = Math.abs(Math.round(cx * 3 + cz * 7));
+        const h1 = h * 0.58;
+        batch.add(toon(cs[k % 4]!), boxGeo(b.minX, 0, b.minZ, b.maxX, h1, b.maxZ, 1));
+        batch.add(toon(cs[(k + 1) % 4]!), boxGeo(b.minX + w * 0.15, h1, b.minZ + d * 0.15, b.maxX - w * 0.15, b.maxY, b.maxZ - d * 0.15, 1));
+        trims.add(cx, h1 / 2, cz, w + 0.02, h1, 0.12, 0, COLORS.gold);
+        trims.add(cx, h1 / 2, cz, 0.12, h1, d + 0.02, 0, COLORS.gold);
+        trims.add(cx, h1 + (b.maxY - h1) / 2, cz, w * 0.7 + 0.02, b.maxY - h1, 0.1, 0, 0xffffff);
+        return;
+      }
+      case 'stage':
+        batch.add(toon(COLORS.violet, { map: wood }), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.05, b.maxZ, 1));
+        batch.add(toon(COLORS.gold), boxGeo(b.minX - 0.03, b.maxY - 0.05, b.minZ - 0.03, b.maxX + 0.03, b.maxY, b.maxZ + 0.03, 1));
         return;
       case 'bin': {
         const m = new THREE.Matrix4().compose(new THREE.Vector3(cx, h / 2, cz), new THREE.Quaternion(), new THREE.Vector3(w * 0.95, h, d * 0.95));
@@ -335,15 +376,16 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(1.2, 2.2, 0.04));
     batch.addMesh(toon(color), UNIT, m);
   };
-  for (const s of opts.teamDecor === false ? [] : [-1, 1] as const) {
-    const color = s < 0 ? COLORS.sol : COLORS.luna;
-    // Banners on the spawn-side face of the separation houses.
-    for (const z of [-8.5, -5.5, 3.5, 7.5]) banner(s * 21.06, s < 0 ? z : -z, Math.PI / 2, color);
-    // A big emblem above each plaza doorway.
-    const emblem = new THREE.Mesh(s < 0 ? new THREE.CircleGeometry(0.9, 20) : crescentGeometry(), toon(color, { emissive: s < 0 ? 0x3a1c00 : 0x002a30 }));
-    emblem.position.set(s * 16.96, 4.3, s * 2.75);
-    emblem.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2;
-    group.add(emblem);
+  if (opts.teamDecor !== false) {
+    // Banners on the spawn-side walls, and a big emblem over each spawn exit.
+    for (const bn of decor.banners ?? []) banner(bn.x, bn.z, bn.ry, bn.team === 0 ? COLORS.sol : COLORS.luna, map === EL_PATIO ? 4.4 : 2.2);
+    for (const em of decor.emblems ?? []) {
+      const sol = em.team === 0;
+      const emblem = new THREE.Mesh(sol ? new THREE.CircleGeometry(0.9, 20) : crescentGeometry(), toon(sol ? COLORS.sol : COLORS.luna, { emissive: sol ? 0x3a1c00 : 0x002a30 }));
+      emblem.position.set(em.x, em.y, em.z);
+      emblem.rotation.y = em.ry;
+      group.add(emblem);
+    }
   }
 
   // --------------------------------------------------- overhead dressing
@@ -368,10 +410,9 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       }
     }
   };
-  // Laundry across the alley and the market (from roof line to roof line).
-  for (const x of [-19, -9, 6, 18]) { line(x, -15, x + 1.2, -11, 4.6, true); line(-x, 15, -x - 1.2, 11, 4.6, true); }
-  // Papel picado over the plaza.
-  for (const z of [-6, 0, 6]) line(-17, z - 1.5, 17, z + 1.5, 6.4, false);
+  // Laundry from roof line to roof line, papel picado over the open ground.
+  for (const [ax, az, bx2, bz, y] of decor.laundry ?? []) line(ax, az, bx2, bz, y, true);
+  for (const [ax, az, bx2, bz, y] of decor.papel ?? []) line(ax, az, bx2, bz, y, false);
   const wires = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink }));
   lines.add(wires);
   const clothMesh = clothes.build(new THREE.PlaneGeometry(1, 1), toon(0xffffff, { side: THREE.DoubleSide }));
@@ -394,8 +435,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       }
     }
   };
-  string(-17, -8, 17, 8, 7.2);
-  string(-17, 8, 17, -8, 7.2);
+  for (const [ax, az, bx2, bz, y] of decor.lights ?? []) string(ax, az, bx2, bz, y);
   group.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(bulbPts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink })));
   const bulbMesh = bulbs.build(new THREE.SphereGeometry(0.5, 6, 4), flat(0xffffff));
   if (bulbMesh && th.bulbsGlow) bulbMesh.scale.setScalar(1);
@@ -403,6 +443,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ---------------------------------------------- skyline landmark: church
   const church = new THREE.Group();
+  const ch = decor.church;
   const cm = (c2: number) => toon(c2, { map: stucco });
   const tower = new THREE.Mesh(UNIT, cm(0xf1dfbc));
   tower.scale.set(4, 16, 4); tower.position.set(0, 8, -24);
@@ -418,11 +459,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   arch.scale.set(1.8, 2.4, 0.05); arch.position.set(0, 14.4, -21.98);
   church.add(tower, belfry, cap, cross, arch, bell);
   church.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
-  group.add(church);
+  if (ch) { church.position.set(ch.x, 0, ch.z + 24); group.add(church); }
   // Distant rooftops so the horizon is not empty.
   for (let i = 0; i < 26; i++) {
     const a = (i / 26) * Math.PI * 2;
-    const r = 38 + (i % 3) * 5;
+    const r = Math.max(38, Math.hypot(bd.maxX, bd.maxZ) + 6) + (i % 3) * 5;
     const hgt = 6 + ((i * 7) % 5) * 1.6;
     const m = new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * r, hgt / 2, Math.sin(a) * r), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(9, hgt, 6));
     batch.addMesh(toon([0xd8765a, 0xf1dfbc, 0x7cc7bb, 0xf0b45a, 0x8a6aa8][i % 5]!, { map: stucco }), UNIT, m);
@@ -436,6 +477,40 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     m.rotation.y = s.ry;
     group.add(m);
   }
+
+  // ---------------------------------------------------- map-specific dressing
+  // Awnings over market stalls: the poles stand inside the stall's own footprint.
+  for (const a of decor.awnings ?? []) {
+    const stall = (opts.boxes ?? map.boxes).find((q) => q.mat === 'stall' && q.minX < a.maxX && q.maxX > a.minX && q.minZ < a.maxZ && q.maxZ > a.minZ);
+    const aw = a.maxX - a.minX;
+    for (let i = 0; i < 4; i++) batch.add(toon(i % 2 ? 0xffffff : a.color), boxGeo(a.minX + (aw / 4) * i, a.y, a.minZ, a.minX + (aw / 4) * (i + 1), a.y + 0.08, a.maxZ, 1));
+    trims.add((a.minX + a.maxX) / 2, a.y - 0.08, a.minZ + 0.02, aw, 0.16, 0.04, 0, a.color);
+    if (stall) {
+      for (const [px, pz] of [[stall.minX + 0.08, stall.minZ + 0.08], [stall.maxX - 0.08, stall.minZ + 0.08], [stall.minX + 0.08, stall.maxZ - 0.08], [stall.maxX - 0.08, stall.maxZ - 0.08]] as const) {
+        rails.add(px, (stall.maxY + a.y) / 2, pz, 0.06, a.y - stall.maxY, 0.06, 0);
+      }
+    }
+  }
+  // Trees growing out of planters: trunk inside the planter, canopy above head height.
+  for (const tr of decor.trees ?? []) {
+    batch.add(toon(COLORS.woodDark), boxGeo(tr.x - 0.12, tr.y, tr.z - 0.12, tr.x + 0.12, 3.3, tr.z + 0.12, 1));
+    for (const [dx, dy, dz, r] of [[0, 4.1, 0, 1.15], [0.7, 3.8, 0.3, 0.8], [-0.6, 3.9, -0.4, 0.85], [0.1, 4.6, -0.2, 0.75]] as const) {
+      bushes.add(tr.x + dx, dy, tr.z + dz, r * 2, r * 1.6, r * 2, dx, dy > 4.2 ? COLORS.leaf : COLORS.leafDark);
+    }
+  }
+  // Dance floor tiles, painted flush with the ground.
+  if (decor.danceFloor) {
+    const df = decor.danceFloor;
+    const n = 8, step = (df.r / n) * 1.2;
+    for (let i = -n; i < n; i++) for (let j = -n; j < n; j++) {
+      const x = df.x + (i + 0.5) * step, z = df.z + (j + 0.5) * step;
+      if (Math.hypot(x - df.x, z - df.z) > df.r) continue;
+      const tile = new THREE.Matrix4().compose(new THREE.Vector3(x, 0.012, z), new THREE.Quaternion(), new THREE.Vector3(step * 0.96, 0.02, step * 0.96));
+      batch.addMesh(toon([COLORS.pink, COLORS.turquoise, COLORS.marigold, COLORS.violet][(i + j + 2 * n) % 4]!), UNIT, tile);
+    }
+  }
+  // The piñata: a seven-point star on a rope, hung well above everyone.
+  const pinata = decor.pinata ? buildPinata(decor.pinata, group) : null;
 
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
@@ -455,10 +530,12 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   const water = group.getObjectByName('water') as THREE.Mesh | undefined;
   const statue = group.getObjectByName('statue');
+  let lastT = 0;
   return {
     group,
     sun,
     drawCalls: calls,
+    pinata: pinata?.view,
     setBrightness(k: number) {
       hemi.intensity = th.hemi[2] * k;
       sun.intensity = th.sun[1] * (0.85 + 0.15 * k);
@@ -467,6 +544,9 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       lines.children.forEach((o) => { if ((o as THREE.InstancedMesh).isInstancedMesh) o.position.y = Math.sin(t * 1.3) * 0.03; });
       if (water) (water.material as THREE.MeshToonMaterial).emissive.setHSL(0.52, 0.6, 0.08 + Math.sin(t * 2) * 0.02);
       if (statue) statue.rotation.y = 0.4 + Math.sin(t * 0.3) * 0.1;
+      const dt = Math.min(0.1, Math.max(0, t - lastT));
+      lastT = t;
+      pinata?.step(dt, t);
     },
   };
 }
@@ -485,4 +565,74 @@ function crescentGeometry(): THREE.ShapeGeometry {
   s.absarc(0.38, 0, 0.72, Math.PI * 1.62, Math.PI * 0.38, true);
   crescent = new THREE.ShapeGeometry(s, 16);
   return crescent;
+}
+
+// La Fiesta's piñata. Hitting it is just for fun: it spins and showers
+// confetti from a fixed pool (nothing is allocated while playing).
+function buildPinata(pp: { x: number; y: number; z: number }, group: THREE.Group): { view: NonNullable<WorldView['pinata']>; step(dt: number, t: number): void } {
+  const pin = new THREE.Group();
+  pin.name = 'pinata';
+  pin.add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), toon(COLORS.marigold)));
+  const coneGeo = new THREE.ConeGeometry(0.16, 0.62, 10);
+  const cols = [COLORS.pink, COLORS.turquoise, COLORS.violet, COLORS.terracotta, COLORS.gold, COLORS.pink, COLORS.turquoise];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const c = new THREE.Mesh(coneGeo, toon(cols[i]!));
+    c.position.set(Math.cos(a) * 0.62, Math.sin(a) * 0.62, 0);
+    c.rotation.z = a - Math.PI / 2;
+    pin.add(c);
+    const tail = new THREE.Mesh(UNIT, toon(cols[(i + 3) % 7]!));
+    tail.scale.set(0.04, 0.5, 0.01);
+    tail.position.set(Math.cos(a) * 0.95, Math.sin(a) * 0.95 - 0.3, 0);
+    pin.add(tail);
+  }
+  pin.position.set(pp.x, pp.y, pp.z);
+  group.add(pin);
+  const top = 6.6;
+  const rope = new THREE.Mesh(CYL, toon(COLORS.ink));
+  rope.scale.set(0.03, top - (pp.y + 0.42), 0.03);
+  rope.position.set(pp.x, (top + pp.y + 0.42) / 2, pp.z);
+  group.add(rope);
+  const N = 60;
+  const confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.12, 0.08), toon(0xffffff, { side: THREE.DoubleSide }), N);
+  confetti.frustumCulled = false;
+  for (let i = 0; i < N; i++) confetti.setColorAt(i, new THREE.Color(cols[i % 7]!));
+  confetti.count = 0;
+  group.add(confetti);
+  const vel = new Float32Array(N * 3), pos = new Float32Array(N * 3);
+  const tmp = new THREE.Object3D();
+  let spin = 0, burst = 0;
+  return {
+    view: {
+      x: pp.x, y: pp.y, z: pp.z, r: 0.95,
+      hit() {
+        spin = Math.min(spin + 9, 16);
+        burst = 1.6;
+        for (let i = 0; i < N; i++) {
+          pos[i * 3] = pp.x; pos[i * 3 + 1] = pp.y; pos[i * 3 + 2] = pp.z;
+          vel[i * 3] = (Math.random() - 0.5) * 5; vel[i * 3 + 1] = Math.random() * 3; vel[i * 3 + 2] = (Math.random() - 0.5) * 5;
+        }
+        confetti.count = N;
+      },
+    },
+    step(dt: number, t: number) {
+      pin.rotation.z = Math.sin(t * 1.1) * 0.12;
+      pin.rotation.y += spin * dt;
+      spin = Math.max(0, spin - dt * 7);
+      if (burst <= 0) return;
+      burst -= dt;
+      for (let i = 0; i < N; i++) {
+        vel[i * 3 + 1] -= 6 * dt;
+        pos[i * 3] += vel[i * 3]! * dt;
+        pos[i * 3 + 1] = Math.max(0.02, pos[i * 3 + 1]! + vel[i * 3 + 1]! * dt);
+        pos[i * 3 + 2] += vel[i * 3 + 2]! * dt;
+        tmp.position.set(pos[i * 3]!, pos[i * 3 + 1]!, pos[i * 3 + 2]!);
+        tmp.rotation.set(t * 7 + i, t * 5 + i * 0.3, 0);
+        tmp.updateMatrix();
+        confetti.setMatrixAt(i, tmp.matrix);
+      }
+      confetti.instanceMatrix.needsUpdate = true;
+      if (burst <= 0) confetti.count = 0;
+    },
+  };
 }

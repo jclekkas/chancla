@@ -1,0 +1,102 @@
+{
+  "env": {
+    "at": "2026-10-21T21:18:55.815Z",
+    "label": "before",
+    "device": "Chromium mobile emulation, 844x390 landscape, DPR 3, touch",
+    "browser": "Chromium 141 headless, SwiftShader (software GL). NOT a phone.",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4
+  },
+  "rows": [
+    {
+      "quality": "low",
+      "map": "patio",
+      "loadMs": 511,
+      "fps": 21.3,
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "megapixels": 0.33,
+      "shadows": false,
+      "drawCalls": 135,
+      "triangles": 22206,
+      "geometries": 100,
+      "textures": 3,
+      "heapMB": 10
+    },
+    {
+      "quality": "low",
+      "map": "plaza",
+      "loadMs": 2651,
+      "fps": 13.5,
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "megapixels": 0.33,
+      "shadows": false,
+      "drawCalls": 129,
+      "triangles": 30580,
+      "geometries": 121,
+      "textures": 10,
+      "heapMB": 14
+    },
+    {
+      "quality": "low",
+      "map": "fiesta",
+      "loadMs": 2533,
+      "fps": 15.5,
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "megapixels": 0.33,
+      "shadows": false,
+      "drawCalls": 101,
+      "triangles": 25148,
+      "geometries": 113,
+      "textures": 8,
+      "heapMB": 17
+    },
+    {
+      "quality": "medium",
+      "map": "patio",
+      "loadMs": 349,
+      "fps": 8.3,
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "megapixels": 0.74,
+      "shadows": true,
+      "drawCalls": 217,
+      "triangles": 27058,
+      "geometries": 96,
+      "textures": 5,
+      "heapMB": 14
+    },
+    {
+      "quality": "medium",
+      "map": "plaza",
+      "loadMs": 3737,
+      "fps": 5.1,
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "megapixels": 0.74,
+      "shadows": true,
+      "drawCalls": 221,
+      "triangles": 35322,
+      "geometries": 117,
+      "textures": 14,
+      "heapMB": 13
+    },
+    {
+      "quality": "medium",
+      "map": "fiesta",
+      "loadMs": 2883,
+      "fps": 5.7,
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "megapixels": 0.74,
+      "shadows": true,
+      "drawCalls": 168,
+      "triangles": 30456,
+      "geometries": 112,
+      "textures": 12,
+      "heapMB": 16
+    }
+  ]
+}

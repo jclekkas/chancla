@@ -235,8 +235,8 @@ export class CampaignUi {
     on('btn-mr-next', () => { const n = this.progress.next(this.current!.id); const m = MISSIONS.find((x) => x.id === n); if (m) this.openIntro(m); });
     on('btn-mr-retry', () => this.openIntro(this.current!));
     on('btn-mr-select', () => this.openSelect());
+    on('btn-mr-home', () => { this.ctx.show('title'); music.play('menu'); });
     on('btn-pause-retrycp', () => this.retryCheckpoint());
-    on('btn-pause-restart', () => this.restart());
     if (!this.skipBound) {
       this.skipBound = true;
       const skip = (e: Event) => { if (this.runtime?.inVictory) { e.preventDefault(); this.runtime.skipVictory(); } };

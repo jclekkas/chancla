@@ -3,9 +3,51 @@
 Online play needs two pieces:
 
 1. **The site** (static files from `npm run build`, in `dist/`). It already deploys on Vercel from this repo.
-2. **The game server** (`server/index.ts`, a single Node process holding rooms in memory). Vercel cannot host it, because it needs a long-lived WebSocket process. Any host that runs a container or a Node process with WebSockets works: Fly.io, Render, Railway, a small VPS.
+2. **The game server** (`server/index.ts`, a single Node process holding rooms in memory). It needs an always-on process with all players routed to that same process. Vercel now supports WebSockets, but its autoscaled functions are not a drop-in host for this in-memory room registry. Use a single always-on container on Render, Fly.io, Railway, or a VPS unless the room architecture is redesigned.
 
 Nothing in this repository has provisioned a server. Until one exists, the site shows "Online play is not set up on this deployment yet" and practice still works offline.
+
+## Prepared production release
+
+`render.yaml` defines one Docker web service in Virginia, using the
+`0.5c-512mb` paid plan (listed at $7/month on 2026-10-21, before excess usage).
+Applying it creates billable capacity and requires the owner's approval and
+connected Render account. This file alone does not deploy anything.
+
+- Source branch: `codex/online-production`, based on production's `934f88b`.
+- One instance, no automatic deploys. Coordinate server/client releases; a
+  server deploy interrupts existing rooms. Never autoscale this configuration.
+- Starts with a conservative 20-room admission ceiling, not a measured
+  capacity guarantee. Measure tick time and bandwidth before increasing it.
+- Production site origins are explicitly allowed, including
+  `https://chanclawarfare.fun`; no wildcard origin access.
+- No database, paid preview instances, or new custom domain is required.
+
+After Render reports the server ready, record its actual assigned hostname
+(do not guess it). Verify `/readyz` and run:
+
+```bash
+GAME_SERVER_URL=wss://ACTUAL-HOST/ws \
+GAME_SITE_ORIGIN=https://chanclawarfare.fun npm run smoke:online
+```
+
+This creates temporary private four-player rooms on Patio, Plaza and Fiesta,
+checks CORS, the protocol handshake, team balance, synchronized snapshots,
+input acknowledgments, reconnection identity and owner migration, then leaves.
+It does not simulate human play or prove browser compatibility.
+
+Only after that passes, set `VITE_GAME_SERVER_URL` in the Vercel production
+environment to that exact WebSocket address and rebuild the matching source
+commit. Open two isolated browser sessions on the production domain, invite,
+ready up, play to results, and rematch. Confirm pause/menu leaves the online
+match running and that returning resumes input. Keep the previous deployment
+available for rollback. GitHub `main` must be reconciled with the release before
+resuming automatic production pushes, so an old branch cannot replace it.
+
+Current scope is desktop-browser private 1v1/2v2 rooms, optional bot fill and
+three selectable maps. Public matchmaking, cross-server persistence and mobile
+online controls are not implemented by this hosting configuration. Mobile
+Arcade remains its separate touch beta.
 
 ## 1. Run the server
 

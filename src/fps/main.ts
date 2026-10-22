@@ -20,12 +20,19 @@ import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
 import { music } from '../audio/music';
+import { loadMusicPrefs } from '../audio/prefs';
+import { SoundtrackPanel } from '../ui/soundtrackPanel';
+import { SoundGate } from '../ui/soundGate';
+import { renderMapCards, type MapChoice } from '../ui/mapSelect';
+import { copyLink, inputProfile, watchInputProfile, type InputProfile } from '../ui/device';
+import { isMapId, mapEntry, randomMapId, type MapId } from '../../shared/maps';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
 import type { SimEvent } from '../../shared/sim';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+let soundtrack: SoundtrackPanel | null = null;
 
 type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
 const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
@@ -77,6 +84,10 @@ let retry: (() => void) | null = null;
 let pendingInviteCode = '';
 let lastCode: string | null = null;
 let lockFailures = 0;
+let pauseOpenedAt = -1e9;
+// The map the current (or last) practice match was started on: Restart keeps it,
+// even when the choice was "Random".
+let practiceMapId: MapId = 'patio';
 
 // Dialogue (campaign and multiplayer quips) with subtitles.
 const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
@@ -91,6 +102,12 @@ const dialogue = new Dialogue(
   },
 );
 let campaign: CampaignUi;
+let soundGate: SoundGate | null = null;
+
+function renderSoundStatus(): void {
+  if (!soundGate) return;
+  $('sound-status').textContent = soundGate.describe((k) => t(`sound.status.${k}` as Key));
+}
 
 // ---------------------------------------------------------------------
 // Screens
@@ -126,7 +143,9 @@ function render(): void {
   $('scr-title').hidden = !(base === 'title' || ((base === 'online' || base === 'practice') && !inMatch));
   const hudOn = inMatch && base !== 'lobby';
   $('hud').hidden = !hudOn;
-  $('click-to-play').hidden = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
+  const ctp = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
+  $('click-to-play').hidden = ctp;
+  if (!ctp) $('ctp-note').textContent = t(practice || campaign?.active ? 'hud.waitingSolo' : 'hud.waitingOnline');
   if (input) input.enabled = inMatch && base === 'none' && overlayStack.length === 0;
   if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback);
   // Focus the first control of the newest panel for keyboard players.
@@ -141,10 +160,15 @@ function render(): void {
   updatePracticePause();
 }
 
+/** Solo play waits while the mouse isn't captured: the menu, or the "click to aim" prompt after a refused or lost lock. */
+function waitingForAim(): boolean {
+  return inMatch && base === 'none' && overlayStack.length === 0 && !!input && !input.locked && !input.fallback;
+}
+
 function updatePracticePause(): void {
-  if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0);
+  if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
-  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0);
+  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
@@ -204,16 +228,28 @@ async function boot(): Promise<void> {
   }, storage);
   const uiTick = () => { campaign.tick(); if (!campaign.active) dialogue.update(); requestAnimationFrame(uiTick); };
   requestAnimationFrame(uiTick);
+  music.setPrefs(loadMusicPrefs());
+  soundtrack = new SoundtrackPanel($('soundtrack'), { lang: getLang, musicSilenced: () => store.value.music <= 0.001, onUi: () => audio.play('ui') });
   music.play('menu');
   document.documentElement.lang = getLang();
   document.title = t('meta.title');
   applyDom(document);
   bootProgress(15, 'loading.shell');
   ($('lnk-classic') as HTMLAnchorElement).href = `${BASE}classic.html`;
+  ($('lnk-touch-arcade') as HTMLAnchorElement).href = `${BASE}classic.html`;
   $('rosa-portrait').style.backgroundImage = svgUrl(rosaSVG('smirk'));
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
-  $('mobile-note').hidden = !coarse;
+  // Touch-only devices (phones, tablets without a mouse) get the Arcade's
+  // touch beta and a link to play the rest on a computer.
+  applyInputProfile(inputProfile());
+  watchInputProfile(applyInputProfile);
   bindUi();
+  soundGate = new SoundGate({
+    text: (k) => t(`sound.${k}` as Key),
+    inGame: () => inMatch && base === 'none',
+    openSettings: () => { renderSettings(); pushOverlay('settings'); },
+    musicStatus: () => music.status(),
+  });
+  setInterval(() => { if (top() === 'settings') renderSoundStatus(); }, 1000);
   readInvite();
 
   if (webglAvailable()) {
@@ -243,6 +279,30 @@ async function boot(): Promise<void> {
   checkServer();
   if (pendingInviteCode) openOnline();
   (window as unknown as { __fps: unknown }).__fps = debugApi();
+}
+
+let touchOnly = false;
+let showAllModes = false;
+
+let lastProfile: InputProfile | null = null;
+
+function applyInputProfile(p: InputProfile): void {
+  lastProfile = p;
+  touchOnly = p.touchOnly;
+  document.body.classList.toggle('touch-only', touchOnly);
+  document.body.classList.toggle('small-screen', p.small);
+  $('mobile-gate').hidden = !touchOnly;
+  $('title-actions').classList.toggle('collapsed', touchOnly && !showAllModes);
+  document.body.classList.toggle('modes-collapsed', touchOnly && !showAllModes);
+  $('mobile-note').hidden = true;
+  for (const el of document.querySelectorAll<HTMLElement>('.needs-pc')) el.dataset.pcLabel = t('mobile.pcOnly');
+}
+
+/** Desktop-only modes on a touch-only device: explain instead of starting something unplayable. */
+function needsComputer(): boolean {
+  if (!touchOnly) return false;
+  toast(t('mobile.pcOnlyToast'), 4200);
+  return true;
 }
 
 function showNoWebgl(): void {
@@ -366,16 +426,18 @@ function startOnline(join: string | null): void {
   retry = () => startOnline(join ?? lastCode);
 }
 
-function startPractice(): void {
+/** `keepMap` (Restart) replays the same arena; otherwise the saved choice is used, resolving Random. */
+function startPractice(keepMap = false): void {
   const v = store.value;
+  if (!keepMap) practiceMapId = v.practiceMap === 'random' ? randomMapId() : isMapId(v.practiceMap) ? v.practiceMap : 'patio';
   endSession(null);
   practice = true;
   const h = new LocalHost();
   host = h;
   const s = newSession(h.transport(), () => h.now());
   s.connect(sanitizeName(store.value.name, t('online.namePh')));
-  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies } });
-  retry = startPractice;
+  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId });
+  retry = () => startPractice(true);
 }
 
 // Leaves the room and tears the session down. `to` picks the next screen.
@@ -448,7 +510,8 @@ function onRoom(room: RoomView): void {
       show('none');
       if (practice) input?.requestLock(); // the Start click is still a user gesture in most browsers
     } else if (base === 'results') {
-      // Rematch: straight back into the courtyard.
+      // Rematch: straight back in (on the room's map, which the owner may have changed).
+      engine?.useMap(room.map);
       engine?.resetRound();
       show('none');
     }
@@ -524,6 +587,13 @@ function renderLobby(room: RoomView): void {
   }
   const mine = room.members.find((m) => m.id === me);
   $('lobby-owner').hidden = !isOwner;
+  // The map is the host's call; everyone sees it, and the room enforces it.
+  document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => {
+    const on = b.dataset.lmap === room.map;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+    b.disabled = !isOwner && !on;
+  });
   ($('chk-bots') as HTMLInputElement).checked = room.bots.enabled;
   document.querySelectorAll<HTMLButtonElement>('[data-bdiff]').forEach((b) => {
     const on = b.dataset.bdiff === room.bots.difficulty;
@@ -555,7 +625,8 @@ function renderResults(room: RoomView): void {
   $('res-title').textContent = r.winner === -1 ? t('results.tie') : r.winner === 0 ? t('results.sol') : t('results.luna');
   const flavor = r.winner === -1 ? t('results.youTie') : r.winner === myTeam ? t('results.youWin') : t('results.youLose');
   const reason = r.reason === 'score' ? t('results.byScore', { n: MATCH.scoreToWin }) : t('results.byTime');
-  $('res-sub').textContent = `${reason} · ${flavor}`;
+  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}`;
+  ($('btn-res-maps') as HTMLButtonElement).hidden = !room.practice;
   $('res-sol').textContent = String(r.scores[0]);
   $('res-luna').textContent = String(r.scores[1]);
   const rows = [...r.rows].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || b.damage - a.damage);
@@ -595,6 +666,8 @@ function applyInputSettings(): void {
 }
 
 function renderSettings(): void {
+  renderSoundStatus();
+  soundtrack?.render();
   const v = store.value;
   const seg = (attr: string, val: string) => document.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) => {
     const on = b.dataset[attr] === val;
@@ -631,6 +704,11 @@ function renderPracticeSetup(): void {
   seg('diff', v.practiceDifficulty);
   seg('allies', String(v.practiceAllies));
   seg('enemies', String(v.practiceEnemies));
+  renderMapCards($('practice-maps'), {
+    selected: v.practiceMap,
+    t: (k) => t(k as Key),
+    onPick: (c: MapChoice) => { store.update({ practiceMap: c }); renderPracticeSetup(); },
+  });
 }
 
 function changeLang(lang: 'en' | 'es'): void {
@@ -640,6 +718,9 @@ function changeLang(lang: 'en' | 'es'): void {
   document.title = t('meta.title');
   applyDom(document);
   hud.invalidate();
+  soundGate?.render();
+  soundtrack?.render();
+  if (lastProfile) applyInputProfile(lastProfile); // relabel, keeping a detected mouse or keyboard
   if (serverOk !== null || !serverUrl()) checkServer();
   if (lastRoom && base === 'lobby') renderLobby(lastRoom);
   if (lastRoom && base === 'results') renderResults(lastRoom);
@@ -662,10 +743,20 @@ function openOnline(): void {
 function openPause(): void {
   if (!inMatch || base !== 'none') return;
   if (campaign.runtime?.inVictory) return;
+  input?.release();
+  input?.exitLock();
+  pauseOpenedAt = performance.now();
   const m = campaign.active;
+  const online = !m && !practice;
   $('pause-note').textContent = m ? t('pause.missionNote') : practice ? t('pause.practiceNote') : t('pause.note');
+  $('pause-note').classList.toggle('live', online);
   ($('btn-pause-retrycp') as HTMLButtonElement).hidden = !m;
-  ($('btn-pause-restart') as HTMLButtonElement).hidden = !m;
+  const rb = $('btn-pause-restart') as HTMLButtonElement;
+  rb.hidden = !m && !practice;
+  rb.dataset.t = m ? 'pause.restart' : 'pause.restartMatch';
+  rb.textContent = t(rb.dataset.t as Key);
+  ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
+  ($('btn-pause-select') as HTMLButtonElement).hidden = !m;
   show('pause');
 }
 
@@ -677,19 +768,34 @@ function confirmBox(title: string, body: string, yes: string, action: () => void
   pushOverlay('confirm');
 }
 
-function resume(): void {
+// From a click (or Enter on the Resume button) the mouse is captured again
+// right away. From Escape it can't be: browsers only grant pointer lock to a
+// click or key press that counts as user activation, and Escape never does.
+// Then the "click to aim" prompt asks for that explicit click.
+function resume(viaClick: boolean): void {
   show('none');
-  input?.requestLock();
+  if (viaClick) input?.requestLock();
 }
 
-function askLeave(): void {
-  if (campaign.active) { campaign.leave(); return; }
-  $('confirm-title').textContent = t('confirm.leaveTitle');
-  $('btn-confirm-yes').textContent = t('confirm.yes');
-  const body = practice ? t('confirm.leavePractice') : t('confirm.leaveBody');
-  $('confirm-body').textContent = body;
-  confirmAction = () => endSession('title');
-  pushOverlay('confirm');
+/** Main menu from the pause menu: confirms first, because a run or match is in progress. */
+function askHome(): void {
+  if (campaign.active) {
+    confirmBox(t('confirm.leaveTitle'), t('confirm.leaveMission'), t('confirm.yes'), () => { campaign.toSelect(); show('title'); music.play('menu'); });
+    return;
+  }
+  confirmBox(t('confirm.leaveTitle'), practice ? t('confirm.leavePractice') : t('confirm.leaveBody'), t('confirm.yes'), () => endSession('title'));
+}
+
+/** Practice: the same match settings and map again. */
+function askRestartPractice(): void {
+  confirmBox(t('confirm.restartPracticeTitle'), t('confirm.restartPractice'), t('confirm.restartYes'), () => { overlayStack.length = 0; startPractice(true); });
+}
+
+/** Back to the practice setup to pick another map. From the pause menu a match is in progress, so it asks. */
+function changePracticeMap(confirmFirst: boolean): void {
+  const go = () => { endSession(null); renderPracticeSetup(); show('practice'); };
+  if (confirmFirst) confirmBox(t('confirm.leaveTitle'), t('confirm.leavePractice'), t('confirm.yes'), go);
+  else go();
 }
 
 async function copyInvite(): Promise<void> {
@@ -722,9 +828,15 @@ function on(id: string, f: (e: Event) => void): void {
 }
 
 function bindUi(): void {
-  on('btn-campaign', () => campaign.openSelect());
-  on('btn-online', openOnline);
-  on('btn-practice', () => { renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-campaign', () => { if (!needsComputer()) campaign.openSelect(); });
+  on('btn-online', () => { if (!needsComputer()) openOnline(); });
+  on('btn-practice', () => { if (needsComputer()) return; renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-copy-link', () => {
+    void copyLink(`${location.origin}${BASE}`, $('mg-link') as HTMLInputElement).then((ok) => toast(t(ok ? 'mobile.copied' : 'mobile.copyManual'), 3600));
+  });
+  on('btn-mg-settings', () => { renderSettings(); pushOverlay('settings'); });
+  on('btn-mg-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));
+  on('btn-mg-more', () => { showAllModes = true; if (lastProfile) applyInputProfile(lastProfile); $('btn-mg-more').hidden = true; });
   on('btn-controls', () => pushOverlay('controls'));
   on('btn-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));
@@ -742,7 +854,7 @@ function bindUi(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceDifficulty: b.dataset.diff as BotDifficulty }); renderPracticeSetup(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-allies]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceAllies: Number(b.dataset.allies) }); renderPracticeSetup(); }));
   document.querySelectorAll<HTMLButtonElement>('[data-enemies]').forEach((b) => b.addEventListener('click', () => { store.update({ practiceEnemies: Number(b.dataset.enemies) }); renderPracticeSetup(); }));
-  on('btn-practice-start', startPractice);
+  on('btn-practice-start', () => startPractice());
 
   on('btn-copy-invite', () => void copyInvite());
   on('btn-share-invite', () => { if (lastRoom) navigator.share?.({ title: t('meta.title'), url: inviteUrl(lastRoom.code) }).catch(() => { /* cancelled */ }); });
@@ -757,6 +869,9 @@ function bindUi(): void {
     $('lobby-err').textContent = '';
     session?.send({ t: 'team', team: (team === 0 ? 1 : 0) as Team });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => b.addEventListener('click', () => {
+    if (lastRoom?.owner === session?.id && isMapId(b.dataset.lmap)) session?.send({ t: 'map', map: b.dataset.lmap });
+  }));
   ($('chk-bots') as HTMLInputElement).addEventListener('change', (e) => {
     session?.send({ t: 'bots', enabled: (e.target as HTMLInputElement).checked, difficulty: lastRoom?.bots.difficulty ?? 'normal' });
   });
@@ -770,11 +885,15 @@ function bindUi(): void {
   on('btn-to-lobby', () => session?.send({ t: 'lobby' }));
   on('btn-res-leave', () => endSession('title'));
 
-  on('btn-resume', resume);
+  on('btn-resume', () => resume(true));
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
   on('btn-fullscreen', toggleFullscreen);
-  on('btn-pause-leave', askLeave);
+  on('btn-pause-leave', askHome);
+  on('btn-pause-select', () => campaign.leave());
+  on('btn-pause-restart', () => { if (campaign.active) campaign.restart(); else if (practice) askRestartPractice(); });
+  on('btn-pause-maps', () => changePracticeMap(true));
+  on('btn-res-maps', () => changePracticeMap(false));
   on('btn-menu', () => { input?.exitLock(); openPause(); });
   on('btn-click-play', () => input?.requestLock());
 
@@ -812,14 +931,20 @@ function bindUi(): void {
     dialogue.refreshSubtitle();
   }));
 
-  // Esc closes the newest panel when the pointer is not locked.
+  // Esc closes the newest panel when the pointer is not locked. This handler
+  // is registered before the game's input handler: whenever it acts on the
+  // key it stops the event, or closing the menu would re-enable game input
+  // and the same press would open the menu again.
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || input?.locked) return;
     const cur = top();
+    if (cur !== 'none') e.stopImmediatePropagation();
     if (OVERLAYS.has(cur)) { e.preventDefault(); popOverlay(); return; }
     if (cur === 'online' || cur === 'practice' || cur === 'campaign') { e.preventDefault(); show('title'); music.play('menu'); return; }
     if (cur === 'mintro' || cur === 'mresults') { e.preventDefault(); campaign.openSelect(); return; }
-    if (cur === 'pause') { e.preventDefault(); resume(); }
+    // The same Escape press that opened the menu (some browsers deliver it
+    // just after releasing the pointer) must not close it again.
+    if (cur === 'pause') { e.preventDefault(); if (!e.repeat && performance.now() - pauseOpenedAt > 250) resume(false); }
   });
   window.addEventListener('resize', () => engine?.resize());
   document.addEventListener('fullscreenchange', () => engine?.resize());
@@ -847,10 +972,14 @@ function bindInput(inp: FpsInput): void {
     else render();
   };
   inp.onLockError = () => {
-    // Browsers also refuse a re-lock right after Esc; only fall back to
-    // drag-to-look when the lock keeps failing or does not exist at all.
+    // Browsers refuse a re-lock for about a second after the lock was
+    // released (Chrome after Esc). That is expected, not a failure: the
+    // "click to aim" prompt stays and the next click tries again. Only fall
+    // back to drag-to-look when the lock is missing or keeps failing later.
+    const cooldown = performance.now() - inp.unlockedAt < 1600;
+    if (cooldown) { if (inMatch && base === 'none') { render(); toast(t('hud.clickAgain'), 2200); } return; }
     lockFailures++;
-    if (lockFailures >= 2 || typeof $('stage').requestPointerLock !== 'function') {
+    if (lockFailures >= 3 || typeof $('stage').requestPointerLock !== 'function') {
       if (!inp.fallback) toast(t('hud.dragLook'), 4000);
       inp.fallback = true;
     }
@@ -860,6 +989,9 @@ function bindInput(inp: FpsInput): void {
   inp.onScoreboard = (open) => hud.scoreboard(open, lastRoom, engine?.stats ?? new Map(), session?.id ?? -1);
   inp.onSwitch = () => audio.play('switch');
   $('stage').addEventListener('click', () => { if (inMatch && base === 'none' && !inp.locked) inp.requestLock(); });
+  // Switching tabs or windows always opens the menu (it pauses local modes),
+  // whether or not the browser also releases the mouse.
+  document.addEventListener('visibilitychange', () => { if (document.hidden && inMatch && base === 'none') openPause(); });
 }
 
 // ---------------------------------------------------------------------
@@ -873,6 +1005,7 @@ function debugApi() {
     get code() { return lastRoom?.code ?? null; },
     info: () => engine?.debugInfo() ?? { mode: 'no-webgl' },
     session: () => session,
+    host: () => host,
     engine: () => engine,
     input: () => input,
     campaign: () => campaign,

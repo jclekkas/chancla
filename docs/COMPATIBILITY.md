@@ -16,7 +16,7 @@ Levels used here:
 | macOS, Safari (campaign and audio) | Unverified | Voice clips are MP3 and the score is pure Web Audio, both of which Safari supports. Audio unlock on the first click and `decodeAudioData` were not tested on Safari. |
 | macOS, Safari | Unverified | WebKit was not run, not even in an automated build. Things to check: pointer lock (Safari requires a click and shows its own banner), `requestPointerLock` without a promise, Web Audio unlock, WebGL2 availability, and fullscreen (`webkitRequestFullscreen` is wired as a fallback). |
 | Firefox (any OS) | Unverified | Not in scope. Expected to work. |
-| iOS and Android | Unsupported for combat | Menus load and the title explains that touch combat is not supported in this release. |
+| iOS and Android | Arcade: Touch Beta, unverified on hardware | The Arcade plays by touch, checked only in Chromium mobile emulation. Story, Practice and Online are marked computer only. Device checklist: [MOBILE.md](MOBILE.md). |
 
 ## Manual checklist for real Windows and Mac machines
 

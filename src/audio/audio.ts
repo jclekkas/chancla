@@ -10,7 +10,7 @@ export type Sfx =
   | 'throwHeavy' | 'hitConfirm' | 'headshot' | 'hurtFps' | 'elimConfirm' | 'died' | 'heartbeat' | 'countdown' | 'go'
   | 'win' | 'lose' | 'switch' | 'jump' | 'landSoft' | 'step' | 'spawn' | 'shielded' | 'heavyImpact';
 
-type MusicMode = 'off' | 'title' | 'game' | 'boss';
+export type MusicMode = 'off' | 'title' | 'game' | 'boss';
 
 interface Ctx {
   ctx: AudioContext;
@@ -25,6 +25,37 @@ interface Ctx {
 }
 
 const MAX_VOICES = 32;
+
+// iPhone and iPad: with the ringer switch on silent, Web Audio is muted
+// unless the page's audio session is "playback" (Safari 16.4+), or a media
+// element has played during a gesture (older versions). Both are harmless
+// elsewhere.
+function playbackSession(): void {
+  try {
+    const s = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (s && s.type !== 'playback') s.type = 'playback';
+  } catch { /* not supported */ }
+}
+
+let primed = false;
+function primeMediaPlayback(): void {
+  if (primed || typeof Audio === 'undefined') return;
+  primed = true;
+  try {
+    // 50 ms of silence as a WAV, played once from the gesture.
+    const n = 2205, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 44100, true); v.setUint32(28, 88200, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+    const url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+    const el = new Audio(url);
+    el.setAttribute('playsinline', '');
+    el.volume = 0;
+    const done = () => URL.revokeObjectURL(url);
+    el.onended = done;
+    void el.play().catch(() => { primed = false; done(); }); // retried on the next gesture
+  } catch { primed = false; }
+}
 
 export class AudioEngine {
   private a: Ctx | null = null;
@@ -70,7 +101,8 @@ export class AudioEngine {
   armLifecycle(): void {
     if (this.armed || typeof window === 'undefined') return;
     this.armed = true;
-    const gesture = () => { if (!this.a || this.a.ctx.state !== 'running') this.unlock(); };
+    playbackSession();
+    const gesture = () => { this.gestures++; if (!this.a || this.a.ctx.state !== 'running') { primeMediaPlayback(); this.unlock(); } };
     for (const ev of ['pointerdown', 'pointerup', 'mousedown', 'click', 'keydown', 'touchend']) window.addEventListener(ev, gesture, { capture: true, passive: true });
     const hide = () => {
       const a = this.a;
@@ -87,8 +119,33 @@ export class AudioEngine {
     window.addEventListener('pageshow', show);
   }
 
+  /** Gestures seen since the page loaded (the sound control uses it to tell "not tried yet" from "blocked"). */
+  gestures = 0;
+
   /** The context's state, for tests and the debug API. */
   get state(): string { return this.a ? this.a.ctx.state : this.failed ? 'unsupported' : 'locked'; }
+
+  /** True when the player turned sound down to nothing on purpose. */
+  get mutedByUser(): boolean { return this.muted || this.volume <= 0.001 || (this.musicVol <= 0.001 && this.sfxVol <= 0.001); }
+
+  /**
+   * For an explicit "Enable sound" button: call it directly from the click.
+   * Unlocks or resumes audio within that gesture, then reports what really
+   * happened. The control trusts the result, never the click.
+   */
+  async unlockFromGesture(timeoutMs = 1500): Promise<'running' | 'blocked' | 'unsupported'> {
+    this.gestures++;
+    playbackSession();
+    primeMediaPlayback();
+    this.unlock();
+    if (this.failed) return 'unsupported';
+    const ctx = this.a?.ctx;
+    if (!ctx) return 'blocked';
+    if (ctx.state !== 'running') {
+      await Promise.race([ctx.resume().catch(() => undefined), new Promise((r) => setTimeout(r, timeoutMs))]);
+    }
+    return (ctx.state as string) === 'running' ? 'running' : 'blocked';
+  }
 
   // Call from a user gesture. Safe to call repeatedly: creates the context
   // once, and resumes it whenever it isn't running.
@@ -139,7 +196,7 @@ export class AudioEngine {
         ctx.addEventListener('statechange', () => { if (ctx.state === 'running' && this.a?.ctx === ctx) this.ran(false); });
         // The Arcade picks its music mode before audio exists (its title
         // screen shows at load); start that music now, unless it is paused.
-        if (this.mode !== 'off' && !this.musicHeld) this.startMusicTimer();
+        if (this.mode !== 'off' && !this.musicHeld && !this.musicDriver) this.startMusicTimer();
         this.ran(true);
       }
       if (this.a.ctx.state !== 'running' && !(typeof document !== 'undefined' && document.hidden)) void this.a.ctx.resume().catch(() => undefined);
@@ -212,12 +269,21 @@ export class AudioEngine {
   suspend(): void {
     this.musicHeld = true;
     this.stopMusicTimer();
+    this.musicDriver?.(this.mode, true);
   }
 
   resume(): void {
     this.musicHeld = false;
-    if (this.mode !== 'off') this.startMusicTimer();
+    if (this.musicDriver) this.musicDriver(this.mode, false);
+    else if (this.mode !== 'off') this.startMusicTimer();
   }
+
+  /**
+   * When set (the Arcade), the music modes drive the shared soundtrack
+   * controller (music.ts) instead of the built-in groove below, so one player
+   * serves every page. `held`: a paused run.
+   */
+  musicDriver: ((mode: MusicMode, held: boolean) => void) | null = null;
 
   // ----- voice helpers -----
 
@@ -511,6 +577,7 @@ export class AudioEngine {
   // ----- music: a light cumbia groove, darker and faster for the boss -----
 
   setMusicMode(mode: MusicMode): void {
+    if (this.musicDriver) { this.mode = mode; this.musicDriver(mode, this.musicHeld); return; }
     if (mode === this.mode) {
       if (mode !== 'off') this.startMusicTimer();
       return;

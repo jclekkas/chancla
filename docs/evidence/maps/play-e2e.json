@@ -1,0 +1,492 @@
+{
+  "at": "2026-10-21T20:42:04.736Z",
+  "passed": 69,
+  "total": 69,
+  "checks": [
+    {
+      "name": "practice patio: the room is on the chosen map",
+      "ok": true,
+      "detail": "patio"
+    },
+    {
+      "name": "practice patio: team chip and spawn banner name the team",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": "☀YOU ARE ON TEAM SOL"
+      }
+    },
+    {
+      "name": "practice patio: the team chip stays after the banner goes",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": ""
+      }
+    },
+    {
+      "name": "practice patio: every visible name tag has the right role",
+      "ok": true,
+      "detail": [
+        "nameplate sol ally"
+      ]
+    },
+    {
+      "name": "practice patio: Escape while moving and throwing opens the menu, frees the mouse, drops held input",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "practice patio: while paused the match clock and health do not change",
+      "ok": true,
+      "detail": {
+        "t0": 295067,
+        "t1": 295067,
+        "hp0": 100,
+        "hp1": 100
+      }
+    },
+    {
+      "name": "practice patio: the menu says practice is paused",
+      "ok": true,
+      "detail": "Practice is paused."
+    },
+    {
+      "name": "practice patio: Resume (an explicit click) captures the mouse again without throwing",
+      "ok": true,
+      "detail": {
+        "locked": true,
+        "fallback": false,
+        "throwsBefore": 0,
+        "throwsAfter": 0
+      }
+    },
+    {
+      "name": "practice plaza: the room is on the chosen map",
+      "ok": true,
+      "detail": "plaza"
+    },
+    {
+      "name": "practice plaza: team chip and spawn banner name the team",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": "☀YOU ARE ON TEAM SOL"
+      }
+    },
+    {
+      "name": "practice plaza: the team chip stays after the banner goes",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": ""
+      }
+    },
+    {
+      "name": "practice plaza: every visible name tag has the right role",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "practice plaza: Escape while moving and throwing opens the menu, frees the mouse, drops held input",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "practice plaza: while paused the match clock and health do not change",
+      "ok": true,
+      "detail": {
+        "t0": 296317,
+        "t1": 296317,
+        "hp0": 100,
+        "hp1": 100
+      }
+    },
+    {
+      "name": "practice plaza: the menu says practice is paused",
+      "ok": true,
+      "detail": "Practice is paused."
+    },
+    {
+      "name": "practice plaza: Resume (an explicit click) captures the mouse again without throwing",
+      "ok": true,
+      "detail": {
+        "locked": true,
+        "fallback": false,
+        "throwsBefore": 0,
+        "throwsAfter": 0
+      }
+    },
+    {
+      "name": "practice fiesta: the room is on the chosen map",
+      "ok": true,
+      "detail": "fiesta"
+    },
+    {
+      "name": "practice fiesta: team chip and spawn banner name the team",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": "☀YOU ARE ON TEAM SOL"
+      }
+    },
+    {
+      "name": "practice fiesta: the team chip stays after the banner goes",
+      "ok": true,
+      "detail": {
+        "chip": "☀YOUR TEAM: SOL",
+        "banner": ""
+      }
+    },
+    {
+      "name": "practice fiesta: every visible name tag has the right role",
+      "ok": true,
+      "detail": [
+        "nameplate sol ally"
+      ]
+    },
+    {
+      "name": "practice fiesta: Escape while moving and throwing opens the menu, frees the mouse, drops held input",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "practice fiesta: while paused the match clock and health do not change",
+      "ok": true,
+      "detail": {
+        "t0": 297567,
+        "t1": 297567,
+        "hp0": 100,
+        "hp1": 100
+      }
+    },
+    {
+      "name": "practice fiesta: the menu says practice is paused",
+      "ok": true,
+      "detail": "Practice is paused."
+    },
+    {
+      "name": "practice fiesta: Resume (an explicit click) captures the mouse again without throwing",
+      "ok": true,
+      "detail": {
+        "locked": true,
+        "fallback": false,
+        "throwsBefore": 0,
+        "throwsAfter": 0
+      }
+    },
+    {
+      "name": "a teammate was seen with the ALLY tag",
+      "ok": true,
+      "detail": 2
+    },
+    {
+      "name": "five pause/resume cycles in a row all work",
+      "ok": true
+    },
+    {
+      "name": "Escape on the menu closes it (one press each way)",
+      "ok": true,
+      "detail": "none"
+    },
+    {
+      "name": "with the mouse free, the visible Menu button is on top and clickable",
+      "ok": true,
+      "detail": "btn-menu"
+    },
+    {
+      "name": "the Menu button opens the menu",
+      "ok": true
+    },
+    {
+      "name": "switching tabs opens the menu, and returning keeps it open (paused)",
+      "ok": true,
+      "detail": "pause"
+    },
+    {
+      "name": "Restart replays the same map from 0–0",
+      "ok": true,
+      "detail": {
+        "before": "fiesta",
+        "after": "fiesta"
+      }
+    },
+    {
+      "name": "Change map (with confirmation) returns to the map choice",
+      "ok": true
+    },
+    {
+      "name": "Main menu (with confirmation) from the pause menu goes home",
+      "ok": true,
+      "detail": "title"
+    },
+    {
+      "name": "after repeated map switches: no extra event listeners",
+      "ok": true,
+      "detail": {
+        "before": 45,
+        "after": 45
+      }
+    },
+    {
+      "name": "after repeated map switches: one render loop (menu runs at about 60 requests a second, not a multiple)",
+      "ok": true,
+      "detail": 10
+    },
+    {
+      "name": "music: one track, not silent",
+      "ok": true,
+      "detail": {
+        "sounding": 1,
+        "sources": [
+          {
+            "id": "rosa-theme",
+            "gain": 0.52
+          }
+        ],
+        "layer": "recorded"
+      }
+    },
+    {
+      "name": "re-entering after going home works",
+      "ok": true
+    },
+    {
+      "name": "Practice: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "campaign: Escape during a mission opens the menu",
+      "ok": true
+    },
+    {
+      "name": "campaign: while paused the mission timer and health stop",
+      "ok": true,
+      "detail": {
+        "t0": 1099.9999999999993,
+        "t1": 1099.9999999999993,
+        "hp0": 100,
+        "hp1": 100
+      }
+    },
+    {
+      "name": "campaign menu: Resume, Restart, Mission select and Main menu",
+      "ok": true
+    },
+    {
+      "name": "campaign shows a solo mode label, not a team",
+      "ok": true,
+      "detail": "STORY · SOLO"
+    },
+    {
+      "name": "campaign: Main menu from mission results goes home",
+      "ok": true
+    },
+    {
+      "name": "campaign: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Arcade plaza: Escape while moving pauses and frees the mouse",
+      "ok": true,
+      "detail": {
+        "state": "paused",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 1.4166666666666665,
+        "hp": 100,
+        "map": "plaza",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade plaza: paused, the run clock and health stop",
+      "ok": true,
+      "detail": {
+        "r0": 1.4166666666666665,
+        "r1": 1.4166666666666665
+      }
+    },
+    {
+      "name": "Arcade plaza: Resume returns to play with the mouse captured",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 1.4166666666666665,
+        "hp": 100,
+        "map": "plaza",
+        "locked": true,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade plaza: Restart keeps the map",
+      "ok": true
+    },
+    {
+      "name": "Arcade plaza: Change map opens the map choice",
+      "ok": true
+    },
+    {
+      "name": "Arcade fiesta: Escape while moving pauses and frees the mouse",
+      "ok": true,
+      "detail": {
+        "state": "paused",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 0.8333333333333343,
+        "hp": 100,
+        "map": "fiesta",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade fiesta: paused, the run clock and health stop",
+      "ok": true,
+      "detail": {
+        "r0": 0.8333333333333343,
+        "r1": 0.8333333333333343
+      }
+    },
+    {
+      "name": "Arcade fiesta: Resume returns to play with the mouse captured",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 0.8333333333333343,
+        "hp": 100,
+        "map": "fiesta",
+        "locked": true,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade fiesta: Restart keeps the map",
+      "ok": true
+    },
+    {
+      "name": "Arcade fiesta: Change map opens the map choice",
+      "ok": true
+    },
+    {
+      "name": "Arcade patio: Escape while moving pauses and frees the mouse",
+      "ok": true,
+      "detail": {
+        "state": "paused",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 1.5166666666666662,
+        "hp": 100,
+        "map": "patio",
+        "locked": false,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade patio: paused, the run clock and health stop",
+      "ok": true,
+      "detail": {
+        "r0": 1.5166666666666662,
+        "r1": 1.5166666666666662
+      }
+    },
+    {
+      "name": "Arcade patio: Resume returns to play with the mouse captured",
+      "ok": true,
+      "detail": {
+        "state": "playing",
+        "phase": "wave",
+        "loops": 1,
+        "runTime": 1.6166666666666658,
+        "hp": 100,
+        "map": "patio",
+        "locked": true,
+        "held": 0
+      }
+    },
+    {
+      "name": "Arcade patio: Restart keeps the map",
+      "ok": true
+    },
+    {
+      "name": "Arcade patio: Change map opens the map choice",
+      "ok": true
+    },
+    {
+      "name": "Arcade after switching maps: one game loop, no extra listeners",
+      "ok": true,
+      "detail": {
+        "loops": 1,
+        "before": 40,
+        "after": 40
+      }
+    },
+    {
+      "name": "Arcade: a lost run ends on the results screen with Change map and Main menu",
+      "ok": true
+    },
+    {
+      "name": "Arcade: Main menu from results opens the main game",
+      "ok": true
+    },
+    {
+      "name": "Arcade: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "online (local server): the guest receives the host's map",
+      "ok": true
+    },
+    {
+      "name": "online: Escape opens the menu, which says the match continues online",
+      "ok": true,
+      "detail": "Match continues online"
+    },
+    {
+      "name": "online: the match clock keeps running while the menu is open (not paused)",
+      "ok": true,
+      "detail": {
+        "a": 296817,
+        "b": 294617
+      }
+    },
+    {
+      "name": "online: the host plays on the chosen map with a team label",
+      "ok": true,
+      "detail": {
+        "map": "fiesta",
+        "chip": "☀YOUR TEAM: SOL"
+      }
+    },
+    {
+      "name": "online: Main menu (with confirmation) leaves the match",
+      "ok": true
+    },
+    {
+      "name": "online: no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

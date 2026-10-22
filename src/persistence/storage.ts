@@ -93,6 +93,10 @@ export interface Settings {
   reducedMotion: boolean;
   quality: Quality;
   showFps: boolean;
+  /** The last Arcade map chosen: 'patio', 'plaza', 'fiesta' or 'random'. */
+  arcadeMap: string;
+  /** Touch aiming speed (1 = the tuned default). */
+  touchSensitivity: number;
 }
 
 export interface Progress {
@@ -118,6 +122,8 @@ export function defaultSettings(env?: { lang?: Lang; reducedMotion?: boolean; mo
     reducedMotion: !!env?.reducedMotion,
     quality: env?.mobile ? 'low' : 'medium',
     showFps: false,
+    arcadeMap: 'patio',
+    touchSensitivity: 1,
   };
 }
 
@@ -137,6 +143,7 @@ export class SettingsStore {
     this.storage = storage;
     const raw = storage.getJSON<Settings>(SETTINGS_KEY) ?? {};
     this.value = {
+      arcadeMap: raw.arcadeMap === 'random' || raw.arcadeMap === 'patio' || raw.arcadeMap === 'plaza' || raw.arcadeMap === 'fiesta' ? raw.arcadeMap : defaults.arcadeMap,
       lang: raw.lang === 'es' || raw.lang === 'en' ? raw.lang : defaults.lang,
       volume: num(raw.volume, defaults.volume, 0, 1),
       muted: bool(raw.muted, defaults.muted),
@@ -150,6 +157,7 @@ export class SettingsStore {
           ? raw.quality
           : defaults.quality,
       showFps: bool(raw.showFps, defaults.showFps),
+      touchSensitivity: num(raw.touchSensitivity, defaults.touchSensitivity, 0.3, 3),
     };
   }
 

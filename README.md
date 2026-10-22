@@ -25,25 +25,30 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 
 ## Controls
 
-| Action | Keys |
-| --- | --- |
-| Move | W A S D or arrow keys |
-| Look | Mouse or trackpad (click the game to lock the pointer) |
-| Throw | Left click, or F (also E) |
-| Jump / crouch | Space / C or Shift |
-| Switch chancla | 1, 2, Q, mouse wheel or right click |
-| Scoreboard | Hold Tab |
-| Menu | Esc or P (frees the mouse and opens the menu in one press) |
+| Action | Keys | Touch (phones, tablets; play sideways) |
+| --- | --- | --- |
+| Move | W A S D or arrow keys | Left thumb: the stick appears where you touch |
+| Look | Mouse or trackpad (click the game to lock the pointer) | Drag on the right side |
+| Throw | Left click, or F (also E) | Hold Throw (drag on it to aim too) |
+| Jump / crouch | Space / C or Shift | Jump (hold) / Crouch (tap on, tap off) |
+| Switch chancla | 1, 2, Q, mouse wheel or right click | ⇄ |
+| Scoreboard | Hold Tab | Scores |
+| Menu | Esc or P (frees the mouse and opens the menu in one press) | ☰ Menu, top right |
 
 **Trackpad:** F throws, so your fingers can stay on the pad, and two-finger scroll switches weapons at most once per gesture. If the browser refuses pointer lock, the game switches to drag-to-look automatically. Ctrl, Cmd and Alt shortcuts are never captured, so Ctrl+W and Cmd+Q behave normally. That is why crouch is C or Shift, not Ctrl.
 
 **Weapons:** La Chancla is fast and accurate. It lands where the crosshair points, bounces once off walls, and recovers in 0.42 s. La Pesada is a slow, arcing clog: 62 damage plus 26 splash around corners and big knockback, but a 1.15 s recovery and no bounce. A bot or player in the open is easier to tag with the chancla; someone camping behind cover is a job for La Pesada.
 
-**Settings** (saved per browser): language, mouse sensitivity, invert Y, field of view, reduced motion, graphics quality, separate music, effects and dialogue volumes, automatic banter on or off, subtitles (menu language, Spanish, English or off), objective markers and tips, and an FPS/ping readout.
+**Settings** (saved per browser): language, mouse sensitivity, touch aim sensitivity, invert Y, field of view, reduced motion, graphics quality (Auto, Low, Medium, High), separate music, effects and dialogue volumes, automatic banter on or off, subtitles (menu language, Spanish, English or off), objective markers and tips, and an FPS/ping readout.
 
 **Music and voices:** an original score is synthesized live (cumbia and son-influenced, one recurring "Rosa's theme" arranged per mission). Dialogue is in Spanish with English or Spanish subtitles. **The voices in this build are temporary synthetic placeholders, not recorded performances**; see [docs/AUDIO.md](docs/AUDIO.md).
 
-On phones and tablets without a mouse, the Arcade plays with touch controls (**Touch Beta, experimental**, not yet tried on a real device). Story, Practice and Online need a keyboard and mouse, and are labelled that way. The phone card also offers a link to copy for a computer. See [docs/MOBILE.md](docs/MOBILE.md).
+On phones and tablets without a mouse, **online matches, Practice and the Arcade play with touch controls** (**Touch Beta, experimental**, checked in emulation, not yet on a real phone).
+
+- **Online:** phones join the same private rooms as computer players, by invite link or code. The controls are a stick, drag to aim, Throw, Jump, Crouch, switch chancla, Scores and a ☰ menu.
+- **Story** needs a keyboard and mouse, and is labelled that way.
+
+Steps, controls and the device checklist are in [docs/MOBILE.md](docs/MOBILE.md).
 
 ## Running it locally
 
@@ -154,6 +159,6 @@ Geometry, textures, animation and sound effects are generated in code. The music
 - **One server process.** Rooms live in memory, so a restart or deploy ends running matches. Clients see a clear message and can make a new room.
 - **No lag compensation.** At high ping, lead your targets.
 - **Bots:** they navigate, see, chase and throw with deliberate aim error, but they are simple. They don't flank, and they don't use La Pesada splash cleverly.
-- **Touch:** only the Arcade, as an experimental beta, checked in mobile emulation only (see [docs/MOBILE.md](docs/MOBILE.md)).
+- **Touch:** online, Practice and the Arcade, as an experimental beta, checked in mobile emulation only (see [docs/MOBILE.md](docs/MOBILE.md)).
 - **Not in this release:** text or voice chat, accounts, ranked play, cosmetics, more maps.
 - **Unverified:** frame rates on real hardware, Safari, and real Windows and macOS machines (see Verification).

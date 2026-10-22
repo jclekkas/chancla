@@ -49,6 +49,17 @@ three selectable maps. Public matchmaking, cross-server persistence and mobile
 online controls are not implemented by this hosting configuration. Mobile
 Arcade remains its separate touch beta.
 
+## Phones (touch online play)
+
+- **No server change.** Touch players send the same input messages as keyboard and mouse players (protocol 4).
+- **Server address.** When the build doesn't set `VITE_GAME_SERVER_URL`, the client uses the production server address (`wss://chanclawarfare-game-server.onrender.com/ws`) on this project's own hostnames:
+  - `chanclawarfare.fun`, with or without `www`
+  - `chancla.vercel.app` and `chanclawarfare.vercel.app`
+  - the multiplayer preview, `chancla-git-multiplayer-jclekkas.vercel.app`
+
+  These are the origins in `render.yaml`'s `ALLOWED_ORIGINS`. `VITE_GAME_SERVER_URL` still takes precedence. Any other host must set it.
+- **Rooms survive a locked phone briefly.** A phone that freezes the page and its socket is detected after 6 s of silence and reconnects through the existing path. The room keeps the slot for `NET.reconnectGraceMs` (25 s).
+
 ## 1. Run the server
 
 Container (recommended):

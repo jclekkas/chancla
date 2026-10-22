@@ -11,6 +11,11 @@
 //
 // Shortcut safety: Ctrl and Cmd combinations are never captured (Ctrl+W
 // would close the tab), so crouch is C or Shift rather than Ctrl.
+//
+// Touch (phones, tablets) is a second source, fed by the on-screen controls
+// (touch.ts) and merged in sample(): no pointer lock, no keyboard needed.
+// release() drops both sources, so a menu, a lost focus or a hidden page
+// never leaves anything held.
 import { ListenerBag } from '../core/listeners';
 import type { WeaponId } from '../../shared/config';
 
@@ -56,6 +61,13 @@ export class FpsInput {
   /** performance.now() when the pointer lock was last released (browsers refuse re-locking for ~1 s). */
   unlockedAt = -1e9;
   private lockedAt = -1e9;
+  /** The on-screen touch controls are the active input (no pointer lock is used). */
+  touchMode = false;
+  /** Touch look speed, separate from the mouse's. */
+  touchSensitivity = 1;
+  private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
+  /** Called by release(): the touch overlay forgets the fingers it was tracking. */
+  onTouchRelease: (() => void) | null = null;
 
   constructor(private canvas: HTMLElement) {
     const doc = document;
@@ -141,14 +153,49 @@ export class FpsInput {
     this.setWeapon(this.weapon === 0 ? 1 : 0);
   }
 
+  // ---- touch source (on-screen controls)
+
+  /** Stick position, each axis -1..1 (forward is +z). */
+  setTouchMove(x: number, z: number): void {
+    this.touch.mx = x;
+    this.touch.mz = z;
+  }
+
+  setTouchButton(b: 'fire' | 'jump' | 'crouch', down: boolean): void {
+    this.touch[b] = down && this.enabled;
+  }
+
+  /** A look drag on the screen, in pixels. */
+  addTouchLook(dx: number, dy: number): void {
+    if (!this.enabled) return;
+    const k = 0.0055 * this.touchSensitivity;
+    this.yaw -= dx * k;
+    this.pitch -= dy * k * (this.invertY ? -1 : 1);
+    this.pitch = clamp(this.pitch, -1.45, 1.45);
+    this.lookEvents++;
+  }
+
+  switchWeapon(): void {
+    if (this.enabled) this.toggleWeapon();
+  }
+
+  toggleScoreboard(): void {
+    this.scoreboard = !this.scoreboard;
+    this.onScoreboard?.(this.scoreboard);
+  }
+
+  get touchCrouch(): boolean { return this.touch.crouch; }
+
   sample(): Controls {
     let mx = 0, mz = 0;
     for (const k of this.keys) { const v = MOVE[k]; if (v) { mx += v[0]; mz += v[1]; } }
+    const t = this.touch;
+    mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
-      jump: this.keys.has('Space'),
-      crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
-      fire: this.enabled && (this.mouseFire || this.keyFire),
+      jump: this.keys.has('Space') || t.jump,
+      crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
+      fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
       weapon: this.weapon,
     };
   }
@@ -158,11 +205,15 @@ export class FpsInput {
     this.keys.clear();
     this.mouseFire = false;
     this.keyFire = false;
+    this.touch.mx = 0; this.touch.mz = 0;
+    this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
+    this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }
   }
 
   get heldCount(): number {
-    return this.keys.size + (this.mouseFire ? 1 : 0) + (this.keyFire ? 1 : 0);
+    const t = this.touch;
+    return this.keys.size + (this.mouseFire ? 1 : 0) + (this.keyFire ? 1 : 0) + (t.fire ? 1 : 0) + (t.jump ? 1 : 0) + (t.crouch ? 1 : 0) + (t.mx !== 0 || t.mz !== 0 ? 1 : 0);
   }
 
   requestLock(): void {

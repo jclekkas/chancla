@@ -1,4 +1,4 @@
-# Phones and tablets (Touch Beta)
+# Phones and tablets (Touch Beta: online, practice, Arcade)
 
 **Status: experimental.** Everything here was built and checked in Chromium's mobile emulation on a Linux container. **No real phone or tablet has run it yet.** Treat touch as a beta until the device checklist below has been done on real hardware.
 
@@ -6,17 +6,116 @@
 
 | Mode | On a touch-only device |
 | --- | --- |
-| **Arcade** | Playable with touch controls (beta). All three maps. |
+| **Online** | Playable with touch controls (beta), in the same private rooms as computer players. See [Online multiplayer on a phone](#online-multiplayer-on-a-phone). |
+| **Practice** | Playable with the same touch controls, against bots. |
+| **Arcade** | Playable with its own touch controls (beta). All three maps. |
 | Story (campaign) | Labelled "Computer only". It needs a keyboard and mouse. |
-| Practice | Labelled "Computer only". |
-| Online | Labelled "Computer only" (and no game server is hosted). |
 
 On the main page, a touch-only device sees a card instead of the computer menu:
 
+- **Play online with friends** opens online play: create a room, or join with a code or an invite link.
+- **Practice with bots** opens the practice setup.
 - **Play Arcade · Touch Beta** opens the Arcade.
-- **Full experience on computer** has **Copy link to play on a computer**. It copies the address; if the clipboard is blocked, the link is shown selected so it can be copied by hand.
+- **Full experience on computer** has **Copy link to play on a computer** (for Story). It copies the address; if the clipboard is blocked, the link is shown selected so it can be copied by hand.
 - **Settings** and the language switch stay available.
-- **Show all modes** opens the full menu. A computer-only mode then explains itself with a short message instead of starting.
+- **Show all modes** opens the full menu. Story then explains itself with a short message instead of starting.
+
+## Online multiplayer on a phone
+
+### How to play with a friend (exact steps)
+
+1. **On the computer** (or another phone): open the site, choose **Play online**, then **Create private room**. Choose the map, and turn on bots if you want them. Then tap **Copy invite link** or **Share invite**, and send the link.
+2. **On the phone**: open the link. The **Play online** panel opens with the room code filled in. Type a name (or keep the saved one) and tap **Join**.
+3. **In the lobby**: you see **YOUR TEAM: SOL ☀** or **YOUR TEAM: LUNA ☾**. Tap **Switch team** if you want the other side, then **I'm ready**. The host taps **Start match**.
+4. **Turn the phone sideways.** Play:
+   - left thumb: move
+   - right thumb: drag to aim
+   - hold **Throw**
+   - **Jump**, **Crouch** (tap on and off), **⇄** to switch chancla, **Scores**
+5. **☰ Menu** (top right) at any time: **Back to the match**, **Audio & settings**, **Controls**, **Leave match** (asks first). The online match keeps going while the menu is open, and the menu says so.
+6. **After the match**: the results show your team and your row. The host can **Rematch**, or go back to the lobby to change the map. **Main menu** leaves.
+
+No keyboard, mouse, fullscreen or pointer lock is needed at any point.
+
+### Touch controls (online and practice)
+
+| Action | Touch |
+| --- | --- |
+| Move | Left side: put a thumb anywhere and drag. The stick appears under it. |
+| Look and aim | Drag on the right side. Dragging on Throw also aims. |
+| Throw | Hold the big Throw button. It repeats at the chancla's own rate, as holding the mouse button does. The ring around it fills as the next throw becomes ready. The crosshair ring shows the same. |
+| Jump | Jump button (hold) |
+| Crouch | Crouch button (tap on, tap off) |
+| Switch chancla | ⇄ |
+| Scoreboard | Scores (tap to show or hide) |
+| Menu | ☰ Menu, top right, always on top of the controls |
+
+- **Independent fingers.** Each control follows its own finger (pointer id). Moving, aiming and throwing work together, and a finger that starts on one control never drives another. A second finger on the stick or the aim area is ignored.
+- **Nothing stays held.** A cancelled touch, a finger lost by the browser, the menu, the rotate screen, switching apps, locking the phone and leaving all drop every held input, including Crouch.
+- **The tap that resumes play** (Resume or Start) is ignored by the controls.
+- **Taps on buttons work while another finger is down.** Browsers don't turn a tap into a click when another finger is on the glass. So on touch, a button acts when one finger goes down and up on it, and the browser's own click that follows is swallowed. Scrolling a menu presses nothing.
+- **No page scrolling, zoom, text selection or long-press menus** on the play surface: `touch-action: none`, iOS `gesturestart` and double-tap blocked during play. Menus scroll normally.
+- **Back gesture or button** during a match opens the menu instead of leaving the page.
+- **Touch aim sensitivity** is its own setting.
+- **Which input is active** follows what the player uses, not the device name:
+  - a finger on the screen means touch
+  - a mouse that moves means mouse and keyboard, with pointer lock as before (a tablet with a trackpad)
+  - the keyboard works in either mode
+  - only one set of controls is shown at a time
+
+### Orientation
+
+The controls need landscape. In portrait during a match, a **Turn your phone sideways** screen covers the game:
+- local input stops, and anything held is dropped
+- the online match keeps going, and the screen says so
+- practice pauses
+- an **Open the menu** button is there, to leave without rotating
+
+Menus, the lobby and results work in portrait.
+
+### Backgrounding and connection
+
+- **Switching apps or locking the phone** opens the menu and drops held input.
+- **On return, the connection is checked.** A phone can freeze a page and leave its socket open but dead, with no close event. If nothing has arrived for 6 s, the client treats the link as dropped and uses the existing reconnect: the server holds your slot for 25 s, and you rejoin the same room, slot and team. The same check runs every 2 s while connected.
+- **While reconnecting,** the HUD shows "Reconnecting…".
+- **If the room is gone** (too long away, server restart), the "Disconnected" screen explains it and offers **Try again** or the main menu.
+- **Nothing is promised in the background:** mobile browsers can suspend a backgrounded page and its connection at any time.
+
+### Team clarity
+
+- **"YOUR TEAM: SOL ☀" / "YOUR TEAM: LUNA ☾"** shows the team's name, icon and colour together, never colour alone:
+  - in the lobby (with your team's box outlined)
+  - in the match HUD, all the time
+  - in the spawn banner
+  - on the results screen (with your row marked)
+- **Teammates and opponents** carry ALLY and ENEMY tags under the existing visibility rules (only when in view, never through walls).
+
+### Fairness
+
+- **Same server, same rules.** Phones and computers join the same rooms, under the same authoritative simulation.
+- **No mobile advantages.** There are no client-side hits, no damage bonus and no aim assist.
+- **No server or protocol change.** A phone sends exactly the inputs a keyboard and mouse do.
+- **Aim assist:** not added. If testing on real phones shows touch players can't compete, a bounded proposal belongs in a separate change: a small, visible, opt-in slowdown of aim near a target, never automatic hits.
+
+### Graphics
+
+- **Settings → Graphics quality** now has **Auto** (the default for new players), Low, Medium and High.
+- **Auto:**
+  - Low on phones, mouse-less tablets and low-core devices: no shadows, no antialiasing, render resolution capped at 1× the screen's CSS pixels
+  - Medium elsewhere
+- A saved choice is kept. Reduced motion is respected (no camera shake).
+
+Measured by `scripts/perf-mobile-mp.ts` (`docs/evidence/mobile-mp/perf.json`): a practice match at 844×390 with DPR 3, in headless Chromium with **SwiftShader software rendering, not a phone**.
+
+| Map | Auto (Low, 0.33 MP per frame) | Medium (0.74 MP per frame, shadows) |
+| --- | --- | --- |
+| El Patio | 11.3 fps | 10.5 fps |
+| La Plaza | 11.8 fps | 10.8 fps |
+| La Fiesta | 13.8 fps | 10.2 fps |
+
+- **What carries over to a phone:** Auto draws less than half the pixels and has no shadow pass.
+- **What doesn't:** the frame rate here is limited by a CPU rasterizer on a 4-core Xeon.
+- **The 30 fps target (60 where practical) on a midrange phone is unverified** until someone runs it with Settings → Show stats.
 
 ### How "touch-only" is decided
 
@@ -93,6 +192,50 @@ Raw data: `docs/evidence/mobile/perf-before.json` and `perf-after.json`.
 
 ## Verification (emulation)
 
+### Online and practice (shooter)
+
+**`scripts/mobile-mp-e2e.ts`: 43 checks, all passing.**
+
+- **Setup:** one emulated phone and one desktop client, each in its own Chromium (headless), in the same private room on a **local** game server started by the script. The production server was not used.
+  - The phone runs at 844×390 (390×844 for the rotation check), with touch and DPR 2. Its input is only taps and multi-touch over the DevTools protocol.
+  - The desktop uses keyboard, mouse and pointer lock.
+- **It covers:**
+  - an invalid invite (clear message, with Back)
+  - opening the real invite, typing a name, Join (which also unlocks audio)
+  - "YOUR TEAM" in the lobby, and switching team twice
+  - Copy invite, Settings from the lobby (music set to 0), Ready
+  - **one match per map: El Patio, La Plaza, La Fiesta**, the second with bots on. On each map:
+    - touch controls shown, with no "click to aim" and no pointer lock on the phone
+    - "YOUR TEAM" in the HUD with its colour
+    - the phone moving, aiming and throwing at the same time with three fingers, and nothing held afterwards
+    - the desktop moving and throwing in the same match
+  - **the menu:** ☰ opens it, input stops, Resume / Audio & settings / Controls / Leave match are there, it says the online match continues, the clock keeps running, and Resume comes back cleanly
+  - **the controls help** shows the touch list
+  - **portrait:** the rotate screen, input stopped, nothing held; back to landscape
+  - **backgrounding:** the menu opens and nothing stays held
+  - **a dropped connection:** "Reconnecting", then back in the same match and team
+  - **audio:** the saved zero music level holds, with no overlapping songs
+  - **results:** your team and your row, music still muted
+  - **rematch** straight back into touch play
+  - **back to the lobby**, change map, start again
+  - **leaving mid-match:** asks first, then returns to the main menu, and the desktop sees the phone go
+  - no page errors on either client
+- `tests/fps-touch.test.ts` (11) covers the touch layer in isolation:
+  - three fingers at once
+  - lifting one finger
+  - second fingers ignored
+  - Throw not stealing the aim finger
+  - cancel and lost capture
+  - release on a menu, blur or hidden page (crouch included)
+  - disabled input
+  - the resume tap ignored
+  - taps for switching chancla and the scoreboard
+  - the cooldown ring
+  - the keyboard alongside touch
+- `tests/mp-mobile-net.test.ts` (2), against the real server: a connection that goes silent without closing (a frozen phone tab) is noticed and rejoins the same room, slot and team; and the on-return check does nothing on a healthy connection.
+
+Screenshots in `docs/evidence/mobile-mp/`: the invite, the lobby, the match, the menu, the portrait rotate screen, results.
+
 **`scripts/touch-e2e.ts`: 35 checks, all passing.** It runs Chromium mobile emulation at 844×390 landscape and 390×844 portrait, with touch and DPR 2. Touches are real multi-touch sent over the DevTools protocol, with a separate id per finger. It covers:
 
 - **Main page on a phone:** the card, no sideways scroll, the copy-link button copying the address, a computer-only mode explaining itself, and the Touch Beta link.
@@ -125,6 +268,19 @@ Screenshots in `docs/evidence/mobile/`:
 - the results screen after the touch round
 
 ## Real-device checklist
+
+**Online on a phone (iPhone Safari and Android Chrome), with a friend on a computer.** Nothing below has been done on real devices yet.
+
+- [ ] The computer creates a room and shares the invite (Share or Copy). Open it on the phone: the room code is filled in. Type a name with the on-screen keyboard; the panel stays usable with the keyboard open. Join.
+- [ ] Lobby: "YOUR TEAM" shows, Switch team works, I'm ready works. The host picks a map and turns bots on. Start.
+- [ ] Sideways: move with the left thumb, aim with the right, hold Throw with a third finger or by sliding the aim thumb onto it. All at once, with nothing stuck after lifting.
+- [ ] No page zoom, scroll, text selection or long-press menu during play. The Back gesture opens the menu.
+- [ ] ☰ Menu while the movement thumb is still down: it opens. Resume. Leave match asks first.
+- [ ] Turn to portrait mid-match: the rotate screen. Back: play continues.
+- [ ] Lock the phone for 10 s, then unlock: the menu is open and the match is still on, or it reconnects. For 40 s: "Disconnected" with a way back.
+- [ ] Sound: Join or Ready starts it; "Tap to enable sound" appears if the browser wants another tap. Mute in Audio & settings stays muted through the match, results and rematch.
+- [ ] Finish a match, Rematch, then leave from results.
+- [ ] Frame rate: Settings → Show stats. Note the fps on each map, and whether the phone gets hot.
 
 Nothing below has been done yet. Please test on at least an iPhone (Safari) and an Android phone (Chrome), plus one desktop Chrome and one desktop Safari to confirm nothing changed there.
 
@@ -160,6 +316,11 @@ Nothing below has been done yet. Please test on at least an iPhone (Safari) and 
 - [ ] The Practice and campaign start.
 
 ## Known limitations
+
+- **Online touch play has not been tried on a real phone or with a real person.** Touch feel, the default aim sensitivity, the button layout for different hand sizes, iOS Safari's audio rules, and battery and heat are all unverified.
+- **Story stays computer only.**
+- **Touch players have no aim assist.** Whether that is fair against mouse players needs real matches; see Fairness above.
+- **Background connectivity isn't guaranteed.** A phone that locks for more than about 25 s loses its slot in the room.
 
 - **No real device has run this.** Touch feel, sensitivity defaults, frame rate, Safari's audio and gesture rules, and the notch layout are unverified on hardware.
 - **Only the Arcade plays by touch.** Story, Practice and Online stay computer-only.

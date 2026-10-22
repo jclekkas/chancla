@@ -214,6 +214,7 @@ export class GameSession {
 
   private receive(m: ServerMsg): void {
     this.msgsIn++;
+    this.lastMsgAt = this.now();
     switch (m.t) {
       case 'welcome': {
         const wasRoom = this.room;
@@ -260,9 +261,30 @@ export class GameSession {
     }
   }
 
+  /** When the last message of any kind arrived (pongs come every 2 s). */
+  private lastMsgAt = 0;
+
+  /**
+   * A phone can freeze a backgrounded page and leave its socket open but
+   * dead, with no close event. If nothing has arrived for a while, treat the
+   * connection as dropped and use the normal reconnect path (the server holds
+   * the slot for NET.reconnectGraceMs). Called on return to the page, and by
+   * the ping timer.
+   */
+  checkAlive(silentMs = 6000): void {
+    const t = this.transport;
+    if (!t || this.state !== 'online' || !this.room) return;
+    if (this.now() - this.lastMsgAt < silentMs) return;
+    t.onClose = null;
+    t.onMessage = null;
+    t.close();
+    this.handleClose(t, 4000);
+  }
+
   private startPing(): void {
     this.stopPing();
-    const ping = () => this.transport?.send({ t: 'ping', c: this.now(), ...(this.rtt > 0 ? { r: Math.round(this.rtt) } : {}) });
+    this.lastMsgAt = this.now();
+    const ping = () => { this.checkAlive(); this.transport?.send({ t: 'ping', c: this.now(), ...(this.rtt > 0 ? { r: Math.round(this.rtt) } : {}) }); };
     ping();
     this.pingTimer = setInterval(ping, 2000);
   }

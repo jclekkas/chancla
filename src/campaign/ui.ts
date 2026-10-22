@@ -108,6 +108,8 @@ export class CampaignUi {
     $('mi-status').textContent = '';
     ($('btn-mi-start') as HTMLButtonElement).disabled = false;
     this.ctx.show('mintro');
+    // Start reading from the title, not wherever focusing Start scrolled to.
+    document.querySelector('#scr-mintro .panel')?.scrollTo(0, 0);
     // Warm the mission code, its music and its voice lines while the player reads.
     this.loadingMod ??= import('./runtime');
     music.preload(m.music);

@@ -239,6 +239,8 @@ export class MissionRuntime implements Controller {
       this.eventLog.push(ev);
       if (this.eventLog.length > 2000) this.eventLog.shift();
       this.view.onEvent(ev);
+      // Progress changes what to do next: refresh the instruction now, not up to 12 frames later.
+      if (ev.k === 'collect' || ev.k === 'goal' || ev.k === 'stage' || ev.k === 'carry' || ev.k === 'deliver') this.hintTick = 0;
       switch (ev.k) {
         case 'throw':
           if (!ev.hostile) { this.lastThrow = performance.now(); audio.play(ev.w === 1 ? 'throwHeavy' : 'throw'); }

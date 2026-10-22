@@ -37,6 +37,9 @@ export class MissionHud {
     document.getElementById('hud')?.classList.toggle('campaign', on);
     if (!on) document.getElementById('hud')?.classList.remove('victory');
     if (!on) { $('m-tip').hidden = true; $('m-arrow').hidden = true; }
+    // Never carry the last mission's instruction into the next one.
+    $('m-next').hidden = true; $('m-next-text').textContent = '';
+    $('m-tip').hidden = true;
     this.cache.clear();
   }
 

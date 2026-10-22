@@ -63,6 +63,66 @@ No keyboard, mouse, fullscreen or pointer lock is needed at any point.
   - the keyboard works in either mode
   - only one set of controls is shown at a time
 
+### Unexpected zoom (fixed)
+
+**Report:** on a phone, the game sometimes zoomed in and the player couldn't zoom back out.
+
+**Causes found** (`scripts/zoom-e2e.ts`; the numbers are from Chromium mobile emulation before the fix):
+
+1. **The trap: zoom couldn't be undone during play.** The play surface blocks pinch gestures, which is right for play. But any zoom picked up before play (a pinch in a menu, or iOS zooming into a text field) stayed, and the pinch that would undo it was blocked. Measured: zoomed to 5× in a menu, then a pinch-out during play left it at 5×.
+2. **Pinches that started on HUD pieces zoomed the page:**
+   - the ☰ Menu button: 4.85×
+   - the open scoreboard: 5×. The scoreboard also blocked aiming.
+
+   These elements had no `touch-action`, and the HUD's "touches pass through" rule didn't cover them.
+3. **iOS focus zoom.** iOS Safari zooms the page when a text field under 16 px gets focus.
+   - the lobby's invite-link field: 13 px. The copy fallback focuses and selects it.
+   - the Arcade's share fallback field: 13 px
+
+   Chromium does not reproduce this; it is checked statically.
+4. **Double-tap zoom:** buttons outside the touch controls had no `touch-action: manipulation`.
+
+**Ruled out:**
+- The shooter's camera FOV only changes from the settings slider.
+- The Arcade's FOV effects widen the view rather than zoom in: up to 2.4° on a hit, fading within about a quarter of a second, and 4° during La Chancla Legendaria. Both are off with reduced motion.
+- The canvas is sized from the stage element, never from a zoomed measurement.
+
+**Fixes:**
+- **While the touch controls are live,** the page root carries `html.touch-play`, and `touch-action: none` applies to the page, `#app` and every element inside it. So no element under a finger, or above it, can start a pan or a zoom.
+  - The iOS `gesturestart` and double-tap guards apply only in this state.
+  - The scoreboard and toasts let touches through.
+  - The same applies to the Arcade during a run.
+- **Menus keep pinch zoom** (accessibility). The viewport tag has no `user-scalable=no` or `maximum-scale`.
+- **Every button** has `touch-action: manipulation`: no double-tap zoom, but pinch works.
+- **Every text field and select** is at least 16 px on touch screens.
+- **Already zoomed when play starts or resumes:**
+  - Online and Practice: play waits behind **"The page is zoomed in: pinch outward"**. Zoom is allowed there, and the notice sits where the zoomed screen is looking. Once the page is back at 1×, play resumes on its own. Online keeps going meanwhile; Practice pauses.
+  - Arcade: the run stays on its pause menu with the same message.
+  - The game never tries to reset zoom from JavaScript. Browsers don't let pages do that reliably.
+- **Sizing:**
+  - The renderer compares its stage size every frame, and also on visual-viewport changes, return from the background, rotation, and the keyboard opening or closing. Any change resizes the drawing buffer and camera aspect. `setSize(…, false)` never touches CSS sizes, so there is no feedback loop.
+  - After a text field loses focus, the page scrolls back to 0, since iOS can leave it scrolled.
+  - The viewport tag adds `interactive-widget=resizes-content`, so Android Chrome's keyboard resizes the layout.
+  - Held input is dropped whenever the visible area changes size.
+
+**Verified in emulation:** `scripts/zoom-e2e.ts`, 39 checks, all passing.
+- **Static checks**, both pages: the viewport allows zoom, every text field is 16 px or more, every button blocks double-tap zoom.
+- **No zoom from pinches** started on:
+  - the look area, the move area and the top-left gap
+  - across stick and look
+  - the menu button, Throw, the HUD score
+  - the open scoreboard
+- **No zoom from taps:** eight quick Throw taps (they throw, nothing held) and quick Jump taps.
+- **No zoom from three fingers at once,** with the canvas and camera still matching the screen.
+- **Zoomed in a menu first:** play waits behind the notice, which is on screen at a readable size; pinch-out works and play resumes. The in-match menu still pinch-zooms.
+- **Text fields:** focus and blur on both fields leave the page unscrolled and unzoomed.
+- **Keyboard:** a viewport going 390 → 220 → 390 tall, and the canvas follows.
+- **Sizes:** at six screen sizes (390×844, 844×390, 568×320, 667×375, 932×430, 1024×768) the canvas and camera match the screen, and the menu button is on screen and 44 px or more.
+- **Rotation:** rotating mid-touch drops the held finger; rotating while backgrounded is resized on return.
+- **The Arcade:** the same pinches and taps, and the zoomed-resume case.
+
+Not reproduced in emulation: iOS Safari's focus zoom and its own gesture handling. Those are in the real-device checklist.
+
 ### Orientation
 
 The controls need landscape. In portrait during a match, a **Turn your phone sideways** screen covers the game:
@@ -270,6 +330,10 @@ Screenshots in `docs/evidence/mobile/`:
 ## Real-device checklist
 
 **Online on a phone (iPhone Safari and Android Chrome), with a friend on a computer.** Nothing below has been done on real devices yet.
+
+- [ ] Zoom: during play, double-tap Throw quickly ten times, pinch with both thumbs while moving and aiming, and pinch starting on ☰ Menu and on the scoreboard. The page must not zoom.
+- [ ] Zoom (iPhone): tap the name field, the room-code field and, in the lobby, the invite link. The page must not zoom. Dismiss the keyboard: the game must not stay shifted or cropped.
+- [ ] Zoom: pinch to zoom in on the main menu, then start a match. The "page is zoomed in" notice must appear on screen; pinching out must bring the game back.
 
 - [ ] The computer creates a room and shares the invite (Share or Copy). Open it on the phone: the room code is filled in. Type a name with the on-screen keyboard; the panel stays usable with the keyboard open. Join.
 - [ ] Lobby: "YOUR TEAM" shows, Switch team works, I'm ready works. The host picks a map and turns bots on. Start.

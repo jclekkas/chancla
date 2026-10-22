@@ -374,3 +374,10 @@ body.touch-mode #stage, body.touch-mode #touch, body.touch-mode .hud { -webkit-u
 .soundtrack select { min-height: 44px; max-width: 100%; border-radius: 10px; border: 2px solid var(--cream); background: rgba(20, 10, 30, 0.6); color: var(--cream); font: inherit; font-weight: 700; padding: 6px 10px; }
 .soundtrack .st-next { min-height: 44px; border-radius: 10px; border: 2px solid var(--cream); background: transparent; color: var(--cream); font: inherit; font-weight: 800; padding: 6px 14px; cursor: pointer; }
 .soundtrack .st-next:focus-visible, .soundtrack select:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- Zoom: never by accident, always undoable ---------- */
+button, a.btn, .seg button, select, label { touch-action: manipulation; }
+html.touch-play, html.touch-play body, html.touch-play #app, html.touch-play #app * { touch-action: none; }
+html.touch-play body { overscroll-behavior: none; }
+@media (pointer: coarse) { input, select, textarea { font-size: max(16px, 1em); } }
+.share-fallback, #share-fallback { font-size: 16px; }

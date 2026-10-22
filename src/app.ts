@@ -420,7 +420,13 @@ export class App {
     // The controls are armed each time they appear, so the tap that resumed
     // or started the run can't also move, aim or throw.
     if (show && el.hidden) this.touch.arm();
+    // Already zoomed in (a menu pinch): the controls would block the pinch
+    // that undoes it, so the run waits on its pause menu, where zoom works.
+    const zoomed = show && (window.visualViewport?.scale ?? 1) > 1.03;
+    if (zoomed) { this.pause(); this.toast(t('touch.zoomed')); return; }
     el.hidden = !show;
+    // While the controls are live, nothing on the page pans or zooms.
+    document.documentElement.classList.toggle('touch-play', show);
     const portrait = window.innerHeight > window.innerWidth;
     $('rotate-hint').hidden = !(this.usingTouch && portrait && !this.rotateDismissed && (this.state === 'playing' || this.state === 'paused'));
   }

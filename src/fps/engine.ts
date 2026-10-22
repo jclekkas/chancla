@@ -131,12 +131,33 @@ export class Engine {
     const loop = (now: number) => {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(loop);
+      this.resizeIfNeeded();
       this.frame(now);
     };
     this.raf = requestAnimationFrame(loop);
   }
 
+  private sizeKey = '';
+
+  /**
+   * The usable area can change without a window resize event (iOS keyboard
+   * dismissal, toolbars, rotation while the page was in the background), so
+   * the size is compared every frame. setSize(..., false) never touches the
+   * canvas's CSS size, so this can't feed back into layout.
+   */
+  resizeIfNeeded(): void {
+    const key = `${this.stage.clientWidth}x${this.stage.clientHeight}@${window.devicePixelRatio}`;
+    if (key !== this.sizeKey) this.resize();
+  }
+
+  /** The drawing buffer and camera match the stage (tests). */
+  get viewSize(): { css: [number, number]; buffer: [number, number]; aspect: number } {
+    const c = this.renderer.domElement;
+    return { css: [this.stage.clientWidth, this.stage.clientHeight], buffer: [c.width, c.height], aspect: +this.camera.aspect.toFixed(4) };
+  }
+
   resize(): void {
+    this.sizeKey = `${this.stage.clientWidth}x${this.stage.clientHeight}@${window.devicePixelRatio}`;
     const w = Math.max(1, this.stage.clientWidth || window.innerWidth);
     const h = Math.max(1, this.stage.clientHeight || window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_CAP[this.quality]));

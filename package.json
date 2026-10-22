@@ -21,6 +21,8 @@
     "e2e:touch": "node --import tsx scripts/touch-e2e.ts",
     "e2e:playlist": "node --import tsx scripts/playlist-e2e.ts",
     "e2e:menu": "node --import tsx scripts/menu-access-e2e.ts",
+    "e2e:zoom": "node --import tsx scripts/zoom-e2e.ts",
+    "e2e:mobile-mp": "node --import tsx scripts/mobile-mp-e2e.ts",
     "music:playlist": "python3 scripts/music/playlist.py",
     "perf:mobile": "node --import tsx scripts/perf-mobile.ts",
     "perf:maps": "node --import tsx scripts/perf-maps.ts",

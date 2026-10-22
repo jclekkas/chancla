@@ -172,7 +172,17 @@ function render(): void {
     input.enabled = playing && !rotate;
     if (was && !input.enabled) input.release(); // nothing stays held behind a menu or the rotate screen
   }
-  touch?.setVisible(playing && touchMode && !rotate);
+  const touchPlay = playing && touchMode && !rotate;
+  // Zoomed in already (a menu pinch, iOS zooming into a text field): the play
+  // surface would block the pinch that undoes it, so play waits behind a
+  // "pinch out" notice that allows zoom, and resumes at normal scale.
+  const zoomed = touchPlay && pageZoom() > 1.03;
+  $('zoom-note').hidden = !zoomed;
+  if (zoomed) placeOnVisibleArea($('zoom-note'));
+  if (zoomed && input?.enabled) { input.enabled = false; input.release(); }
+  touch?.setVisible(touchPlay && !zoomed);
+  // While the touch controls are live, nothing on the page pans or zooms.
+  document.documentElement.classList.toggle('touch-play', touchPlay && !zoomed);
   if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback || touchMode);
   // Focus the first control of the newest panel for keyboard players.
   const cur = top();
@@ -188,8 +198,29 @@ function render(): void {
 
 /** Solo play waits while the mouse isn't captured: the menu, or the "click to aim" prompt after a refused or lost lock. */
 function waitingForAim(): boolean {
-  if (touchMode) return rotateBlocked(); // touch needs no lock; it waits only behind the rotate screen
+  if (touchMode) return rotateBlocked() || (inMatch && base === 'none' && overlayStack.length === 0 && pageZoom() > 1.03); // touch needs no lock
   return inMatch && base === 'none' && overlayStack.length === 0 && !!input && !input.locked && !input.fallback;
+}
+
+/**
+ * The notice covers the whole page (so any finger can pinch on it) and puts
+ * its message where a zoomed-in screen actually looks, at normal size. No
+ * transforms: a pinch that starts on a transformed layer doesn't zoom.
+ */
+function placeOnVisibleArea(note: HTMLElement): void {
+  const vv = window.visualViewport;
+  const box = note.querySelector<HTMLElement>('.zn-box');
+  if (!vv || !box) return;
+  box.style.left = `${vv.offsetLeft}px`;
+  box.style.top = `${vv.offsetTop}px`;
+  box.style.width = `${vv.width}px`;
+  box.style.height = `${vv.height}px`;
+  (box.firstElementChild as HTMLElement).style.setProperty('zoom', String(1 / vv.scale));
+}
+
+/** The page's pinch-zoom factor (1 = not zoomed). */
+function pageZoom(): number {
+  return window.visualViewport?.scale ?? 1;
 }
 
 /** A touch match in portrait: the controls don't fit, so play waits behind a "turn your phone" screen. */
@@ -1097,9 +1128,26 @@ function bindUi(): void {
   });
   window.addEventListener('resize', () => { engine?.resize(); if (inMatch) render(); });
   window.addEventListener('orientationchange', () => setTimeout(() => { engine?.resize(); input?.release(); render(); }, 150));
-  // iOS Safari pinch gestures and double-tap zoom during play.
-  document.addEventListener('gesturestart', (e) => { if (inMatch) e.preventDefault(); });
-  document.addEventListener('dblclick', (e) => { if (inMatch && touchMode) e.preventDefault(); });
+  // iOS Safari pinch gestures and double-tap zoom, only while the touch
+  // controls are live: menus keep pinch zoom for accessibility.
+  const touchPlaying = () => document.documentElement.classList.contains('touch-play');
+  document.addEventListener('gesturestart', (e) => { if (touchPlaying()) e.preventDefault(); });
+  document.addEventListener('dblclick', (e) => { if (touchPlaying()) e.preventDefault(); });
+  // The usable area changed (keyboard shown or dismissed, toolbars, zoom):
+  // resize, drop held input if the size changed, re-check the zoom notice.
+  let vvSize = '';
+  const viewportChanged = () => {
+    const vv = window.visualViewport;
+    const size = vv ? `${Math.round(vv.width)}x${Math.round(vv.height)}` : '';
+    if (size !== vvSize) { vvSize = size; input?.release(); }
+    engine?.resizeIfNeeded();
+    if (inMatch) render();
+  };
+  window.visualViewport?.addEventListener('resize', viewportChanged);
+  window.visualViewport?.addEventListener('scroll', () => { if (!$('zoom-note').hidden) placeOnVisibleArea($('zoom-note')); });
+  // iOS can leave the page scrolled after the keyboard closes (the fixed game
+  // then looks cropped): put it back.
+  document.addEventListener('focusout', () => setTimeout(() => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, 60));
   document.addEventListener('fullscreenchange', () => engine?.resize());
   window.addEventListener('beforeunload', (e) => {
     if (inMatch && !practice && !campaign.active) { e.preventDefault(); e.returnValue = ''; }
@@ -1147,7 +1195,7 @@ function bindInput(inp: FpsInput): void {
   // connection survived: a phone may have frozen the page and its socket.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { inp.release(); if (inMatch && base === 'none') openPause(); }
-    else session?.checkAlive();
+    else { session?.checkAlive(); engine?.resizeIfNeeded(); render(); }
   });
   window.addEventListener('pageshow', () => session?.checkAlive());
 }

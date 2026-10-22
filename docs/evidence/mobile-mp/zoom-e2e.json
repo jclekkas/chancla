@@ -1,0 +1,375 @@
+{
+  "at": "2026-10-22T02:31:16.945Z",
+  "environment": "Chromium 141 headless, mobile emulation (touch, DPR 2), multi-touch over CDP. Emulation pinch-zooms like Android Chrome; iOS Safari focus zoom and gestures are not reproduced. NOT a real phone.",
+  "passed": 39,
+  "total": 39,
+  "checks": [
+    {
+      "name": "main page: viewport allows zoom for accessibility (no user-scalable=no / maximum-scale)",
+      "ok": true,
+      "detail": "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    },
+    {
+      "name": "main page: every text field and select is at least 16 px on a touch screen (no iOS focus zoom)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "main page: every button blocks double-tap zoom (touch-action manipulation or none)",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "classic.html: viewport allows zoom for accessibility (no user-scalable=no / maximum-scale)",
+      "ok": true,
+      "detail": "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    },
+    {
+      "name": "classic.html: every text field and select is at least 16 px on a touch screen (no iOS focus zoom)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "classic.html: every button blocks double-tap zoom (touch-action manipulation or none)",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "in play: a pinch starting on the look area does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on the move area does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on the top-left gap does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on across stick and look does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on the menu button does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on the Throw button does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch starting on the HUD score does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "in play: a pinch on the open scoreboard does not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "repeated quick Throw taps: no zoom, they throw, nothing held",
+      "ok": true,
+      "detail": {
+        "scale": 1,
+        "shots": 6,
+        "held": 0
+      }
+    },
+    {
+      "name": "repeated quick taps on Jump: no zoom",
+      "ok": true
+    },
+    {
+      "name": "three fingers at once (move, aim, throw): no zoom, nothing held",
+      "ok": true,
+      "detail": {
+        "scale": 1,
+        "held": 0
+      }
+    },
+    {
+      "name": "the canvas and camera still match the screen",
+      "ok": true,
+      "detail": {
+        "css": [
+          844,
+          390
+        ],
+        "buffer": [
+          844,
+          390
+        ],
+        "aspect": 2.1641,
+        "iw": 844,
+        "ih": 390,
+        "scrollY": 0,
+        "menu": {
+          "x": 741,
+          "y": 10,
+          "r": 832,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        },
+        "held": 0,
+        "shots": 19,
+        "controls": true,
+        "zoomNote": false,
+        "enabled": true
+      }
+    },
+    {
+      "name": "menus keep pinch zoom (accessibility)",
+      "ok": true,
+      "detail": 5
+    },
+    {
+      "name": "starting play while zoomed: a \"pinch out\" notice, controls and input held back",
+      "ok": true,
+      "detail": {
+        "note": true,
+        "controls": false
+      }
+    },
+    {
+      "name": "the notice sits inside the zoomed-in visible area, at a readable size",
+      "ok": true,
+      "detail": {
+        "inside": true,
+        "onScreenPx": 30
+      }
+    },
+    {
+      "name": "pinching out on the notice works; play resumes at normal size",
+      "ok": true,
+      "detail": {
+        "scale": 1,
+        "note": false,
+        "controls": true
+      }
+    },
+    {
+      "name": "the in-match menu keeps pinch zoom",
+      "ok": true,
+      "detail": 5
+    },
+    {
+      "name": "text fields: focus and blur leave the page unscrolled and unzoomed",
+      "ok": true,
+      "detail": {
+        "scrollY": 0,
+        "scale": 1
+      }
+    },
+    {
+      "name": "keyboard shown and dismissed (viewport 390 -> 220 -> 390 tall): canvas and camera follow",
+      "ok": true,
+      "detail": {
+        "open": [
+          844,
+          220
+        ],
+        "closed": [
+          844,
+          390
+        ]
+      }
+    },
+    {
+      "name": "390x844: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          390,
+          844
+        ],
+        "buffer": [
+          390,
+          844
+        ],
+        "aspect": 0.4621,
+        "menu": {
+          "x": 287,
+          "y": 10,
+          "r": 378,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "rotating mid-touch drops the held finger",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "844x390: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          844,
+          390
+        ],
+        "buffer": [
+          844,
+          390
+        ],
+        "aspect": 2.1641,
+        "menu": {
+          "x": 741,
+          "y": 10,
+          "r": 832,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "568x320: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          568,
+          320
+        ],
+        "buffer": [
+          568,
+          320
+        ],
+        "aspect": 1.775,
+        "menu": {
+          "x": 465,
+          "y": 10,
+          "r": 556,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "667x375: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          667,
+          375
+        ],
+        "buffer": [
+          667,
+          375
+        ],
+        "aspect": 1.7787,
+        "menu": {
+          "x": 564,
+          "y": 10,
+          "r": 655,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "932x430: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          932,
+          430
+        ],
+        "buffer": [
+          932,
+          430
+        ],
+        "aspect": 2.1674,
+        "menu": {
+          "x": 829,
+          "y": 10,
+          "r": 920,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "1024x768: canvas and camera match the screen; menu button on screen and 44 px+",
+      "ok": true,
+      "detail": {
+        "css": [
+          1024,
+          768
+        ],
+        "buffer": [
+          1024,
+          768
+        ],
+        "aspect": 1.3333,
+        "menu": {
+          "x": 921,
+          "y": 10,
+          "r": 1012,
+          "b": 58,
+          "w": 91,
+          "h": 48
+        }
+      }
+    },
+    {
+      "name": "rotated while in the background: on return the canvas fits the new shape, nothing held",
+      "ok": true,
+      "detail": {
+        "css": [
+          390,
+          844
+        ],
+        "buffer": [
+          390,
+          844
+        ]
+      }
+    },
+    {
+      "name": "main page: no page errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Arcade: pinches on Pause, Throw, the HUD and the look area do not zoom",
+      "ok": true,
+      "detail": 1
+    },
+    {
+      "name": "Arcade: repeated quick Throw taps do not zoom",
+      "ok": true
+    },
+    {
+      "name": "Arcade: resuming while zoomed keeps the run paused on its menu (where pinch-out works)",
+      "ok": true,
+      "detail": {
+        "zoom": 5,
+        "state": "paused"
+      }
+    },
+    {
+      "name": "Arcade: zoomed back out, Resume plays",
+      "ok": true
+    },
+    {
+      "name": "Arcade: no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

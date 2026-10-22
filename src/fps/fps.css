@@ -546,3 +546,10 @@ body.touch-input .scoreboard, body.touch-input .toast { pointer-events: none; }
 @media (pointer: coarse) { .diag-text { font-size: 16px; } }
 .build-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0; }
 .btn.small { padding: 6px 12px; min-height: 34px; font-size: 14px; }
+/* Short windows: the briefing's steps should start above the fold. */
+@media (max-height: 520px) {
+  .mintro { gap: 4px; }
+  .mintro p { margin: 0; }
+  .mintro h2 { font-size: 22px; margin: 0; }
+  .mintro .mi-how ol { gap: 2px; margin: 2px 0 4px; }
+}

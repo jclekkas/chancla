@@ -124,8 +124,18 @@ const BURST = ({ vx, vz }: { vx: number; vz: number }): void => {
 };
 
 const STEP = 1000 / 60;
+// Headless Chromium only paints (and so only runs rAF) when asked, so each
+// step moves the fake clock and then runs exactly one engine frame at that
+// time: deterministic frames whatever SwiftShader's speed.
+async function step(p: Page, ms = STEP): Promise<number> {
+  await p.clock.runFor(Math.max(1, Math.round(ms)));
+  return p.evaluate(() => { const e = (window as any).__fps.engine(); e.frame(performance.now()); return performance.now(); });
+}
+// Runs frames until the fake clock is `ms` further on (runFor's own steps are not exact).
 async function advance(p: Page, ms: number): Promise<void> {
-  for (let t = 0; t < ms - 0.01; t += STEP) await p.clock.runFor(STEP);
+  const end = (await p.evaluate(() => performance.now())) + ms;
+  let now = end - ms;
+  while (end - now > 0.5) now = await step(p, Math.min(STEP, end - now));
 }
 
 type Frame = { file: string; label: string };
@@ -145,7 +155,7 @@ async function strip(p: Page, name: string, times: number[]): Promise<Frame[]> {
 async function cost(p: Page): Promise<{ calls: number; tris: number; fx: unknown }> {
   // One whole engine frame (shadow pass, world, held item), counted from the renderer.
   await p.evaluate(() => { const r = (window as any).__fps.engine().renderer; r.info.autoReset = false; r.info.reset(); });
-  await p.clock.runFor(STEP);
+  await step(p);
   return p.evaluate(() => {
     const e = (window as any).__fps.engine(); const r = e.renderer;
     const o = { calls: r.info.render.calls, tris: r.info.render.triangles, fx: { fx: e.fx.stats?.(), proj: e.proj.stats?.(), ruleros: e.ruleros.stats?.() ?? { active: e.ruleros.active } } };
@@ -177,6 +187,14 @@ async function run(quality: string): Promise<void> {
     await p.evaluate(() => { const h = (window as any).__fps.host(); (window as any).__h0 = h.now(); h.pause(); });
     await p.clock.install();
     await p.clock.pauseAt((await p.evaluate(() => Date.now())) + 200);
+    // The faked rAF hands its callback the real time, so the engine's dt was
+    // however long SwiftShader took (up to its 0.1 s cap); give it the fake
+    // clock's time instead, so frames land exactly at the labelled ms.
+    await p.evaluate(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb: FrameRequestCallback) => raf(() => cb(performance.now()));
+      (window as any).__fps.engine().last = performance.now();
+    });
     await p.evaluate(() => {
       const h = (window as any).__fps.host();
       h.pausedAt = -1;
@@ -185,6 +203,12 @@ async function run(quality: string): Promise<void> {
       h.timer = setInterval(() => { if (h.pausedAt < 0) h.hub.update(); }, 1000 / 60);
     });
     await advance(p, 400);
+    const clk = () => p.evaluate(() => [(window as any).__fps.engine().time * 1000, performance.now(), (window as any).__fps.engine().last]);
+    await advance(p, 300);
+    const c0 = await clk();
+    await advance(p, 500);
+    const c1 = await clk();
+    console.log(quality, `clock check: 500 ms advanced the clock ${Math.round(c1[1]! - c0[1]!)} ms, the engine ${Math.round(c1[0]! - c0[0]!)} ms`, c0, c1);
     const want = (n: string) => !ONLY || ONLY.some((o) => n.startsWith(o));
     const T = [17, 50, 100, 150, 200, 270, 350, 500];
 

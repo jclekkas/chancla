@@ -141,7 +141,7 @@ Options: `&quality=high|medium|low` (default High), `&secs=` (default 60), `&war
 - **Exported:** build, benchmark version, mode, workload id and hash, variant, quality, canvas and buffer size, pixel ratio, frame-time median, p95, p99 and max, frames over 50 ms, average FPS, draw calls and triangles (average, min, max), the same per view, and the renderer and user agent.
 - Copy results and Save JSON keep everything on the device.
 
-**Results** (`bench/bench-60s.json`): headless Chromium 141 on SwiftShader, a **software renderer on a shared cloud CPU, not a GPU**. The phone rows are Chromium emulating an iPhone screen, not a phone.
+**Results** (`bench/bench-60s.json`; its `build` reads `d2456db (local)` because it was built from the uncommitted tree that was committed unchanged as 7421e3d): headless Chromium 141 on SwiftShader, a **software renderer on a shared cloud CPU, not a GPU**. The phone rows are Chromium emulating an iPhone screen, not a phone.
 
 | Run (60 s, 15 s per view) | Experiment | Production drawing | Difference |
 | --- | --- | --- | --- |

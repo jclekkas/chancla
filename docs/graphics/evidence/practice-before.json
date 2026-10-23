@@ -1,0 +1,72 @@
+{
+ "label": "before",
+ "dist": "../../../tmp/claude-0/-home-user-chancla/e214e291-d92c-53c9-bfff-62cfe69c94bf/scratchpad/gfx/prod-dist",
+ "perf": {
+  "player": {
+   "fps": [
+    13,
+    13,
+    10,
+    10,
+    10,
+    10
+   ],
+   "drawCalls": 162,
+   "triangles": 47388,
+   "geometries": 111,
+   "textures": 14,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "facade": {
+   "fps": [
+    10,
+    12,
+    12,
+    12,
+    12,
+    12
+   ],
+   "drawCalls": 157,
+   "triangles": 46964,
+   "geometries": 111,
+   "textures": 14,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "wide": {
+   "fps": [
+    13,
+    13,
+    10,
+    10,
+    10,
+    10
+   ],
+   "drawCalls": 175,
+   "triangles": 48642,
+   "geometries": 112,
+   "textures": 14,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "panaderia": {
+   "fps": [
+    13,
+    13,
+    13,
+    12,
+    12,
+    12
+   ],
+   "drawCalls": 210,
+   "triangles": 55846,
+   "geometries": 112,
+   "textures": 14,
+   "pixelRatio": 1,
+   "quality": "high"
+  }
+ },
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36"
+}

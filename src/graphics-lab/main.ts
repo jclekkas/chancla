@@ -27,6 +27,11 @@ export const VIEWS = {
   facade: { label: 'Facade close-up', pos: [-4.2, EYE, -3.6], look: [0.2, 2.6, -8] },
   wide: { label: 'Wider courtyard', pos: [9.5, EYE + 0.4, 3.5], look: [-4, 2.2, -8] },
   panaderia: { label: 'Mirror side (Panadería)', pos: [-2.8, EYE, 3.4], look: [2.5, 2.2, 8.5] },
+  // Whole-arena views (milestone 3: the kit across El Patio).
+  terrace: { label: 'Terrace and stairs', pos: [-9.5, EYE, -3.2], look: [-10.5, 2.0, -9.5] },
+  southrow: { label: 'South row houses (alley)', pos: [10, EYE, -12.6], look: [-2, 3.6, -15.6] },
+  northrow: { label: 'North row houses (alley)', pos: [-10, EYE, 12.6], look: [2, 3.6, 15.6] },
+  solspawn: { label: 'Casa Sol courtyard', pos: [-12, EYE, 4], look: [-17.5, 2.5, -1] },
   overview: { label: 'Overview', pos: [0, 34, 30], look: [0, 0, -1] },
 } as const;
 export type ViewKey = keyof typeof VIEWS;

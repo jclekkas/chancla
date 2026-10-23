@@ -8,6 +8,7 @@ import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
 import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
+import { patioGroundTexture, patioLight } from './patio-materials';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -80,8 +81,12 @@ const LEAF = new THREE.IcosahedronGeometry(0.5, 0);
 const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
-  const th = THEMES[opts.theme ?? 'afternoon'];
   const map = opts.map ?? EL_PATIO;
+  // Graphics experiment: the El Patio arena itself (not a campaign layout,
+  // which also builds on El Patio's map) is drawn with the patio kit.
+  const patioKit = map === EL_PATIO && !opts.boxes && sectionEnabled();
+  const th0 = THEMES[opts.theme ?? 'afternoon'];
+  const th: Theme = patioKit ? { ...th0, ...patioLight({ hemi: th0.hemi, sun: th0.sun }) } : th0;
   const decor = map.decor ?? EL_PATIO.decor!;
   const bd = map.bounds;
   const group = new THREE.Group();
@@ -128,7 +133,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   group.add(sun, sun.target);
 
   // ------------------------------------------------------------- ground
-  const gtex = groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18);
+  const gtex = patioKit ? patioGroundTexture(quality) : groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: gtex }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -148,9 +153,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // Graphics experiment: the café section gets the detailed kit (section.ts);
   // its boxes skip the generic dressing below. Collision is unchanged.
   const sectionBoxes: MapBox[] = [];
-  const sectionOn = map === EL_PATIO && sectionEnabled();
   for (const bx of opts.boxes ?? map.boxes) {
-    if (sectionOn && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    if (patioKit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
     addBox(bx);
   }
 

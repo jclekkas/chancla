@@ -26,7 +26,7 @@ export const FX_SETTINGS: FxSettings = { quality: 'high', reduced: false, camera
 
 // ---------------------------------------------------------------- shapes
 
-export type SpriteKind = 'star' | 'ring' | 'streak' | 'puff' | 'arc';
+export type SpriteKind = 'star' | 'ring' | 'streak' | 'puff' | 'arc' | 'word';
 
 // Every shape carries `aT`: x = tone (0 cream core, 1 the instance tint,
 // 2 ink rim) and y = alpha. Bands of ink use duplicated vertices so the rim
@@ -114,7 +114,7 @@ const templates = new Map<SpriteKind, THREE.BufferGeometry>();
 function template(k: SpriteKind): THREE.BufferGeometry {
   let g = templates.get(k);
   if (!g) {
-    g = k === 'star' ? starGeo() : k === 'ring' ? ringGeo() : k === 'streak' ? streakGeo() : k === 'puff' ? puffGeo() : arcGeo();
+    g = k === 'star' ? starGeo() : k === 'ring' ? ringGeo() : k === 'streak' ? streakGeo() : k === 'puff' ? puffGeo() : k === 'word' ? new THREE.PlaneGeometry(2, 1) : arcGeo();
     templates.set(k, g); // CPU-side templates only: each layer draws its own clone
   }
   return g;
@@ -161,6 +161,70 @@ function spriteMaterial(): THREE.ShaderMaterial {
   });
 }
 
+// Comic words for confirmed hits, one per row of a small shared canvas:
+// "¡PAF!" (El Revés) and "¡ZAS!" (El Chanclazo). Cream letters, ink outline,
+// a marigold drop. 128 x 128, made once per CombatFx; none without a DOM.
+export const WORDS = ['¡PAF!', '¡ZAS!'] as const;
+function wordTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const el = document.createElement('canvas');
+  el.width = 128; el.height = 128;
+  const c = el.getContext('2d');
+  if (!c) return null;
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+  WORDS.forEach((w, i) => {
+    const y = 32 + i * 64;
+    c.save();
+    c.translate(64, y); c.rotate(-0.12);
+    c.font = 'italic 900 40px "Trebuchet MS", system-ui, sans-serif';
+    c.fillStyle = '#e8871e'; c.fillText(w, 3, 4);
+    c.lineWidth = 7; c.strokeStyle = '#241626'; c.strokeText(w, 0, 0);
+    c.fillStyle = '#fff4dc'; c.fillText(w, 0, 0);
+    c.restore();
+  });
+  const t = new THREE.CanvasTexture(el);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearFilter;
+  return t;
+}
+
+// The word shader: the row is packed into the instance alpha (alpha + 2 * row).
+const WORD_VERT = /* glsl */ `
+attribute float iAlpha;
+varying vec2 vUv;
+varying float vA;
+varying float vRow;
+#include <common>
+#include <fog_pars_vertex>
+void main() {
+  vRow = floor(iAlpha * 0.5); vA = iAlpha - 2.0 * vRow; vUv = uv;
+  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+const WORD_FRAG = /* glsl */ `
+uniform sampler2D uMap;
+varying vec2 vUv;
+varying float vA;
+varying float vRow;
+#include <common>
+#include <fog_pars_fragment>
+void main() {
+  vec4 t = texture2D(uMap, vec2(vUv.x, (vUv.y + 1.0 - vRow) * 0.5));
+  gl_FragColor = vec4(t.rgb, t.a * vA);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
+}`;
+function wordMaterial(map: THREE.Texture): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...THREE.UniformsUtils.merge([THREE.UniformsLib.fog]), uMap: { value: map } },
+    vertexShader: WORD_VERT, fragmentShader: WORD_FRAG, fog: true,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+}
+
 interface Layer { mesh: THREE.InstancedMesh; alpha: THREE.InstancedBufferAttribute; n: number; cap: number }
 
 const _m = new THREE.Matrix4();
@@ -176,14 +240,24 @@ export class FxSprites {
   readonly group = new THREE.Group();
   private layers = new Map<SpriteKind, Layer>();
   private mat = spriteMaterial();
+  private wordMat: THREE.ShaderMaterial | null = null;
+  private wordTex: THREE.Texture | null = null;
 
   constructor(caps: Partial<Record<SpriteKind, number>>, renderOrder = 3) {
     for (const k of Object.keys(caps) as SpriteKind[]) {
       const cap = caps[k]!;
+      let mat: THREE.Material = this.mat;
+      if (k === 'word') {
+        // Only with a canvas to draw the words on (not in Node).
+        this.wordTex = wordTexture();
+        if (!this.wordTex) continue;
+        this.wordMat = wordMaterial(this.wordTex);
+        mat = this.wordMat;
+      }
       const geo = template(k).clone();
       const alpha = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1).setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute('iAlpha', alpha);
-      const mesh = new THREE.InstancedMesh(geo, this.mat, cap);
+      const mesh = new THREE.InstancedMesh(geo, mat, cap);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.setColorAt(0, new THREE.Color(1, 1, 1));
       mesh.instanceColor!.setUsage(THREE.DynamicDrawUsage);
@@ -216,6 +290,17 @@ export class FxSprites {
     return true;
   }
 
+  /** A comic word (row of WORDS), `h` high, facing `q`. */
+  addWord(row: number, x: number, y: number, z: number, q: THREE.Quaternion, h: number, alpha: number): boolean {
+    const l = this.layers.get('word');
+    if (!l || l.n >= l.cap || !(alpha > 0.003) || h <= 0) return false;
+    _m.compose(_p.set(x, y, z), q, _s.set(h, h, h));
+    l.mesh.setMatrixAt(l.n, _m);
+    l.alpha.array[l.n] = Math.min(1, alpha) + 2 * row;
+    l.n++;
+    return true;
+  }
+
   end(): void {
     for (const l of this.layers.values()) {
       const was = l.mesh.count;
@@ -243,6 +328,8 @@ export class FxSprites {
     for (const l of this.layers.values()) { l.mesh.geometry.dispose(); l.mesh.dispose(); }
     this.layers.clear();
     this.mat.dispose();
+    this.wordMat?.dispose();
+    this.wordTex?.dispose();
   }
 }
 
@@ -347,16 +434,16 @@ const EYE = 1.58;
 
 const C = {
   lightBody: new THREE.Color(0xffeab0), lightHead: new THREE.Color(0xffd36a),
-  heavyBody: new THREE.Color(0xf5ae3c), heavyHead: new THREE.Color(0xf79a2e),
+  heavyBody: new THREE.Color(0xf2a032), heavyHead: new THREE.Color(0xf08a24),
   speed: new THREE.Color(0xfff2cf), shock: new THREE.Color(0xfff0d0), lilac: new THREE.Color(0xc9a6ee),
   air: new THREE.Color(0x6cb8e8), airHeavy: new THREE.Color(0x8e98ea),
   shield: new THREE.Color(0x58c8e0), shieldFill: new THREE.Color(0xd8f6ff),
-  sparkle: new THREE.Color(0xfff6c8),
+  sparkle: new THREE.Color(0xfff6c8), swing: new THREE.Color(0xffc27a),
 };
 
 export class CombatFx {
   readonly group = new THREE.Group();
-  private sprites = new FxSprites({ star: 64, ring: 32, streak: 80, puff: 16, arc: 32 });
+  private sprites = new FxSprites({ star: 64, ring: 32, streak: 80, puff: 16, arc: 72, word: 16 });
   private pool: Fx[] = [];
   private seq = 0;
   private view = new ViewBasis();
@@ -468,6 +555,17 @@ export class CombatFx {
       const [la, ls] = nearSafe(v.dist(px, py, pz), len, this.safe);
       s.addMatrix('streak', streakMatrix(v, px, py, pz, ddx / nl, ddy / nl, ddz / nl, ls, ls * 0.16, this.m), heavy && i % 2 ? C.lilac : C.speed, fade * la);
     }
+    this.drawSwing(f, t);
+    // The comic word: ¡PAF! for El Revés (High and Medium), a smaller ¡ZAS!
+    // for El Chanclazo (High), up and to the side the blow travels, so it
+    // never sits on the target.
+    if (heavy || q === 'high') {
+      const side = Math.cos(ang) >= 0 ? 1 : -1;
+      const off = (heavy ? 0.36 : 0.3) * Math.min(1.6, Math.max(1, Math.sqrt(d / 3)));
+      const wx = x + v.right.x * side * off, wy = y + (heavy ? 0.26 : 0.24) + (reduced ? 0 : 0.06 * t), wz = z + v.right.z * side * off;
+      const [wa, wh] = nearSafe(v.dist(wx, wy, wz), (heavy ? 0.15 : 0.1) * k * pop(t, reduced), this.safe);
+      s.addWord(heavy ? 0 : 1, wx, wy, wz, v.billboard(0, this.q), wh, (1 - smooth(heavy ? 0.6 : 0.5, 1, t)) * wa);
+    }
     if (f.head && q === 'high') {
       for (let i = 0; i < 3; i++) {
         const a = (i - 1) * 0.9 + (hash(f.seed, i + 20) - 0.5) * 0.4;
@@ -476,6 +574,44 @@ export class CombatFx {
         const [sa, ss] = nearSafe(v.dist(sx, sy, sz), 0.07 * (1 - 0.4 * t) * k, this.safe);
         s.add('star', sx, sy, sz, v.billboard(a + t * 3, this.q), ss, ss, ss, C.sparkle, (1 - smooth(0.6, 1, t)) * sa);
       }
+    }
+  }
+
+  // Curved swing streaks on a confirmed hit: two or three thin warm bands
+  // along the arc the blow came in on, ending at the contact point, so the
+  // swing reads from any side (forehand from her right, backhand from her
+  // left). Not on Low.
+  private drawSwing(f: Fx, t: number): void {
+    const q = this.settings.quality, reduced = this.settings.reduced, heavy = f.weapon === 1, v = this.view;
+    if (q === 'low') return;
+    // Centre of the swing: toward the attacker, square to the blow
+    // (forehand: the blow turned left; backhand: turned right).
+    const turn = heavy ? -1 : 1;
+    const R = heavy ? 0.95 : 0.85;
+    const px = -f.dz * turn, pz = f.dx * turn; // (dx, dz) turned 90 degrees
+    const cx = f.x + px * R, cz = f.z + pz * R;
+    const wx = -px, wz = -pz; // centre to contact
+    // Pick the mirror whose head points along the blow.
+    let mirror = 1, yaw = 0;
+    for (const m of [1, -1]) {
+      const hx = -m * Math.sin(ARC_SPAN), hz = -Math.cos(ARC_SPAN);
+      const a = Math.atan2(wx, wz) - Math.atan2(hx, hz);
+      const tx0 = -m * Math.cos(ARC_SPAN), tz0 = Math.sin(ARC_SPAN);
+      const tx = tx0 * Math.cos(a) + tz0 * Math.sin(a), tz = -tx0 * Math.sin(a) + tz0 * Math.cos(a);
+      if (tx * f.dx + tz * f.dz > 0) { mirror = m; yaw = a; break; }
+    }
+    const fade = smooth(0, 0.1, t) * (1 - smooth(0.35, 0.9, t));
+    const [na] = nearSafe(v.dist(f.x, f.y, f.z), 1, this.safe);
+    const bands = q === 'high' ? 3 : 2;
+    for (let i = 0; i < bands; i++) {
+      const tilt = (i - (bands - 1) / 2) * 0.22 + (hash(f.seed, i + 30) - 0.5) * 0.1;
+      this.q.setFromAxisAngle(_x.set(wx, 0, wz), tilt);
+      this.q2.setFromAxisAngle(Y, yaw);
+      this.q.multiply(this.q2);
+      const r = R * (1 + (i - 1) * 0.05);
+      _s.set(r * mirror, (heavy ? 0.11 : 0.08) * (reduced ? 0.8 : 1), r);
+      this.m.compose(_p.set(cx, f.y + (i - 1) * 0.04, cz), this.q, _s);
+      this.sprites.addMatrix('arc', this.m, C.swing, (heavy ? 1 : 0.9) * fade * na * (1 - i * 0.2));
     }
   }
 

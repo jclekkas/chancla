@@ -281,13 +281,21 @@ async function run(quality: string): Promise<void> {
       await advance(p, 300);
       const before = await cost(p);
       await p.evaluate(BURST, { vx: m.vx, vz: m.vz });
+      // Six more in the air at the same time (their trails are the effects' share).
+      await p.evaluate(({ vx, vz }) => {
+        (window as any).__fx.proj = [0, 1, 2, 3, 4, 5].map((i) => ({ key: 'w' + i, w: i % 2, a: [vx - 2, 1.2 + i * 0.1, vz + 4], b: [vx + 1, 1.4, vz - 4 + i * 0.3], arc: 0.4, ms: 900, t0: performance.now() - 200 }));
+      }, { vx: m.vx, vz: m.vz });
       await advance(p, 50);
       const during = await cost(p);
       // The same frame with this pass's groups hidden: the effects' own share.
       await p.evaluate(() => { const e = (window as any).__fps.engine(); for (const g of [e.fx.group, e.proj.group, e.ruleros.group]) g.visible = false; });
       const hidden = await cost(p);
       await p.evaluate(() => { const e = (window as any).__fps.engine(); for (const g of [e.fx.group, e.proj.group, e.ruleros.group]) g.visible = true; });
-      worst = { before, during, hidden, extraCalls: during.calls - before.calls, ownCalls: during.calls - hidden.calls, ownTris: during.tris - hidden.tris };
+      // Effects only (stats): CombatFx, impacts, trails and particles, rollers and accents.
+      const st = during.fx as any;
+      const effectCalls = st.fx.drawCalls + st.proj.drawCalls + (st.ruleros.drawCalls ?? 0);
+      worst = { before, during, hidden, extraCalls: during.calls - before.calls, ownCalls: during.calls - hidden.calls, ownTris: during.tris - hidden.tris, effectCalls };
+      await p.evaluate(() => { (window as any).__fx.proj = null; });
       await stage(p, m.scene);
       await advance(p, 200);
       await p.evaluate(BURST, { vx: m.vx, vz: m.vz });

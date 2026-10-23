@@ -104,6 +104,7 @@ describe('CombatFx', () => {
       expect(layers.get('star')!.n).toBe(0);
       expect(layers.get('streak')!.n).toBe(0);
       expect(layers.get('ring')!.n).toBe(0);
+      expect(layers.get('word')?.n ?? 0).toBe(0);
     }
   });
 
@@ -140,6 +141,28 @@ describe('CombatFx', () => {
     fx.setQuality('high'); fx.setReducedMotion(false);
     run(fx, cam, 1);
     expect(fx.stats().active).toBe(0);
+  });
+
+  it('a hit draws swing streaks along the blow (not on Low); no word layer without a DOM', () => {
+    const arcs = (q: Quality, w: 0 | 1) => {
+      const fx = new CombatFx(settings(q));
+      fx.meleeHit(w, { x: 0, y: 1.4, z: 0 }, { x: -1, z: 0 }, false);
+      run(fx, camera(0, 1.58, 3), 0.08);
+      const sp = (fx as unknown as { sprites: { layers: Map<string, { n: number; mesh: THREE.InstancedMesh }> } }).sprites;
+      return sp.layers.get('arc')!;
+    };
+    expect(arcs('high', 0).n).toBe(3);
+    expect(arcs('medium', 1).n).toBe(2);
+    expect(arcs('low', 1).n).toBe(0);
+    // The streak's head ends at the contact point: the arc's head vertex lands near it.
+    const l = arcs('high', 1);
+    const m = new THREE.Matrix4();
+    l.mesh.getMatrixAt(1, m);
+    const pos = l.mesh.geometry.attributes.position as THREE.BufferAttribute;
+    const head = new THREE.Vector3().fromBufferAttribute(pos, pos.count - 3).applyMatrix4(m);
+    expect(Math.hypot(head.x, head.z)).toBeLessThan(0.25);
+    const fx = new CombatFx(settings());
+    expect((fx as any).sprites.layers.has('word')).toBe(false);
   });
 
   it('fades and shrinks next to the camera and caps the size on screen', () => {

@@ -77,6 +77,23 @@ Hazards:
 
 Payoff: the piñata bursts into confetti and a capped handful of short-lived candy (nothing to collect). The gathering appears: neighbors and the reformed helpers at the tables, while the camera circles. It's skippable. The results screen then closes the campaign.
 
+## How the game tells you what to do
+
+Playtest feedback was that objectives said *what* ("Ingredient baskets") but not *how*. Every step is now spelled out in three places:
+
+- **Briefing.** The mission intro lists "How it works" in 3-4 numbered steps, plus a controls line (throw, La Chancla on 1, La Pesada on 2, and what the gold arrow means).
+- **"Next:" line.** Under the goal checklist, the objective panel always shows one concrete instruction for the step the gold arrow points at, and it changes with the situation:
+  - **Moving targets:** "The influencer dodges while he walks. Wait until he stops to pose, then hit him" becomes "He's posing. Hit the influencer now".
+  - **Hit counts:** the cart and the leaf blower show how many hits are left.
+  - **Timed targets:** the haywire timer says whether to wait or throw now.
+  Instructions come from `src/campaign/howto.ts`, which turns the hint system's next action into text (English and Spanish).
+- **When a hit doesn't count,** a callout says why straight away: it needs a ricochet, it needs La Pesada, the timing was off, the cart is spinning, or that's the piñata's armor. Before this change, only a spoken line in Spanish said so.
+- **When stuck,** the same instruction pops up as a tip after 20 s with no progress (was 35 s, with generic text).
+
+`tests/campaign-howto.test.ts` plays every mission with the helper bot (including sloppy aim, so it misses and gets rejected). It fails if any hint the player could see falls back to a generic instruction, or if any rejected hit has no explanation. `scripts/campaign-e2e.ts` checks the briefing steps and the "Next:" line in the real page.
+
+Turning off "Objective markers and tips" in Settings hides the arrow, the "Next:" line and the tips. The briefing and the rejected-hit explanations stay.
+
 ## Challenges and time targets
 
 Each mission has three independent challenges:

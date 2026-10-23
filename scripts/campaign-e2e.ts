@@ -125,6 +125,9 @@ async function playMission(page: Page, id: string, videoStart: number): Promise<
   await page.click(`.mcard[data-mission="${id}"] button`);
   await page.waitForFunction(() => (window as any).__fps.screen === 'mintro');
   await page.screenshot({ path: path.join(OUT, `${m.order}-${id}-intro.png`) });
+  r.howSteps = await page.evaluate(() => [...document.querySelectorAll('#mi-how li')].map((li) => li.textContent));
+  if ((r.howSteps as string[]).length < 3) throw new Error(`${id}: briefing has no "How it works" steps`);
+  const nextSteps = new Set<string>();
   await page.click('#btn-mi-start');
   await page.waitForFunction(() => (window as any).__fps.campaign().active);
   r.startedAtVideoS = (Date.now() - videoStart) / 1000;
@@ -152,10 +155,15 @@ async function playMission(page: Page, id: string, videoStart: number): Promise<
       const rt = c.runtime;
       if (!rt) return { done: true, events: [], t: 0 };
       const ev = rt.eventLog.slice(from).map((e: any) => ({ ...e }));
-      return { done: false, events: ev, n: rt.eventLog.length, t: rt.sim.state.timeMs, stage: rt.sim.stageDef.id, victory: rt.inVictory, subs: document.getElementById('subs')!.hidden ? '' : document.getElementById('subs')!.textContent };
+      return { done: false, events: ev, n: rt.eventLog.length, t: rt.sim.state.timeMs, stage: rt.sim.stageDef.id, victory: rt.inVictory, subs: document.getElementById('subs')!.hidden ? '' : document.getElementById('subs')!.textContent, next: document.getElementById('m-next')!.hidden ? '' : document.getElementById('m-next-text')!.textContent };
     }, seen);
     if (st.done) break;
     seen = (st as { n: number }).n;
+    const next = (st as { next: string }).next;
+    if (next && !nextSteps.has(next)) {
+      nextSteps.add(next);
+      if (nextSteps.size === 1) await page.screenshot({ path: path.join(OUT, `${m.order}-${id}-next-step.png`) });
+    }
     for (const e of st.events as Array<Record<string, unknown>>) {
       for (const s of shots) {
         if (taken.has(s.name) || !s.when(e)) continue;
@@ -182,6 +190,8 @@ async function playMission(page: Page, id: string, videoStart: number): Promise<
   r.voiced = await page.evaluate(() => { const d = (window as any).__fps.dialogue(); return { quality: d.quality, failed: d.voiceFailed, voiced: d.log.filter((l: any) => l.voiced).length, total: d.log.length }; });
   r.dropped = await page.evaluate(() => (window as any).__fps.dialogue().dropped);
   r.shots = [...taken];
+  r.nextSteps = [...nextSteps];
+  if (!nextSteps.size) throw new Error(`${id}: the objective panel never showed a "Next:" step`);
   // Save the audio recording.
   const b64: string | null = await page.evaluate(async () => {
     const w = window as any;

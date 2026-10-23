@@ -294,7 +294,7 @@ On style: the palette draws on cumbia and son rhythms and regional string and pe
 - **Danger cues come first.** When an attack is telegraphed (a gust cone, a candy-bomb circle, a speaker warming up), banter is dropped for its duration so a joke never masks the warning.
 - **Ducking.** Music drops while a voiced line plays: a recording to 42%, the synthesized score to 55%, with a dip around 2 kHz either way.
 - **Settings.** There are separate volumes for music, effects and dialogue. "Automatic banter" turns off reaction lines and keeps story and objective lines. Subtitles can follow the menu language, or be set to Spanish, English or off.
-- **Objectives never spam lines.** Lines fire from mission events (a goal completed, a pile scattered), and each of those happens once. Hints repeat at most once per 35 s of no progress.
+- **Objectives never spam lines.** Lines fire from mission events (a goal completed, a pile scattered), and each of those happens once. Hints repeat at most once per 20 s of no progress.
 
 ### Multiplayer rules
 

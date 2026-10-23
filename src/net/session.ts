@@ -78,6 +78,11 @@ export interface SessionEvents {
 
 const DT = 1 / NET.tickRate;
 const DT_MS = 1000 / NET.tickRate;
+// How long a connection attempt may take to be welcomed before it is dropped.
+// Reconnects use a shorter limit: a hung attempt can only be noticed when it
+// times out, and the server holds the slot for NET.reconnectGraceMs.
+export const CONNECT_TIMEOUT_MS = 8000;
+export const RECONNECT_ATTEMPT_MS = 5000;
 
 interface SnapRecord {
   st: number;
@@ -111,6 +116,7 @@ export class GameSession {
   private reconnectAttempts = 0;
   private reconnectDeadline = 0;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private attemptTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private pendingJoin: ClientMsg | null = null;
 
@@ -189,10 +195,45 @@ export class GameSession {
     t.onOpen = () => t.send({ t: 'hello', v: PROTOCOL_VERSION, name: this.name, resume: this.resume || undefined });
     t.onMessage = (m) => this.receive(m);
     t.onClose = (code) => this.handleClose(t, code);
+    // A socket can sit in CONNECTING for minutes with no event at all when
+    // the network is gone but nothing refuses the connection (Chromium: over
+    // a minute, measured). Without this the player waits on "Reconnecting…"
+    // forever. No welcome in time: drop the attempt and take the normal path.
+    this.clearAttempt();
+    this.attemptTimer = setTimeout(() => {
+      this.attemptTimer = null;
+      if (this.transport !== t) return;
+      t.onClose = null;
+      t.onMessage = null;
+      t.close();
+      this.handleClose(t, 4001);
+    }, reconnecting ? RECONNECT_ATTEMPT_MS : CONNECT_TIMEOUT_MS);
+  }
+
+  /**
+   * While reconnecting, start a fresh attempt now instead of waiting out a
+   * possibly hung one: the browser just said the network is back, or the
+   * page just became visible again.
+   */
+  retryNow(): void {
+    if (this.state !== 'reconnecting' || this.intentionalClose) return;
+    if (this.now() > this.reconnectDeadline) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.clearAttempt();
+    const t = this.transport;
+    if (t) { t.onClose = null; t.onMessage = null; t.onOpen = null; t.close(); this.transport = null; }
+    this.open(true);
+  }
+
+  private clearAttempt(): void {
+    if (this.attemptTimer) clearTimeout(this.attemptTimer);
+    this.attemptTimer = null;
   }
 
   private handleClose(t: Transport, code: number): void {
     if (t !== this.transport) return;
+    this.clearAttempt();
     this.stopPing();
     this.transport = null;
     if (this.intentionalClose || this.state === 'lost' || this.state === 'closed') {
@@ -209,13 +250,15 @@ export class GameSession {
     }
     if (this.now() > this.reconnectDeadline) { this.setState('lost', 'timeout'); return; }
     const delay = Math.min(4000, 400 * 2 ** this.reconnectAttempts++);
-    this.reconnectTimer = setTimeout(() => this.open(true), delay);
+    this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.open(true); }, delay);
   }
 
   private receive(m: ServerMsg): void {
     this.msgsIn++;
+    this.lastMsgAt = this.now();
     switch (m.t) {
       case 'welcome': {
+        this.clearAttempt();
         const wasRoom = this.room;
         this.id = m.id;
         this.resume = m.resume;
@@ -260,9 +303,33 @@ export class GameSession {
     }
   }
 
+  /** When the last message of any kind arrived (pongs come every 2 s). */
+  private lastMsgAt = 0;
+
+  /** Milliseconds since the server last said anything (diagnostics). */
+  get msSinceMsg(): number | null { return this.lastMsgAt ? Math.round(this.now() - this.lastMsgAt) : null; }
+
+  /**
+   * A phone can freeze a backgrounded page and leave its socket open but
+   * dead, with no close event. If nothing has arrived for a while, treat the
+   * connection as dropped and use the normal reconnect path (the server holds
+   * the slot for NET.reconnectGraceMs). Called on return to the page, and by
+   * the ping timer.
+   */
+  checkAlive(silentMs = 6000): void {
+    const t = this.transport;
+    if (!t || this.state !== 'online' || !this.room) return;
+    if (this.now() - this.lastMsgAt < silentMs) return;
+    t.onClose = null;
+    t.onMessage = null;
+    t.close();
+    this.handleClose(t, 4000);
+  }
+
   private startPing(): void {
     this.stopPing();
-    const ping = () => this.transport?.send({ t: 'ping', c: this.now(), ...(this.rtt > 0 ? { r: Math.round(this.rtt) } : {}) });
+    this.lastMsgAt = this.now();
+    const ping = () => { this.checkAlive(); this.transport?.send({ t: 'ping', c: this.now(), ...(this.rtt > 0 ? { r: Math.round(this.rtt) } : {}) }); };
     ping();
     this.pingTimer = setInterval(ping, 2000);
   }
@@ -293,6 +360,7 @@ export class GameSession {
   close(): void {
     this.intentionalClose = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.clearAttempt();
     this.stopPing();
     this.transport?.close();
     this.transport = null;

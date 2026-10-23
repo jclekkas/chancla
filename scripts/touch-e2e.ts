@@ -103,8 +103,8 @@ async function main(): Promise<void> {
       const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
       check('phone: "Copy link to play on a computer" copies the site address', clip.startsWith('http'), clip);
       await tap(page, cdp, '#btn-mg-more');
-      await tap(page, cdp, '#btn-practice');
-      check('phone: a computer-only mode explains itself instead of starting', (await page.evaluate(() => (window as any).__fps.screen)) === 'title' && (await page.isVisible('#toast')));
+      await tap(page, cdp, '#btn-campaign');
+      check('phone: Story (computer only) explains itself instead of starting', (await page.evaluate(() => (window as any).__fps.screen)) === 'title' && (await page.isVisible('#toast')));
       await page.setViewportSize(LAND);
       await sleep(300);
       await page.screenshot({ path: path.join(SHOTS, 'phone-landscape-home.png') });

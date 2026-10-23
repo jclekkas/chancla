@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 import { defineConfig, type Plugin } from 'vite';
 
 // Public origin used for absolute Open Graph URLs. Vercel and Netlify expose
@@ -16,6 +17,15 @@ function siteOrigin(): string {
 
 const base = process.env.BASE_PATH || '/';
 
+// Which build is running, for the diagnostics report and the settings footer:
+// the commit (Vercel provides it; locally, git), plus the Vercel environment.
+function buildId(): string {
+  let sha = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
+  if (!sha) { try { sha = execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { sha = 'unknown'; } }
+  const env = process.env.VERCEL_ENV || 'local';
+  return `${sha} (${env})`;
+}
+
 function socialMeta(): Plugin {
   return {
     name: 'chancla-social-meta',
@@ -30,7 +40,7 @@ export default defineConfig({
   base,
   // True only for Vercel preview deployments: enables tester conveniences
   // (?unlock=all) that never exist in production builds.
-  define: { __PREVIEW_BUILD__: JSON.stringify(process.env.VERCEL_ENV === 'preview' || process.env.PREVIEW_BUILD === '1') },
+  define: { __BUILD_ID__: JSON.stringify(buildId()), __PREVIEW_BUILD__: JSON.stringify(process.env.VERCEL_ENV === 'preview' || process.env.PREVIEW_BUILD === '1') },
   plugins: [socialMeta()],
   build: {
     target: 'es2020',

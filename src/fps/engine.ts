@@ -20,6 +20,7 @@ import type { Hud } from './hud';
 import type { FpsInput } from './input';
 import type { FpsSettings, Quality } from './settings';
 import { t } from './strings';
+import { diagError, diagLog, diagVisibleFor } from '../diag';
 
 const DT = 1 / NET.tickRate;
 const PIXEL_CAP: Record<Quality, number> = { low: 1, medium: 1.5, high: 2 };
@@ -117,26 +118,88 @@ export class Engine {
     this.vmScene.add(vmSun, this.vm.root);
 
     const canvas = this.renderer.domElement;
-    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; this.onContextLost?.(true); });
-    canvas.addEventListener('webglcontextrestored', () => { this.contextLost = false; this.onContextLost?.(false); });
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; diagLog('gfx', 'WebGL context lost'); this.onContextLost?.(true); });
+    canvas.addEventListener('webglcontextrestored', () => { this.contextLost = false; diagLog('gfx', 'WebGL context restored'); this.onContextLost?.(false); });
     this.resize();
   }
 
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
 
+  get isContextLost(): boolean { return this.contextLost; }
+
+  /** For the diagnostics report. */
+  diag(): Record<string, unknown> {
+    const now = performance.now();
+    const m = this.renderer.info.memory;
+    return {
+      mode: this.mode, map: this.map.id, msSinceFrame: this.lastGoodFrameAt ? Math.round(now - this.lastGoodFrameAt) : null, frameErrors: this.frameErrors,
+      fps: Math.round(this.fps), contextLost: this.contextLost, quality: this.quality, drawCalls: this.drawCalls, geometries: m.geometries, textures: m.textures, paused: this.paused,
+    };
+  }
+
   get drawCalls(): number { return this.renderer.info.render.calls; }
+
+  /** When the last frame completed without an error (diagnostics). */
+  lastGoodFrameAt = 0;
+  /** Frames in a row that threw. */
+  frameErrors = 0;
+  /** Called once when frames keep failing: the picture has stopped. */
+  onFatal: ((err: unknown) => void) | null = null;
+  private fatalSent = false;
+  private lastLoopAt = 0;
 
   start(): void {
     this.last = performance.now();
     const loop = (now: number) => {
       if (this.disposed) return;
       this.raf = requestAnimationFrame(loop);
-      this.frame(now);
+      // A long gap between frames while the page is visible is a stall
+      // (main thread blocked, or the browser stopped scheduling frames).
+      if (this.lastLoopAt && now - this.lastLoopAt > 1000 && diagVisibleFor() > now - this.lastLoopAt) diagLog('stall', `no frame for ${Math.round(now - this.lastLoopAt)} ms (mode ${this.mode})`);
+      this.lastLoopAt = now;
+      // After the stopped-picture screen, stop running the failing frame: no
+      // endless error loop burning the battery behind it. The player's choice
+      // (Back to the menu: clearFatal) starts frames again.
+      if (this.fatalSent) return;
+      try {
+        this.resizeIfNeeded();
+        this.frame(now);
+        this.lastGoodFrameAt = now;
+        this.frameErrors = 0;
+      } catch (err) {
+        // Recorded, never swallowed silently: one bad frame is logged; a run
+        // of them means the picture has stopped, and the player is told.
+        if (this.frameErrors++ < 3) { diagError('frame', err); console.error(err); }
+        if (this.frameErrors >= 30 && !this.fatalSent) { this.fatalSent = true; this.onFatal?.(err); }
+      }
     };
     this.raf = requestAnimationFrame(loop);
   }
 
+  /** After the player chose to go back to the menu from the error screen. */
+  clearFatal(): void { this.fatalSent = false; this.frameErrors = 0; }
+
+  private sizeKey = '';
+
+  /**
+   * The usable area can change without a window resize event (iOS keyboard
+   * dismissal, toolbars, rotation while the page was in the background), so
+   * the size is compared every frame. setSize(..., false) never touches the
+   * canvas's CSS size, so this can't feed back into layout.
+   */
+  resizeIfNeeded(): void {
+    const key = `${this.stage.clientWidth}x${this.stage.clientHeight}@${window.devicePixelRatio}`;
+    if (key !== this.sizeKey) this.resize();
+  }
+
+  /** The drawing buffer and camera match the stage (tests). */
+  get viewSize(): { css: [number, number]; buffer: [number, number]; aspect: number } {
+    const c = this.renderer.domElement;
+    return { css: [this.stage.clientWidth, this.stage.clientHeight], buffer: [c.width, c.height], aspect: +this.camera.aspect.toFixed(4) };
+  }
+
   resize(): void {
+    this.sizeKey = `${this.stage.clientWidth}x${this.stage.clientHeight}@${window.devicePixelRatio}`;
     const w = Math.max(1, this.stage.clientWidth || window.innerWidth);
     const h = Math.max(1, this.stage.clientHeight || window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_CAP[this.quality]));

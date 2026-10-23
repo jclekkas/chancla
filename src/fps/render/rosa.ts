@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { WEAPONS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { COLORS, OUTLINE, toon } from './materials';
-import { buildSandal } from '../../models/sandal';
+import { buildSandal, markShared } from '../../models/sandal';
 
 const TEAM = {
   0: { dress: 0xf29a2e, trim: 0xb8441f, shawl: 0xf4e6c8, stripe: 0xe8871e, emblem: 0xf5c542, accent: 0xf2a33a },
@@ -34,6 +34,7 @@ export function buildPesada(): THREE.Group {
     upper.translate(0, 0.07, -0.06);
     const stud = new THREE.SphereGeometry(0.012, 6, 4);
     pesadaGeo = { sole, heel, upper, stud };
+    markShared(sole, heel, upper, stud);
   }
   const g = new THREE.Group();
   const wood = toon(0x9a6a3e), dark = toon(0x5e3b25), leather = toon(0x6a3a8c), brass = toon(0xf5c542, { emissive: 0x3a2800 });
@@ -84,6 +85,7 @@ function skirtGeometry(): THREE.LatheGeometry {
   return new THREE.LatheGeometry(pts, 18);
 }
 const SKIRT = skirtGeometry();
+markShared(SKIRT, ...Object.values(geo));
 
 function outlined(m: THREE.Mesh, scale = 1.07): THREE.Mesh {
   const o = new THREE.Mesh(m.geometry, OUTLINE);
@@ -305,6 +307,13 @@ export class Avatar {
   dispose(): void {
     for (const m of this.flashMats) m.dispose();
     (this.bubble.material as THREE.Material).dispose();
+    // Geometry made for this avatar alone (skirt trim, apron, shawl, hair,
+    // hat parts...). Shared geometry and cached materials stay. Missing this
+    // left about 7-9 GPU buffers behind per avatar, every match (soak test).
+    this.root.traverse((o) => {
+      const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+      if (g && !g.userData.shared) g.dispose();
+    });
   }
 
   update(s: AvatarState, dt: number, reducedMotion: boolean): void {
@@ -411,5 +420,6 @@ function crescent(): THREE.ShapeGeometry {
   s.absarc(0, 0, 0.13, Math.PI * 0.25, Math.PI * 1.75, false);
   s.absarc(0.055, 0, 0.105, Math.PI * 1.62, Math.PI * 0.38, true);
   moonGeo = new THREE.ShapeGeometry(s, 12);
+  markShared(moonGeo);
   return moonGeo;
 }

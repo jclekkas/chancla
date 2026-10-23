@@ -10,8 +10,21 @@
 // second Escape that belongs to the same press.
 //
 // Shortcut safety: Ctrl and Cmd combinations are never captured (Ctrl+W
-// would close the tab), so crouch is C or Shift rather than Ctrl.
+// would close the tab), so crouch is C or Shift rather than Ctrl. macOS
+// sends no keyup for a key released while Cmd is held, so pressing Cmd (or
+// Ctrl) drops everything held: otherwise Rosa keeps walking on her own.
+//
+// Focus: in play no form field or button is on screen, but one can still
+// hold focus from before (macOS Safari does not move focus to a clicked
+// button, so a name field or a Settings slider keeps it). Keys aimed at such
+// a stale target are game keys: the focus is dropped and the key counts.
+//
+// Touch (phones, tablets) is a second source, fed by the on-screen controls
+// (touch.ts) and merged in sample(): no pointer lock, no keyboard needed.
+// release() drops both sources, so a menu, a lost focus or a hidden page
+// never leaves anything held.
 import { ListenerBag } from '../core/listeners';
+import { diagLog } from '../diag';
 import type { WeaponId } from '../../shared/config';
 
 export interface Controls {
@@ -56,6 +69,13 @@ export class FpsInput {
   /** performance.now() when the pointer lock was last released (browsers refuse re-locking for ~1 s). */
   unlockedAt = -1e9;
   private lockedAt = -1e9;
+  /** The on-screen touch controls are the active input (no pointer lock is used). */
+  touchMode = false;
+  /** Touch look speed, separate from the mouse's. */
+  touchSensitivity = 1;
+  private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
+  /** Called by release(): the touch overlay forgets the fingers it was tracking. */
+  onTouchRelease: (() => void) | null = null;
 
   constructor(private canvas: HTMLElement) {
     const doc = document;
@@ -92,24 +112,39 @@ export class FpsInput {
       const locked = doc.pointerLockElement === this.canvas;
       if (locked === this.locked) return;
       this.locked = locked;
-      if (locked) { this.lockedAt = performance.now(); this.fallback = false; } else { this.unlockedAt = performance.now(); this.release(); }
+      diagLog('input', locked ? 'mouse captured' : 'mouse released');
+      if (locked) { this.lockedAt = performance.now(); this.fallback = false; } else { this.unlockedAt = performance.now(); this.release('mouse released'); }
       this.onLockChange?.(locked);
     });
-    this.bag.on(doc, 'pointerlockerror', () => { this.locked = false; this.onLockError?.(); });
+    this.bag.on(doc, 'pointerlockerror', () => { this.locked = false; diagLog('input', 'mouse capture refused'); this.onLockError?.(); });
     this.bag.on(canvas, 'contextmenu', (e) => e.preventDefault());
-    this.bag.on(window, 'blur', () => this.release());
-    this.bag.on(doc, 'visibilitychange', () => { if (doc.hidden) this.release(); });
+    this.bag.on(window, 'blur', () => this.release('window lost focus'));
+    this.bag.on(doc, 'visibilitychange', () => { if (doc.hidden) this.release('page hidden'); });
   }
 
   private key(e: KeyboardEvent, down: boolean): void {
+    if (e.key === 'Meta' || e.key === 'Control' || e.key === 'OS') {
+      if (down && this.heldCount) this.release('Cmd/Ctrl pressed');
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) { if (!down) this.keys.delete(e.code); return; }
-    const tag = (e.target as HTMLElement | null)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName;
+    const field = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || !!target?.isContentEditable;
+    if (field) {
+      // A field the player is using (menus are open, so input is disabled): leave it alone.
+      if (!this.enabled) return;
+      // In play, a focused field or button is left over from a menu: drop it, keep the key.
+      diagLog('input', `stale focus on ${describeEl(target)} dropped`);
+      e.preventDefault(); // no slider step, no button press, no typing into a hidden field
+      target!.blur();
+    }
     if (!this.enabled) { if (!down) this.keys.delete(e.code); return; }
     if (e.code === 'Escape') {
       if (!down || e.repeat) return;
       // In play: free the mouse ourselves (if the browser didn't) and open the menu.
       this.lastMenuAt = performance.now();
+      diagLog('input', 'Esc: menu');
       if (this.locked) this.exitLock();
       this.release();
       this.onMenu?.();
@@ -130,7 +165,7 @@ export class FpsInput {
     if (e.code === 'Digit1') this.setWeapon(0);
     else if (e.code === 'Digit2') this.setWeapon(1);
     else if (e.code === 'KeyQ') this.toggleWeapon();
-    else if (e.code === 'KeyP') { this.lastMenuAt = performance.now(); if (this.locked) this.exitLock(); this.release(); this.onMenu?.(); }
+    else if (e.code === 'KeyP') { this.lastMenuAt = performance.now(); diagLog('input', 'P: menu'); if (this.locked) this.exitLock(); this.release(); this.onMenu?.(); }
   }
 
   private setWeapon(w: WeaponId): void {
@@ -141,28 +176,77 @@ export class FpsInput {
     this.setWeapon(this.weapon === 0 ? 1 : 0);
   }
 
+  // ---- touch source (on-screen controls)
+
+  /** Stick position, each axis -1..1 (forward is +z). */
+  setTouchMove(x: number, z: number): void {
+    this.touch.mx = x;
+    this.touch.mz = z;
+  }
+
+  setTouchButton(b: 'fire' | 'jump' | 'crouch', down: boolean): void {
+    this.touch[b] = down && this.enabled;
+  }
+
+  /** A look drag on the screen, in pixels. */
+  addTouchLook(dx: number, dy: number): void {
+    if (!this.enabled) return;
+    const k = 0.0055 * this.touchSensitivity;
+    this.yaw -= dx * k;
+    this.pitch -= dy * k * (this.invertY ? -1 : 1);
+    this.pitch = clamp(this.pitch, -1.45, 1.45);
+    this.lookEvents++;
+  }
+
+  switchWeapon(): void {
+    if (this.enabled) this.toggleWeapon();
+  }
+
+  toggleScoreboard(): void {
+    this.scoreboard = !this.scoreboard;
+    this.onScoreboard?.(this.scoreboard);
+  }
+
+  get touchCrouch(): boolean { return this.touch.crouch; }
+
   sample(): Controls {
     let mx = 0, mz = 0;
     for (const k of this.keys) { const v = MOVE[k]; if (v) { mx += v[0]; mz += v[1]; } }
+    const t = this.touch;
+    mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
-      jump: this.keys.has('Space'),
-      crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
-      fire: this.enabled && (this.mouseFire || this.keyFire),
+      jump: this.keys.has('Space') || t.jump,
+      crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
+      fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
       weapon: this.weapon,
     };
   }
 
   // Drops everything held (focus loss, menus, death).
-  release(): void {
+  release(reason?: string): void {
+    if (reason && this.heldCount) diagLog('input', `released held input (${reason})`);
     this.keys.clear();
     this.mouseFire = false;
     this.keyFire = false;
+    this.touch.mx = 0; this.touch.mz = 0;
+    this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
+    this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }
   }
 
   get heldCount(): number {
-    return this.keys.size + (this.mouseFire ? 1 : 0) + (this.keyFire ? 1 : 0);
+    const t = this.touch;
+    return this.keys.size + (this.mouseFire ? 1 : 0) + (this.keyFire ? 1 : 0) + (t.fire ? 1 : 0) + (t.jump ? 1 : 0) + (t.crouch ? 1 : 0) + (t.mx !== 0 || t.mz !== 0 ? 1 : 0);
+  }
+
+  /** For the diagnostics report. */
+  diag(): Record<string, unknown> {
+    return {
+      mode: this.touchMode ? 'touch' : this.locked ? 'mouse (captured)' : this.fallback ? 'mouse (drag to look)' : 'mouse (not captured)',
+      enabled: this.enabled, locked: this.locked, pointerLockElement: !!document.pointerLockElement, fallback: this.fallback,
+      held: this.heldCount, focus: describeEl(document.activeElement),
+    };
   }
 
   requestLock(): void {
@@ -181,6 +265,13 @@ export class FpsInput {
   }
 
   dispose(): void { this.bag.dispose(); }
+}
+
+/** Element kind for diagnostics: tag and type only, never contents. */
+export function describeEl(el: Element | null): string {
+  if (!el) return 'none';
+  const t = (el as HTMLInputElement).type;
+  return `${el.tagName.toLowerCase()}${t && el.tagName === 'INPUT' ? `[${t}]` : ''}`;
 }
 
 function clamp(v: number, a: number, b: number): number { return v < a ? a : v > b ? b : v; }

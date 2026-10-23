@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FixedLoop } from './core/loop';
+import { diagCopy, diagLog, diagProvide, diagText, showDiagText } from './diag';
 import { ListenerBag, liveListenerCount } from './core/listeners';
 import { activeLoopCount } from './core/loop';
 import { Game, emptyInput, provideMapArena, type RunResult } from './game/game';
@@ -132,6 +133,8 @@ export class App {
       step: (dt, first) => this.step(dt, first),
       render: (dt, alpha) => this.render(dt, alpha),
     });
+    diagProvide('game', () => ({ mode: 'arcade', screen: this.state, map: this.game.mapId, input: this.usingTouch ? 'touch' : 'keyboard/mouse' }));
+    diagProvide('render', () => ({ fps: Math.round(this.loop.fps), loopRunning: this.loop.isRunning, contextLost: this.contextLost }));
 
     this.paintArt();
     this.bindUi();
@@ -268,6 +271,7 @@ export class App {
     this.click('btn-pause-home', () => this.openConfirm('confirm.leaveTitle', 'confirm.leaveBody', 'confirm.leaveYes', () => this.goHome()), 'uiBack');
     this.click('btn-results-home', () => this.goHome(), 'uiBack');
     this.click('btn-ctx-reload', () => location.reload());
+    for (const id of ['btn-pause-diag', 'btn-ctx-diag', 'btn-settings-diag']) this.click(id, () => void this.copyDiagnostics());
     document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => {
       this.bag.on(b, 'click', () => { audio.unlock(); audio.play('ui'); this.updateSettings({ lang: b.dataset.lang as Lang }); });
     });
@@ -389,6 +393,7 @@ export class App {
     this.bag.on(canvas, 'webglcontextlost', (e) => {
       e.preventDefault();
       this.contextLost = true;
+      diagLog('gfx', 'WebGL context lost');
       if (this.state === 'playing') this.pause();
       $('screen-ctx').hidden = false;
     });
@@ -420,7 +425,13 @@ export class App {
     // The controls are armed each time they appear, so the tap that resumed
     // or started the run can't also move, aim or throw.
     if (show && el.hidden) this.touch.arm();
+    // Already zoomed in (a menu pinch): the controls would block the pinch
+    // that undoes it, so the run waits on its pause menu, where zoom works.
+    const zoomed = show && (window.visualViewport?.scale ?? 1) > 1.03;
+    if (zoomed) { this.pause(); this.toast(t('touch.zoomed')); return; }
     el.hidden = !show;
+    // While the controls are live, nothing on the page pans or zooms.
+    document.documentElement.classList.toggle('touch-play', show);
     const portrait = window.innerHeight > window.innerWidth;
     $('rotate-hint').hidden = !(this.usingTouch && portrait && !this.rotateDismissed && (this.state === 'playing' || this.state === 'paused'));
   }
@@ -845,6 +856,11 @@ export class App {
     } catch {
       this.toast(t('share.copyFailed'));
     }
+  }
+
+  private async copyDiagnostics(): Promise<void> {
+    if (await diagCopy()) { this.toast(t('diag.copied'), 3500); return; }
+    showDiagText(diagText(), t('diag.manual'), t('settings.close'));
   }
 
   toast(msg: string, ms = 2600): void {

@@ -353,15 +353,19 @@ export class MissionView {
   private confetti: THREE.Mesh[] = [];
   readonly marker: THREE.Group;
   private time = 0;
+  private owned: Array<THREE.Texture | THREE.Material> = [];
 
   constructor(private sim: MissionSim, private particles: Particles) {
     for (const e of sim.def.entities) this.build(e);
     // Marked bank surfaces from the layout.
     const tex = buildMosaicTexture();
+    if (tex) this.owned.push(tex);
     for (const b of sim.def.layout.add) {
       if (!b.tag.startsWith('bank')) continue;
       const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(w, d), h), tex ? new THREE.MeshBasicMaterial({ map: tex }) : flat(0x2f6fb8));
+      const mat = tex ? new THREE.MeshBasicMaterial({ map: tex }) : flat(0x2f6fb8);
+      if (tex) this.owned.push(mat);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(w, d), h), mat);
       // Face the open side (the side with more room is the thin dimension's min side here).
       if (d < w) { plane.position.set((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, b.minZ - 0.01); plane.rotation.y = Math.PI; }
       else { plane.position.set(b.minX - 0.01, (b.minY + b.maxY) / 2, (b.minZ + b.maxZ) / 2); plane.rotation.y = -Math.PI / 2; }
@@ -790,6 +794,10 @@ export class MissionView {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();
     });
+    // The bank-surface texture and its materials are made per mission
+    // (one GPU texture was left behind per mission before; soak test).
+    for (const x of this.owned) x.dispose();
+    this.owned.length = 0;
     this.group.removeFromParent();
   }
 }

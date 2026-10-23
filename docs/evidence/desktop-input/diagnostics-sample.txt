@@ -1,0 +1,135 @@
+Chancla Warfare diagnostics
+{
+ "build": "f27063b (local)",
+ "page": "shooter",
+ "uptimeS": 85,
+ "visibility": "visible",
+ "online": true,
+ "viewport": "1280x720@1 (visible 1280x720, zoom 1.00)",
+ "touch": false,
+ "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+ "jsHeap": "16 MB of 4096 MB",
+ "errors": 3,
+ "game": {
+  "mode": "menu",
+  "screen": "title",
+  "map": "patio",
+  "conn": "none",
+  "msSinceServerMsg": null,
+  "rttMs": null,
+  "input": "mouse",
+  "inputEnabled": false,
+  "held": 0,
+  "lang": "en"
+ },
+ "input": {
+  "mode": "mouse (not captured)",
+  "enabled": false,
+  "locked": false,
+  "pointerLockElement": false,
+  "fallback": false,
+  "held": 0,
+  "focus": "input[text]",
+  "menu": "title",
+  "clickToAim": false
+ },
+ "render": {
+  "mode": "menu",
+  "map": "patio",
+  "msSinceFrame": 41,
+  "frameErrors": 0,
+  "fps": 10,
+  "contextLost": false,
+  "quality": "low",
+  "drawCalls": 192,
+  "geometries": 108,
+  "textures": 13,
+  "paused": false
+ },
+ "audio": {
+  "context": "running",
+  "music": "ok"
+ }
+}
+
+Recent events (ms since page load):
+   46491 screen practice / none
+   46491 input  play input on; dropped focus from button
+   46543 input  mouse captured
+   48887 input  Esc: menu
+   48887 screen practice / pause
+   48887 input  play input off (pause)
+   48937 input  mouse released
+   49770 screen practice / pause>settings
+   50404 screen practice / pause
+   50406 screen practice / none
+   50406 input  play input on; dropped focus from button
+   50468 input  mouse captured
+   53197 input  released held input (Cmd/Ctrl pressed)
+   55482 input  mouse released
+   55482 input  released held input (mouse released)
+   55482 screen practice / pause
+   55482 input  play input off (pause)
+   56358 screen practice / none
+   56358 input  play input on; dropped focus from button
+   56408 input  mouse captured
+   58800 input  released held input (window lost focus)
+   58908 life   visibility hidden
+   58908 screen practice / pause
+   58908 input  play input off (pause)
+   58957 input  mouse released
+   59113 life   visibility visible
+   59536 screen practice / none
+   59536 input  play input on; dropped focus from button
+   59588 input  mouse captured
+   62017 input  Esc: menu
+   62017 screen practice / pause
+   62017 input  play input off (pause)
+   62069 input  mouse released
+   64666 screen practice / none
+   64666 input  play input on; dropped focus from button
+   64718 input  mouse capture refused
+   65137 input  mouse capture refused
+   65556 input  mouse capture refused
+   65968 input  mouse capture refused
+   66809 input  mouse capture refused
+   68381 screen practice / pause
+   68381 input  play input off (pause)
+   69080 screen practice / pause>confirm
+   69673 net    connection closed
+   69676 net    connection connecting
+   69676 net    connection online
+   69684 match  room lobby, map patio, 4 players (practice)
+   69692 match  room countdown, map patio, 4 players (practice)
+   69693 screen practice / none
+   69693 input  play input on; dropped focus from button
+   69697 input  mouse captured
+   72707 match  room playing, map patio, 4 players (practice)
+   75721 input  Esc: menu
+   75722 screen practice / pause
+   75722 input  play input off (pause)
+   75763 input  mouse released
+   76512 screen practice / pause>confirm
+   77219 net    connection closed
+   77220 screen menu / title
+   78755 stall  no frame for 1083 ms (mode menu)
+   78757 stall  main thread busy 1092 ms
+   78766 screen menu / campaign
+   78985 screen menu / mintro
+   79201 match  mission ruleros started
+   79249 screen campaign ruleros / mintro
+   79251 screen campaign ruleros / none
+   79251 input  play input on; dropped focus from button
+   79320 input  mouse captured
+   82601 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   82688 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   82693 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   83244 screen game stopped (frames keep failing)
+   83244 input  play input off (none)
+   83245 input  mouse released
+   83245 screen campaign ruleros / pause
+   83496 screen menu / pause
+   83497 screen menu / campaign
+   83499 screen menu / title
+   84083 screen menu / online
+   85249 screen menu / title

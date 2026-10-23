@@ -5,17 +5,20 @@
 //
 // Menus are plain DOM and work without WebGL. The 3D engine loads after a
 // WebGL check; if that fails the title explains why and play is disabled.
+import { setHowTouch } from '../campaign/howto';
+import { installDiag, diagProvide, diagLog, diagError, diagCopy, diagText, diagBuild } from '../diag';
 import './fps.css';
 import { SafeStorage } from '../persistence/storage';
 import { audio } from '../audio/audio';
-import { MATCH, type BotDifficulty } from '../../shared/config';
+import { MATCH, WEAPONS, type BotDifficulty } from '../../shared/config';
 import { isValidCode, normalizeCode, sanitizeName, type ErrorCode, type RoomView } from '../../shared/protocol';
 import type { Team } from '../../shared/map';
 import { GameSession, wsTransport, type ConnState, type TransportFactory } from '../net/session';
 import { LocalHost } from '../net/local';
 import { applyDom, detectLang, getLang, hasKey, setLang, t, type Key } from './strings';
-import { FpsSettingsStore, defaults } from './settings';
-import { FpsInput } from './input';
+import { FpsSettingsStore, defaults, type Quality, type QualityMode } from './settings';
+import { FpsInput, describeEl } from './input';
+import { FpsTouch } from './touch';
 import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
 import type { Engine } from './engine';
@@ -46,13 +49,26 @@ const reducedPref = typeof matchMedia === 'function' && matchMedia('(prefers-red
 const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
 const store = new FpsSettingsStore(storage, defaults(detectLang(), reducedPref, lowEnd));
 setLang(store.value.lang);
+/** Auto graphics: Low on touch-only and low-core devices (no shadows, 1x pixels, no antialiasing), Medium elsewhere. */
+function resolveQuality(m: QualityMode): Quality {
+  return m !== 'auto' ? m : inputProfile().touchOnly || lowEnd ? 'low' : 'medium';
+}
+if (store.value.quality !== resolveQuality(store.value.qualityMode)) store.update({ quality: resolveQuality(store.value.qualityMode) });
 const BASE = import.meta.env.BASE_URL || '/';
+
+// The production game server (docs/DEPLOY.md). Its origin allow-list covers
+// the production domains and this project's multiplayer preview, so those
+// sites use it when the build doesn't name a server. Anything else needs
+// VITE_GAME_SERVER_URL (which always takes precedence).
+const PRODUCTION_SERVER = 'wss://chanclawarfare-game-server.onrender.com/ws';
+const PRODUCTION_HOSTS = /^(www\.)?chanclawarfare\.fun$|^chancla(warfare)?\.vercel\.app$|^chancla-git-multiplayer-jclekkas\.vercel\.app$/;
 
 function serverUrl(): string | null {
   const env = import.meta.env.VITE_GAME_SERVER_URL as string | undefined;
   if (env) return env;
   const h = location.hostname;
   if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return `ws://${h}:8787/ws`;
+  if (PRODUCTION_HOSTS.test(h)) return PRODUCTION_SERVER;
   return null;
 }
 
@@ -69,6 +85,9 @@ function healthUrl(ws: string): string {
 
 let engine: Engine | null = null;
 let input: FpsInput | null = null;
+let touch: FpsTouch | null = null;
+/** Touch is the active input: on-screen controls, no pointer lock. Follows what the player actually uses. */
+let touchMode = false;
 const hud = new Hud();
 let session: GameSession | null = null;
 let host: LocalHost | null = null;
@@ -132,7 +151,16 @@ function top(): ScreenId {
   return overlayStack[overlayStack.length - 1] ?? base;
 }
 
+let lastLoggedView = '';
+function modeName(): string {
+  if (campaign?.active) return `campaign ${campaign.missionId}`;
+  if (inMatch) return practice ? 'practice' : 'online';
+  return 'menu';
+}
+
 function render(): void {
+  const view = `${modeName()} / ${[base, ...overlayStack].join('>')}`;
+  if (view !== lastLoggedView) { lastLoggedView = view; diagLog('screen', view); }
   const visible = new Set<ScreenId>([base, ...overlayStack]);
   for (const s of SCREENS) {
     const el = $(`scr-${s}`);
@@ -143,11 +171,42 @@ function render(): void {
   $('scr-title').hidden = !(base === 'title' || ((base === 'online' || base === 'practice') && !inMatch));
   const hudOn = inMatch && base !== 'lobby';
   $('hud').hidden = !hudOn;
-  const ctp = !(inMatch && base === 'none' && overlayStack.length === 0 && !input?.locked && !input?.fallback);
+  // System overlays (graphics paused, the game stopped, the diagnostics box)
+  // sit outside the screen stack but still block play.
+  const sysOverlay = !$('scr-gfx').hidden || !$('scr-crash').hidden || !$('scr-diagbox').hidden;
+  const playing = inMatch && base === 'none' && overlayStack.length === 0 && !sysOverlay;
+  const rotate = rotateBlocked();
+  const ctp = !(playing && !touchMode && !input?.locked && !input?.fallback);
   $('click-to-play').hidden = ctp;
   if (!ctp) $('ctp-note').textContent = t(practice || campaign?.active ? 'hud.waitingSolo' : 'hud.waitingOnline');
-  if (input) input.enabled = inMatch && base === 'none' && overlayStack.length === 0;
-  if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback);
+  $('fps-rotate').hidden = !rotate;
+  if (rotate) $('fps-rotate-body').textContent = t(practice ? 'touch.rotateSolo' : 'touch.rotateOnline');
+  if (input) {
+    const was = input.enabled;
+    input.enabled = playing && !rotate;
+    if (was && !input.enabled) { input.release('menu or overlay'); diagLog('input', `play input off (${top()})`); } // nothing stays held behind a menu or the rotate screen
+    if (!was && input.enabled) {
+      // Back in play: nothing on screen takes typing, so a field or button
+      // still holding focus from a menu (macOS Safari keeps it on a clicked
+      // button's panel) must not swallow the game's keys.
+      const a = document.activeElement as HTMLElement | null;
+      if (a && a !== document.body && !$('hud').contains(a) && !$('fps-touch').contains(a)) { diagLog('input', `play input on; dropped focus from ${describeEl(a)}`); a.blur(); }
+      else diagLog('input', 'play input on');
+    }
+  }
+  document.body.classList.toggle('mouse-captured', !!input?.locked && !touchMode);
+  const touchPlay = playing && touchMode && !rotate;
+  // Zoomed in already (a menu pinch, iOS zooming into a text field): the play
+  // surface would block the pinch that undoes it, so play waits behind a
+  // "pinch out" notice that allows zoom, and resumes at normal scale.
+  const zoomed = touchPlay && pageZoom() > 1.03;
+  $('zoom-note').hidden = !zoomed;
+  if (zoomed) placeOnVisibleArea($('zoom-note'));
+  if (zoomed && input?.enabled) { input.enabled = false; input.release(); }
+  touch?.setVisible(touchPlay && !zoomed);
+  // While the touch controls are live, nothing on the page pans or zooms.
+  document.documentElement.classList.toggle('touch-play', touchPlay && !zoomed);
+  if (engine) engine.inputActive = !!input?.enabled && (!!input.locked || input.fallback || touchMode);
   // Focus the first control of the newest panel for keyboard players.
   const cur = top();
   if (cur !== 'none') {
@@ -162,7 +221,45 @@ function render(): void {
 
 /** Solo play waits while the mouse isn't captured: the menu, or the "click to aim" prompt after a refused or lost lock. */
 function waitingForAim(): boolean {
+  if (touchMode) return rotateBlocked() || (inMatch && base === 'none' && overlayStack.length === 0 && pageZoom() > 1.03); // touch needs no lock
   return inMatch && base === 'none' && overlayStack.length === 0 && !!input && !input.locked && !input.fallback;
+}
+
+/**
+ * The notice covers the whole page (so any finger can pinch on it) and puts
+ * its message where a zoomed-in screen actually looks, at normal size. No
+ * transforms: a pinch that starts on a transformed layer doesn't zoom.
+ */
+function placeOnVisibleArea(note: HTMLElement): void {
+  const vv = window.visualViewport;
+  const box = note.querySelector<HTMLElement>('.zn-box');
+  if (!vv || !box) return;
+  box.style.left = `${vv.offsetLeft}px`;
+  box.style.top = `${vv.offsetTop}px`;
+  box.style.width = `${vv.width}px`;
+  box.style.height = `${vv.height}px`;
+  (box.firstElementChild as HTMLElement).style.setProperty('zoom', String(1 / vv.scale));
+}
+
+/** The page's pinch-zoom factor (1 = not zoomed). */
+function pageZoom(): number {
+  return window.visualViewport?.scale ?? 1;
+}
+
+/** A touch match in portrait: the controls don't fit, so play waits behind a "turn your phone" screen. */
+function rotateBlocked(): boolean {
+  return touchMode && inMatch && base === 'none' && overlayStack.length === 0 && window.innerHeight > window.innerWidth;
+}
+
+/** Switches between touch and mouse/keyboard play, from what the player actually used. */
+function setTouchMode(on: boolean): void {
+  setHowTouch(on);
+  if (on === touchMode) return;
+  touchMode = on;
+  if (input) input.touchMode = on;
+  document.body.classList.toggle('touch-input', on);
+  if (on) input?.exitLock();
+  render();
 }
 
 function updatePracticePause(): void {
@@ -209,6 +306,24 @@ function webglAvailable(): boolean {
 }
 
 async function boot(): Promise<void> {
+  installDiag('shooter');
+  diagProvide('game', () => ({
+    mode: modeName(),
+    screen: [base, ...overlayStack].join('>'),
+    map: lastRoom?.map ?? engine?.diag().map,
+    phase: session?.phase,
+    conn: session?.state ?? 'none',
+    msSinceServerMsg: session?.msSinceMsg ?? null,
+    rttMs: session ? Math.round(session.rtt) : null,
+    players: lastRoom?.members.length,
+    input: touchMode ? 'touch' : input?.locked ? 'mouse (locked)' : input?.fallback ? 'mouse (no lock)' : 'mouse',
+    inputEnabled: input?.enabled ?? null,
+    held: input?.heldCount ?? null,
+    lang: getLang(),
+  }));
+  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden }));
+  diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
+  diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({
     engine: () => engine,
     input: () => input,
@@ -226,7 +341,18 @@ async function boot(): Promise<void> {
     render,
     baseUrl: BASE,
   }, storage);
-  const uiTick = () => { campaign.tick(); if (!campaign.active) dialogue.update(); requestAnimationFrame(uiTick); };
+  const uiTick = () => {
+    // Scheduled first: one exception here used to end this loop for good
+    // (dialogue, victory controls and the touch cooldown ring stopped).
+    requestAnimationFrame(uiTick);
+    campaign.tick();
+    if (!campaign.active) dialogue.update();
+    const s = session;
+    if (touch?.visible && s) {
+      const def = WEAPONS[s.weapon];
+      touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+    }
+  };
   requestAnimationFrame(uiTick);
   music.setPrefs(loadMusicPrefs());
   soundtrack = new SoundtrackPanel($('soundtrack'), { lang: getLang, musicSilenced: () => store.value.music <= 0.001, onUi: () => audio.play('ui') });
@@ -242,9 +368,14 @@ async function boot(): Promise<void> {
   // touch beta and a link to play the rest on a computer.
   applyInputProfile(inputProfile());
   watchInputProfile(applyInputProfile);
+  setTouchMode(inputProfile().touchOnly);
+  // Then follow what is actually used: a finger on the screen means touch;
+  // a mouse that moves means mouse and keyboard (a tablet with a trackpad).
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setTouchMode(true); else if (e.pointerType === 'mouse') setTouchMode(false); }, { capture: true });
+  window.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && (e.movementX || e.movementY) && touchMode && !inMatch) setTouchMode(false); }, { capture: true, passive: true });
   bindUi();
   soundGate = new SoundGate({
-    text: (k) => t(`sound.${k}` as Key),
+    text: (k) => (k === 'enable' && touchOnly ? t('touch.tapSound') : t(`sound.${k}` as Key)),
     inGame: () => inMatch && base === 'none',
     openSettings: () => { renderSettings(); pushOverlay('settings'); },
     musicStatus: () => music.status(),
@@ -259,15 +390,22 @@ async function boot(): Promise<void> {
       bootProgress(65, 'loading.world');
       await new Promise((r) => setTimeout(r, 0));
       input = new FpsInput($('stage'));
+      input.touchMode = touchMode;
+      touch = new FpsTouch(input);
       bindInput(input);
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
-      engine.onContextLost = (lost) => { if (lost) toast(t('status.webgl'), 5000); };
+      engine.onContextLost = (lost) => graphicsLost(lost);
+      engine.onFatal = () => showCrash();
       engine.start();
     } catch (err) {
       console.error(err);
+      diagError('boot', err);
       engine = null;
-      showNoWebgl();
+      // A chunk that failed to download is not a graphics problem: say so,
+      // and offer the reload that fixes it.
+      if (isLoadError(err)) showLoadFailed();
+      else showNoWebgl();
     }
   } else {
     showNoWebgl();
@@ -278,6 +416,12 @@ async function boot(): Promise<void> {
   show('title');
   checkServer();
   if (pendingInviteCode) openOnline();
+  // Another invite opened in this tab changes only the #room= part: pick it up
+  // (outside a match; in one, the code waits for the player to leave).
+  window.addEventListener('hashchange', () => {
+    readInvite();
+    if (pendingInviteCode && !inMatch && !lastRoom) openOnline();
+  });
   (window as unknown as { __fps: unknown }).__fps = debugApi();
 }
 
@@ -296,13 +440,85 @@ function applyInputProfile(p: InputProfile): void {
   document.body.classList.toggle('modes-collapsed', touchOnly && !showAllModes);
   $('mobile-note').hidden = true;
   for (const el of document.querySelectorAll<HTMLElement>('.needs-pc')) el.dataset.pcLabel = t('mobile.pcOnly');
+  document.body.classList.toggle('touch-help', touchOnly);
 }
 
-/** Desktop-only modes on a touch-only device: explain instead of starting something unplayable. */
+/** Story on a touch-only device: explain instead of starting something unplayable (online and practice have touch controls). */
 function needsComputer(): boolean {
   if (!touchOnly) return false;
   toast(t('mobile.pcOnlyToast'), 4200);
   return true;
+}
+
+// ---------------------------------------------------------------------
+// Diagnostics and recovery
+
+/** A dynamic import or module script that failed to download. */
+function isLoadError(err: unknown): boolean {
+  return /dynamically imported module|Importing a module script failed|error loading dynamically imported module|Failed to fetch/i.test(String((err as Error)?.message ?? err));
+}
+
+function showLoadFailed(): void {
+  const el = $('webgl-status');
+  el.hidden = false;
+  el.textContent = t('load.failed');
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn small';
+  b.textContent = t('crash.reload');
+  b.addEventListener('click', () => location.reload());
+  el.append(' ', b);
+  ($('btn-online') as HTMLButtonElement).disabled = true;
+  ($('btn-practice') as HTMLButtonElement).disabled = true;
+}
+
+async function copyDiagnostics(): Promise<void> {
+  if (await diagCopy()) { toast(t('diag.copied'), 3500); return; }
+  const ta = $('diagbox-text') as HTMLTextAreaElement;
+  ta.value = diagText();
+  $('scr-diagbox').hidden = false;
+  render();
+  ta.focus();
+  ta.select();
+}
+
+let gfxSlowTimer: ReturnType<typeof setTimeout> | null = null;
+/** WebGL context lost: say what happened, pause solo modes, wait for it to come back. */
+function graphicsLost(lost: boolean): void {
+  if (gfxSlowTimer) clearTimeout(gfxSlowTimer);
+  gfxSlowTimer = null;
+  if (lost) {
+    input?.release();
+    input?.exitLock();
+    if (inMatch && base === 'none' && (practice || campaign.active)) openPause();
+    $('gfx-body').textContent = t(inMatch && !practice && !campaign.active ? 'gfx.bodyOnline' : 'gfx.bodySolo');
+    $('gfx-slow').hidden = true;
+    gfxSlowTimer = setTimeout(() => ($('gfx-slow').hidden = false), 8000);
+  }
+  $('scr-gfx').hidden = !lost;
+  render();
+}
+
+let crashShown = false;
+/** Frames keep failing: the picture has stopped. Never hidden; the player chooses. */
+function showCrash(): void {
+  if (crashShown) return;
+  crashShown = true;
+  diagLog('screen', 'game stopped (frames keep failing)');
+  input?.release();
+  input?.exitLock();
+  $('scr-crash').hidden = false;
+  render();
+  ($('btn-crash-diag') as HTMLButtonElement).focus();
+}
+
+function crashToMenu(): void {
+  crashShown = false;
+  $('scr-crash').hidden = true;
+  render();
+  if (campaign.active) campaign.toSelect();
+  endSession('title');
+  engine?.clearFatal();
 }
 
 function showNoWebgl(): void {
@@ -452,6 +668,7 @@ function endSession(to: ScreenId | null): void {
   lastRoom = null;
   input?.exitLock();
   input?.release();
+  unguardBack();
   engine?.enterMenu();
   if (engine) engine.paused = false;
   hud.scoreboard(false, null, new Map(), -1);
@@ -462,6 +679,7 @@ function endSession(to: ScreenId | null): void {
 }
 
 function onState(s: ConnState, detail?: string): void {
+  diagLog('net', `connection ${s}${detail ? ` (${detail})` : ''}`);
   if (s === 'online') { hud.connection(null); $('online-err').textContent = ''; return; }
   if (s === 'reconnecting') { hud.connection(t('hud.reconnecting')); setLobbyStatusOverride(t('hud.reconnecting')); return; }
   if (s === 'lost') {
@@ -499,6 +717,7 @@ function onError(code: ErrorCode): void {
 
 function onRoom(room: RoomView): void {
   const prev = lastRoom;
+  if (prev?.phase !== room.phase || prev?.map !== room.map) diagLog('match', `room ${room.phase}, map ${room.map}, ${room.members.length} players${room.practice ? ' (practice)' : ''}`);
   lastRoom = room;
   if (!room.practice) lastCode = room.code;
   if (room.phase === 'countdown' || room.phase === 'playing') {
@@ -508,7 +727,8 @@ function onRoom(room: RoomView): void {
       music.play('combat');
       dialogue.react('start');
       show('none');
-      if (practice) input?.requestLock(); // the Start click is still a user gesture in most browsers
+      guardBack();
+      if (practice && !touchMode) input?.requestLock(); // the Start click is still a user gesture in most browsers
     } else if (base === 'results') {
       // Rematch: straight back in (on the room's map, which the owner may have changed).
       engine?.useMap(room.map);
@@ -586,6 +806,8 @@ function renderLobby(room: RoomView): void {
     ul.replaceChildren(...rows);
   }
   const mine = room.members.find((m) => m.id === me);
+  showMyTeam($('lobby-myteam'), mine ? mine.team : null);
+  for (const team of [0, 1] as const) $(`team-${team}`).parentElement?.classList.toggle('mine', mine?.team === team);
   $('lobby-owner').hidden = !isOwner;
   // The map is the host's call; everyone sees it, and the room enforces it.
   document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => {
@@ -618,10 +840,20 @@ function renderLobby(room: RoomView): void {
   $('lobby-status').textContent = status;
 }
 
+/** "YOUR TEAM: SOL" with its icon and colour: name, icon and colour together, never colour alone. */
+function showMyTeam(el: HTMLElement, team: Team | null): void {
+  el.hidden = team === null;
+  if (team === null) return;
+  el.className = `team-chip big ${team === 0 ? 'sol' : 'luna'}`;
+  el.querySelector('.tc-icon')!.textContent = team === 0 ? '☀' : '☾';
+  el.querySelector('.tc-text')!.textContent = t('hud.yourTeam', { team: t(team === 0 ? 'hud.sol' : 'hud.luna').toUpperCase() });
+}
+
 function renderResults(room: RoomView): void {
   const r = room.results;
   if (!r) return;
   const myTeam = session?.team ?? null;
+  showMyTeam($('res-myteam'), myTeam);
   $('res-title').textContent = r.winner === -1 ? t('results.tie') : r.winner === 0 ? t('results.sol') : t('results.luna');
   const flavor = r.winner === -1 ? t('results.youTie') : r.winner === myTeam ? t('results.youWin') : t('results.youLose');
   const reason = r.reason === 'score' ? t('results.byScore', { n: MATCH.scoreToWin }) : t('results.byTime');
@@ -658,7 +890,7 @@ function renderResults(room: RoomView): void {
 
 function applyInputSettings(): void {
   const v = store.value;
-  if (input) { input.sensitivity = v.sensitivity; input.invertY = v.invertY; }
+  if (input) { input.sensitivity = v.sensitivity; input.touchSensitivity = v.touchSensitivity; input.invertY = v.invertY; }
   audio.setLevels(v.music, v.sfx);
   audio.setVoiceLevel(v.voice);
   engine?.applySettings();
@@ -666,6 +898,7 @@ function applyInputSettings(): void {
 }
 
 function renderSettings(): void {
+  $('build-id').textContent = t('diag.build', { id: diagBuild() });
   renderSoundStatus();
   soundtrack?.render();
   const v = store.value;
@@ -675,7 +908,7 @@ function renderSettings(): void {
     b.classList.toggle('on', on);
   });
   seg('lang', v.lang);
-  seg('q', v.quality);
+  seg('q', v.qualityMode);
   seg('subs', v.subtitles);
   ($('set-voice') as HTMLInputElement).value = String(Math.round(v.voice * 100));
   $('out-voice').textContent = `${Math.round(v.voice * 100)}%`;
@@ -683,6 +916,8 @@ function renderSettings(): void {
   ($('set-hints') as HTMLInputElement).checked = v.campaignHints;
   ($('set-sens') as HTMLInputElement).value = String(Math.round(v.sensitivity * 100));
   $('out-sens').textContent = v.sensitivity.toFixed(2);
+  ($('set-tsens') as HTMLInputElement).value = String(Math.round(v.touchSensitivity * 100));
+  $('out-tsens').textContent = v.touchSensitivity.toFixed(2);
   ($('set-invert') as HTMLInputElement).checked = v.invertY;
   ($('set-fov') as HTMLInputElement).value = String(v.fov);
   $('out-fov').textContent = `${v.fov}°`;
@@ -736,13 +971,16 @@ function openOnline(): void {
   ($('in-code') as HTMLInputElement).value = pendingInviteCode;
   $('online-err').textContent = serverUrl() ? '' : t('status.serverMissing');
   show('online');
-  if (pendingInviteCode) $('btn-join').focus();
+  // From an invite: the code is filled in; ask for a name first if there isn't one.
+  if (pendingInviteCode) $(store.value.name ? 'btn-join' : 'in-name').focus();
   pendingInviteCode = '';
 }
 
 function openPause(): void {
   if (!inMatch || base !== 'none') return;
+  $('pause-build').textContent = t('diag.build', { id: diagBuild() });
   if (campaign.runtime?.inVictory) return;
+  ($('btn-fullscreen') as HTMLButtonElement).hidden = !(document.documentElement.requestFullscreen || (document.documentElement as HTMLElement & { webkitRequestFullscreen?: unknown }).webkitRequestFullscreen);
   input?.release();
   input?.exitLock();
   pauseOpenedAt = performance.now();
@@ -757,6 +995,9 @@ function openPause(): void {
   rb.textContent = t(rb.dataset.t as Key);
   ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
   ($('btn-pause-select') as HTMLButtonElement).hidden = !m;
+  const lb = $('btn-pause-leave');
+  lb.dataset.t = online ? 'pause.leaveMatch' : 'pause.home';
+  lb.textContent = t(lb.dataset.t as Key);
   show('pause');
 }
 
@@ -774,8 +1015,30 @@ function confirmBox(title: string, body: string, yes: string, action: () => void
 // Then the "click to aim" prompt asks for that explicit click.
 function resume(viaClick: boolean): void {
   show('none');
+  if (touchMode) { touch?.arm(); return; } // the tap on Resume must not also move or throw
   if (viaClick) input?.requestLock();
 }
+
+// A phone's Back gesture or button during a match opens the menu instead of
+// leaving the page (leaving is in the menu, with a confirmation).
+let backGuarded = false;
+function guardBack(): void {
+  if (backGuarded) return;
+  try { history.pushState({ chanclaMatch: 1 }, ''); backGuarded = true; } catch { /* sandboxed */ }
+}
+function unguardBack(): void {
+  if (!backGuarded) return;
+  backGuarded = false;
+  if ((history.state as { chanclaMatch?: number } | null)?.chanclaMatch) { try { history.back(); } catch { /* sandboxed */ } }
+}
+window.addEventListener('popstate', () => {
+  if (!backGuarded) return;
+  backGuarded = false;
+  if (inMatch) {
+    guardBack();
+    if (base === 'none') openPause();
+  }
+});
 
 /** Main menu from the pause menu: confirms first, because a run or match is in progress. */
 function askHome(): void {
@@ -823,17 +1086,60 @@ function toggleFullscreen(): void {
   } catch { /* not allowed here */ }
 }
 
+// Touch taps on buttons. While another finger is down (a thumb on the
+// movement stick, or resting on the glass), browsers don't turn a tap into a
+// click, so the menu button or Resume would do nothing. On touch, a button
+// acts when the same finger goes down and up on it; the browser's own click
+// that may follow is swallowed so nothing fires twice. A drag that scrolls a
+// menu is cancelled by the browser (pointercancel) and presses nothing.
+function armTouchTaps(): void {
+  let down: { id: number; el: HTMLElement } | null = null;
+  // The browser's own click for the last tap, still to come: swallowed when it
+  // arrives, however late (a busy phone can take a while), but never past the
+  // start of the next touch, or a couple of seconds for a click that never comes.
+  let swallow = 0;
+  const btnAt = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTMLElement>('button, a.btn') : null);
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    swallow = 0; // a new touch: the previous tap's click is not coming
+    const b = btnAt(e.target);
+    down = b && !b.closest('#fps-touch') ? { id: e.pointerId, el: b } : null;
+  }, true);
+  document.addEventListener('pointercancel', (e) => { if (down?.id === e.pointerId) down = null; }, true);
+  document.addEventListener('pointerup', (e) => {
+    const d = down;
+    if (!d || e.pointerId !== d.id) return;
+    down = null;
+    const b = btnAt(document.elementFromPoint(e.clientX, e.clientY));
+    if (b !== d.el || (b as HTMLButtonElement).disabled || b.hidden) return;
+    swallow = performance.now() + 2500;
+    b.click();
+  }, true);
+  // The browser's click for the same tap comes next, and the screen may have
+  // changed under it (a panel closed): swallow it wherever it lands.
+  document.addEventListener('click', (e) => {
+    if (!e.isTrusted || performance.now() > swallow) return;
+    swallow = 0;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
+}
+
 function on(id: string, f: (e: Event) => void): void {
   $(id).addEventListener('click', (e) => { audio.unlock(); audio.play('ui'); f(e); });
 }
 
 function bindUi(): void {
+  armTouchTaps();
   on('btn-campaign', () => { if (!needsComputer()) campaign.openSelect(); });
-  on('btn-online', () => { if (!needsComputer()) openOnline(); });
-  on('btn-practice', () => { if (needsComputer()) return; renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-online', () => openOnline());
+  on('btn-practice', () => { renderPracticeSetup(); show('practice'); music.preload('combat'); });
   on('btn-copy-link', () => {
     void copyLink(`${location.origin}${BASE}`, $('mg-link') as HTMLInputElement).then((ok) => toast(t(ok ? 'mobile.copied' : 'mobile.copyManual'), 3600));
   });
+  on('btn-mg-online', () => openOnline());
+  on('btn-mg-practice', () => { renderPracticeSetup(); show('practice'); music.preload('combat'); });
+  on('btn-rotate-menu', () => openPause());
   on('btn-mg-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-mg-lang', () => changeLang(getLang() === 'en' ? 'es' : 'en'));
   on('btn-mg-more', () => { showAllModes = true; if (lastProfile) applyInputProfile(lastProfile); $('btn-mg-more').hidden = true; });
@@ -886,6 +1192,12 @@ function bindUi(): void {
   on('btn-res-leave', () => endSession('title'));
 
   on('btn-resume', () => resume(true));
+  for (const id of ['btn-pause-diag', 'btn-settings-diag', 'btn-lost-diag', 'btn-crash-diag', 'btn-gfx-diag']) on(id, () => void copyDiagnostics());
+  on('btn-diagbox-close', () => { $('scr-diagbox').hidden = true; render(); });
+  on('btn-crash-home', crashToMenu);
+  on('btn-crash-reload', () => location.reload());
+  on('btn-gfx-reload', () => location.reload());
+  on('btn-mi-reload', () => location.reload());
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
   on('btn-fullscreen', toggleFullscreen);
@@ -909,12 +1221,14 @@ function bindUi(): void {
   // Settings controls.
   document.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((b) => b.addEventListener('click', () => changeLang(b.dataset.lang === 'es' ? 'es' : 'en')));
   document.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) => b.addEventListener('click', () => {
-    store.update({ quality: b.dataset.q as 'low' | 'medium' | 'high' });
+    const mode = b.dataset.q as QualityMode;
+    store.update({ qualityMode: mode, quality: resolveQuality(mode) });
     applyInputSettings();
     renderSettings();
   }));
   const range = (id: string, f: (v: number) => void) => ($(id) as HTMLInputElement).addEventListener('input', (e) => { f(Number((e.target as HTMLInputElement).value)); applyInputSettings(); renderSettings(); });
   range('set-sens', (v) => store.update({ sensitivity: v / 100 }));
+  range('set-tsens', (v) => store.update({ touchSensitivity: v / 100 }));
   range('set-fov', (v) => store.update({ fov: v }));
   range('set-music', (v) => store.update({ music: v / 100 }));
   range('set-sfx', (v) => store.update({ sfx: v / 100 }));
@@ -946,7 +1260,28 @@ function bindUi(): void {
     // just after releasing the pointer) must not close it again.
     if (cur === 'pause') { e.preventDefault(); if (!e.repeat && performance.now() - pauseOpenedAt > 250) resume(false); }
   });
-  window.addEventListener('resize', () => engine?.resize());
+  window.addEventListener('resize', () => { engine?.resize(); if (inMatch) render(); });
+  window.addEventListener('orientationchange', () => setTimeout(() => { engine?.resize(); input?.release(); render(); }, 150));
+  // iOS Safari pinch gestures and double-tap zoom, only while the touch
+  // controls are live: menus keep pinch zoom for accessibility.
+  const touchPlaying = () => document.documentElement.classList.contains('touch-play');
+  document.addEventListener('gesturestart', (e) => { if (touchPlaying()) e.preventDefault(); });
+  document.addEventListener('dblclick', (e) => { if (touchPlaying()) e.preventDefault(); });
+  // The usable area changed (keyboard shown or dismissed, toolbars, zoom):
+  // resize, drop held input if the size changed, re-check the zoom notice.
+  let vvSize = '';
+  const viewportChanged = () => {
+    const vv = window.visualViewport;
+    const size = vv ? `${Math.round(vv.width)}x${Math.round(vv.height)}` : '';
+    if (size !== vvSize) { vvSize = size; input?.release(); }
+    engine?.resizeIfNeeded();
+    if (inMatch) render();
+  };
+  window.visualViewport?.addEventListener('resize', viewportChanged);
+  window.visualViewport?.addEventListener('scroll', () => { if (!$('zoom-note').hidden) placeOnVisibleArea($('zoom-note')); });
+  // iOS can leave the page scrolled after the keyboard closes (the fixed game
+  // then looks cropped): put it back.
+  document.addEventListener('focusout', () => setTimeout(() => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, 60));
   document.addEventListener('fullscreenchange', () => engine?.resize());
   window.addEventListener('beforeunload', (e) => {
     if (inMatch && !practice && !campaign.active) { e.preventDefault(); e.returnValue = ''; }
@@ -967,6 +1302,8 @@ function bindUi(): void {
 function bindInput(inp: FpsInput): void {
   inp.onLockChange = (locked) => {
     if (locked) { lockFailures = 0; render(); return; }
+    // Switching to touch releases the mouse on purpose: that's not "pause".
+    if (touchMode) { render(); return; }
     // Losing the lock mid-match (Esc, alt-tab, a browser prompt) opens the menu.
     if (inMatch && base === 'none') openPause();
     else render();
@@ -988,10 +1325,17 @@ function bindInput(inp: FpsInput): void {
   inp.onMenu = () => { if (inMatch && base === 'none') { inp.exitLock(); openPause(); } };
   inp.onScoreboard = (open) => hud.scoreboard(open, lastRoom, engine?.stats ?? new Map(), session?.id ?? -1);
   inp.onSwitch = () => audio.play('switch');
-  $('stage').addEventListener('click', () => { if (inMatch && base === 'none' && !inp.locked) inp.requestLock(); });
-  // Switching tabs or windows always opens the menu (it pauses local modes),
-  // whether or not the browser also releases the mouse.
-  document.addEventListener('visibilitychange', () => { if (document.hidden && inMatch && base === 'none') openPause(); });
+  $('stage').addEventListener('click', () => { if (inMatch && base === 'none' && !inp.locked && !touchMode) inp.requestLock(); });
+  // Switching tabs or apps, or locking the phone, always opens the menu (it
+  // pauses local modes) and drops held input. Coming back, check that the
+  // connection survived: a phone may have frozen the page and its socket.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { inp.release(); if (inMatch && base === 'none') openPause(); }
+    else { session?.checkAlive(); session?.retryNow(); engine?.resizeIfNeeded(); render(); }
+  });
+  window.addEventListener('pageshow', () => { session?.checkAlive(); session?.retryNow(); });
+  // The browser says the network is back: don't wait out a hung reconnect attempt.
+  window.addEventListener('online', () => session?.retryNow());
 }
 
 // ---------------------------------------------------------------------
@@ -1006,12 +1350,15 @@ function debugApi() {
     info: () => engine?.debugInfo() ?? { mode: 'no-webgl' },
     session: () => session,
     host: () => host,
+    touch: () => touch,
+    get touchMode() { return touchMode; },
     engine: () => engine,
     input: () => input,
     campaign: () => campaign,
     dialogue: () => dialogue,
     music: () => music,
     audio: () => audio,
+    diagText: () => diagText(),
   };
 }
 

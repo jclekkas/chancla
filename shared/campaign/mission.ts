@@ -33,7 +33,7 @@ export const CAMPAIGN = {
   collectRadius: 1.15,
   carrySpeed: 0.85,
   hitRadiusActor: 0.55,
-  hintAfterMs: 35000, // no progress for this long: the client may offer a hint
+  hintAfterMs: 20000, // no progress for this long: the client may offer a hint
 };
 
 // ------------------------------------------------------------------ state

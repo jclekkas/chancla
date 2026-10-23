@@ -3,15 +3,20 @@ import type { Lang } from './strings';
 import { isMapId, type MapId } from '../../shared/maps';
 
 export type Quality = 'low' | 'medium' | 'high';
+/** What the player chose: Auto picks Low on phones, tablets and low-core devices, Medium elsewhere. */
+export type QualityMode = 'auto' | Quality;
 
 export interface FpsSettings {
   lang: Lang;
   name: string;
   sensitivity: number; // 1 = 0.0022 rad per pixel
+  touchSensitivity: number; // 1 = 0.0055 rad per pixel of drag
   invertY: boolean;
   fov: number;
   reducedMotion: boolean;
+  /** The quality in effect (what the renderer uses). */
   quality: Quality;
+  qualityMode: QualityMode;
   music: number;
   sfx: number;
   showStats: boolean;
@@ -29,7 +34,7 @@ const KEY = 'chancla.mp.settings.v1';
 
 export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): FpsSettings {
   return {
-    lang, name: '', sensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium',
+    lang, name: '', sensitivity: 1, touchSensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium', qualityMode: 'auto',
     music: 0.45, sfx: 0.85, showStats: false, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
   };
 }
@@ -45,10 +50,13 @@ export class FpsSettingsStore {
       lang: r.lang === 'es' || r.lang === 'en' ? r.lang : d.lang,
       name: typeof r.name === 'string' ? r.name.slice(0, 16) : d.name,
       sensitivity: num(r.sensitivity, d.sensitivity, 0.1, 4),
+      touchSensitivity: num(r.touchSensitivity, d.touchSensitivity, 0.3, 3),
       invertY: bool(r.invertY, d.invertY),
       fov: num(r.fov, d.fov, 70, 105),
       reducedMotion: bool(r.reducedMotion, d.reducedMotion),
       quality: r.quality === 'low' || r.quality === 'medium' || r.quality === 'high' ? r.quality : d.quality,
+      // Saves from before Auto existed keep their explicit choice.
+      qualityMode: r.qualityMode === 'auto' || r.qualityMode === 'low' || r.qualityMode === 'medium' || r.qualityMode === 'high' ? r.qualityMode : r.quality === 'low' || r.quality === 'medium' || r.quality === 'high' ? r.quality : 'auto',
       music: num(r.music, d.music, 0, 1),
       sfx: num(r.sfx, d.sfx, 0, 1),
       showStats: bool(r.showStats, d.showStats),

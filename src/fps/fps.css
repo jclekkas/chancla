@@ -266,7 +266,7 @@ body.reduced-motion .spawn-banner { animation: none; }
 .scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 15; width: min(680px, 94vw); background: rgba(46, 24, 70, 0.94); border: 3px solid var(--cream); border-radius: 18px; padding: 16px 18px; }
 .scoreboard h2 { margin: 0 0 8px; font-family: var(--display); font-weight: 400; color: var(--marigold); }
 
-.toast { position: absolute; left: 50%; bottom: calc(90px + var(--safe-b)); transform: translateX(-50%); z-index: 40; background: var(--cream); color: var(--ink); font-weight: 800; padding: 10px 16px; border-radius: 14px; box-shadow: 0 5px 0 var(--terracotta); max-width: min(90vw, 520px); text-align: center; }
+.toast { position: absolute; left: 50%; bottom: calc(90px + var(--safe-b)); transform: translateX(-50%); z-index: 70; background: var(--cream); color: var(--ink); font-weight: 800; padding: 10px 16px; border-radius: 14px; box-shadow: 0 5px 0 var(--terracotta); max-width: min(90vw, 520px); text-align: center; }
 
 @media (max-width: 860px) {
   .title { grid-template-columns: 1fr; }
@@ -310,6 +310,8 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .m-goals li.done { opacity: 0.6; text-decoration: line-through; }
 .m-goals li.done::before { background: #4ccf7a; border-color: #4ccf7a; }
 .m-goals b { margin-left: auto; color: var(--marigold); }
+.m-next { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.25); font-size: 13px; line-height: 1.35; max-width: 300px; }
+.m-next b { color: var(--gold); margin-right: 2px; }
 .m-bar { position: relative; flex: 1 1 100%; height: 12px; border-radius: 99px; background: rgba(0, 0, 0, 0.35); border: 2px solid var(--cream); overflow: hidden; }
 .m-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #f2a33a, #ffd27a); }
 .m-bar.warn { border-color: #ff8a6a; animation: m-warn 0.6s ease-in-out infinite alternate; }
@@ -430,3 +432,133 @@ body.modes-collapsed .title .server-status, body.modes-collapsed .title .title-r
 
 .click-to-play .ctp-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .click-to-play .ctp-note { margin: 0; padding: 4px 12px; border-radius: 8px; background: rgba(20, 10, 30, 0.75); font-weight: 700; text-align: center; max-width: min(90vw, 460px); }
+
+/* ---------- Touch play (phones, tablets): on-screen controls ---------- */
+.fps-touch { position: absolute; inset: 0; z-index: 1; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.fps-touch > * { pointer-events: auto; touch-action: none; }
+.ft-move { position: absolute; left: 0; bottom: 0; width: 42%; height: 72%; }
+.ft-look { position: absolute; right: 0; top: 0; bottom: 0; width: 58%; }
+.ft-hint { position: absolute; bottom: calc(10px + var(--safe-b)); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.55; pointer-events: none; }
+.ft-move .ft-hint { left: calc(30px + var(--safe-l)); }
+.ft-look .ft-hint { left: 50%; transform: translateX(-50%); bottom: calc(14px + var(--safe-b)); }
+.ft-base { position: absolute; left: calc(110px + var(--safe-l)); top: 64%; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 3px solid rgba(244, 230, 200, 0.55); background: rgba(46, 24, 70, 0.28); pointer-events: none; }
+.ft-base.on { border-color: var(--cream); background: rgba(46, 24, 70, 0.4); }
+.ft-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(244, 230, 200, 0.85); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4); }
+.ft-btn { position: absolute; display: grid; place-items: center; align-content: center; gap: 0; border-radius: 50%; border: 3px solid var(--cream); background: rgba(46, 24, 70, 0.62); color: #fff; font: inherit; font-weight: 900; font-size: 22px; line-height: 1; text-shadow: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.ft-btn .ft-lbl { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+.ft-btn.held, .ft-btn.on { background: rgba(244, 166, 35, 0.85); color: var(--violet-deep); }
+/* Throw: the big one, bottom right, with its cooldown ring. */
+.ft-throw { --ready: 1; right: calc(22px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); width: 104px; height: 104px; background: conic-gradient(rgba(244, 166, 35, 0.85) calc(var(--ready) * 360deg), rgba(46, 24, 70, 0.62) 0); }
+.ft-throw .ft-ico { width: 46px; height: 30px; border-radius: 50% 50% 46% 46%; background: var(--turquoise); border: 3px solid var(--cream); transform: rotate(-24deg); }
+.ft-throw.cooling .ft-ico { opacity: 0.55; }
+.ft-throw.held { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5); }
+.ft-jump { right: calc(140px + var(--safe-r)); bottom: calc(22px + var(--safe-b)); width: 68px; height: 68px; }
+.ft-crouch { right: calc(140px + var(--safe-r)); bottom: calc(100px + var(--safe-b)); width: 58px; height: 58px; font-size: 18px; }
+.ft-weapon { right: calc(40px + var(--safe-r)); bottom: calc(142px + var(--safe-b)); width: 58px; height: 58px; font-size: 20px; }
+.ft-score { right: calc(12px + var(--safe-r)); top: calc(112px + var(--safe-t)); width: 52px; height: 52px; font-size: 18px; border-radius: 14px; }
+/* While touch is the input: the HUD makes room for the controls. */
+body.touch-input .hud-tr { z-index: 3; }
+body.touch-input .hud-btn.menu-btn { min-height: 48px; min-width: 64px; font-size: 16px; }
+body.touch-input .esc-hint, body.touch-input .hint { display: none; }
+body.touch-input .weapons { right: auto; left: 50%; transform: translateX(-50%); bottom: calc(8px + var(--safe-b)); gap: 6px; }
+body.touch-input .wslot { min-width: 74px; padding: 4px 8px 6px; }
+body.touch-input .wslot .wkey { display: none; }
+body.touch-input .hud-bl { bottom: auto; top: calc(14px + var(--safe-t)); }
+body.touch-input .hud-bl .hp-face { width: 38px; height: 38px; }
+body.touch-input .region { top: calc(76px + var(--safe-t)); }
+body.touch-input .killfeed { top: calc(64px + var(--safe-t)); right: calc(84px + var(--safe-r)); font-size: 12px; }
+body.touch-input .toast { bottom: auto; top: calc(96px + var(--safe-t)); }
+body.touch-input .hud { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (max-height: 420px) {
+  body.touch-input .hud-top { transform: translateX(-50%) scale(0.82); transform-origin: top center; }
+  body.touch-input .hud-ident { top: calc(46px + var(--safe-t)); }
+}
+/* Rotate screen: a touch match in portrait. */
+.fps-rotate { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; background: rgba(30, 14, 46, 0.9); padding: calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b)); pointer-events: auto; text-shadow: none; }
+.fps-rotate .panel { text-align: center; max-width: 340px; }
+.fps-rotate .rot-ico { font-size: 54px; line-height: 1; color: var(--marigold); }
+/* Controls help: touch list on touch devices, keys elsewhere. */
+.controls.touch-list { display: none; }
+body.touch-help .controls.touch-list, body.touch-input .controls.touch-list { display: grid; }
+body.touch-input .controls.key-list { display: none; }
+/* Menus on phones: fit the visible area, including with the keyboard open. */
+@supports (height: 100dvh) {
+  .panel { max-height: calc(100dvh - 32px - var(--safe-t) - var(--safe-b)); }
+}
+body.touch-only .btn, body.touch-input .btn { min-height: 44px; }
+body.touch-only .seg button, body.touch-input .seg button { min-height: 44px; }
+body.touch-input .hp-bar { width: clamp(80px, 13vw, 140px); height: 16px; }
+body.touch-input .hp-num { font-size: 18px; }
+body.touch-input .spawn-banner { top: calc(92px + var(--safe-t)); }
+body.touch-input .center-msg { top: 64%; }
+body.touch-input .ft-score { width: 70px; height: 46px; }
+body.touch-only .sound-gate:not(.in-game) { left: auto; right: calc(16px + env(safe-area-inset-right, 0px)); }
+
+/* Lobby and results on phones: your team, joining by code, teams side by side in landscape. */
+.team-chip.big { align-self: flex-start; font-size: 15px; padding: 4px 14px 4px 4px; }
+.team-chip.big .tc-icon { width: 28px; height: 28px; font-size: 17px; }
+.team.mine { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
+@media (max-width: 480px) {
+  .join-row { flex-wrap: wrap; }
+  .join-row .field { flex: 1 1 100%; }
+  .join-row .btn { flex: 1 1 100%; }
+  .codebox { flex-wrap: wrap; gap: 8px; }
+}
+@media (max-width: 860px) and (min-width: 560px) and (orientation: landscape) {
+  .teams { grid-template-columns: 1fr 1fr; }
+}
+.touch-setting { display: none !important; }
+body.touch-help .touch-setting, body.touch-input .touch-setting { display: grid !important; }
+
+/* The in-match menu on a phone held sideways: two columns, so Leave is on screen. */
+@media (max-height: 520px) {
+  #scr-pause .panel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #scr-pause .panel > h2, #scr-pause .panel > .note, #scr-pause .panel > #btn-resume { grid-column: 1 / -1; }
+}
+
+/* ---------- Zoom: never by accident, always undoable ---------- */
+/* Buttons: no double-tap zoom anywhere (pinch zoom stays available in menus). */
+button, a.btn, .seg button, select, label { touch-action: manipulation; }
+/* While the touch controls are live, the whole page is the play surface: no
+   pan, no pinch, no double-tap zoom, from any element a finger lands on. */
+html.touch-play, html.touch-play body, html.touch-play #app, html.touch-play #app * { touch-action: none; }
+html.touch-play body { overscroll-behavior: none; }
+/* Panels that show during play take no touches, so they can't start a pinch or block aiming. */
+body.touch-input .scoreboard, body.touch-input .toast { pointer-events: none; }
+/* iOS zooms into any text field under 16 px when it gets focus. */
+.invite { font-size: 16px; }
+@media (pointer: coarse) { input, select, textarea { font-size: max(16px, 1em); } }
+/* Already zoomed when play starts: play waits here, where zoom is allowed. */
+.zoom-note { position: absolute; inset: 0; z-index: 26; display: grid; place-items: center; background: rgba(30, 14, 46, 0.86); padding: 16px; touch-action: auto; pointer-events: auto; text-shadow: none; }
+.zn-box { position: absolute; display: grid; place-items: center; }
+.zoom-note .panel { text-align: center; max-width: 360px; }
+
+/* Mission briefing: the steps, in order. */
+.mi-how { text-align: left; margin: 2px 0; font-size: 14px; }
+.mi-how ol { margin: 4px 0 6px; padding-left: 22px; display: flex; flex-direction: column; gap: 3px; }
+/* The briefing grew; keep Start in view while the rest scrolls. */
+.mintro .actions { position: sticky; bottom: -22px; margin: 0 -22px -22px; padding: 12px 22px 22px; background: rgb(46, 24, 70); border-top: 1px solid rgba(244, 230, 200, 0.25); }
+@media (max-height: 700px) { .mintro .actions { bottom: -16px; margin: 0 -20px -16px; padding: 10px 20px 16px; } }
+
+/* System overlays (graphics reset, stopped picture, diagnostics) sit above every menu. */
+.screen.overlay.sys { z-index: 60; }
+.diag-text { width: 100%; font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(0, 0, 0, 0.3); color: var(--cream); border: 1px solid rgba(244, 230, 200, 0.4); border-radius: 10px; padding: 8px; resize: vertical; }
+@media (pointer: coarse) { .diag-text { font-size: 16px; } }
+.build-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 0; }
+.btn.small { padding: 6px 12px; min-height: 34px; font-size: 14px; }
+/* Short windows: the briefing's steps should start above the fold. */
+@media (max-height: 520px) {
+  .mintro { gap: 4px; }
+  .mintro p { margin: 0; }
+  .mintro h2 { font-size: 22px; margin: 0; }
+  .mintro .mi-how ol { gap: 2px; margin: 2px 0 4px; }
+}
+
+/* Desktop menu affordance. While the mouse is captured the cursor is hidden,
+   so a clickable button would be unreachable: show what to press instead.
+   Uncaptured (click to aim, drag-to-look) the button is clickable again. */
+.esc-hint { display: none; }
+body.mouse-captured #btn-menu { display: none; }
+body.mouse-captured .esc-hint { display: block; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; padding: 8px 14px; border-radius: 12px; background: rgba(46, 24, 70, 0.82); border: 2px solid rgba(244, 230, 200, 0.6); }
+body.touch-input .menu-key { display: none; }
+.build-note { margin: 0; font-size: 12px; opacity: 0.75; }

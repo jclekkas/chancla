@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Chancla Warfare: La Ley de la Chancla</title>
     <meta name="description" content="A comedic first-person arcade game. You are Doña Rosa, and the neighborhood is too loud. Two chanclas, zero patience. Free in your browser." />
     <meta name="theme-color" content="#4b2a6b" />
@@ -201,6 +201,7 @@
           <button type="button" class="btn-ghost wide" id="btn-pause-maps" data-i18n="pause.maps"></button>
           <button type="button" class="btn-ghost wide" id="btn-to-title" data-i18n="pause.toTitle"></button>
           <button type="button" class="btn-ghost wide" id="btn-pause-home" data-i18n="title.mainMenu"></button>
+          <button type="button" class="btn-ghost wide" id="btn-pause-diag" data-i18n="diag.copy"></button>
           <p class="note" id="pause-lock-note" data-i18n="pause.lockNote"></p>
         </div>
       </section>
@@ -274,6 +275,7 @@
             <button type="button" class="btn-danger" id="btn-reset" data-i18n="settings.reset"></button>
           </div>
           <button type="button" class="btn-play small" id="btn-settings-close" data-i18n="settings.close"></button>
+          <button type="button" class="btn-ghost small" id="btn-settings-diag" data-i18n="diag.copy"></button>
         </div>
       </section>
 
@@ -293,7 +295,9 @@
       <section id="screen-ctx" class="screen overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="ctx-title">
         <div class="panel">
           <h2 id="ctx-title" data-i18n="ctx.lost"></h2>
+          <p data-i18n="ctx.reloadNote"></p>
           <button type="button" class="btn-play small" id="btn-ctx-reload" data-i18n="ctx.reload"></button>
+          <button type="button" class="btn-ghost" id="btn-ctx-diag" data-i18n="diag.copy"></button>
         </div>
       </section>
 

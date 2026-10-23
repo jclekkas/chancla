@@ -1,0 +1,79 @@
+Chancla Warfare diagnostics
+{
+ "build": "f27063b (local)",
+ "page": "shooter",
+ "uptimeS": 13,
+ "visibility": "visible",
+ "online": true,
+ "viewport": "1280x720@1 (visible 1280x720, zoom 1.00)",
+ "touch": false,
+ "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+ "jsHeap": "14 MB of 4096 MB",
+ "errors": 3,
+ "game": {
+  "mode": "practice",
+  "screen": "pause",
+  "map": "patio",
+  "phase": "playing",
+  "conn": "online",
+  "msSinceServerMsg": 0,
+  "rttMs": 0,
+  "players": 4,
+  "input": "mouse",
+  "inputEnabled": false,
+  "held": 0,
+  "lang": "en"
+ },
+ "input": {
+  "mode": "mouse (not captured)",
+  "enabled": false,
+  "locked": false,
+  "pointerLockElement": false,
+  "fallback": false,
+  "held": 0,
+  "focus": "button",
+  "menu": "pause",
+  "clickToAim": false
+ },
+ "render": {
+  "mode": "match",
+  "map": "patio",
+  "msSinceFrame": 3106,
+  "frameErrors": 30,
+  "fps": 10,
+  "contextLost": false,
+  "quality": "low",
+  "drawCalls": 22,
+  "geometries": 132,
+  "textures": 12,
+  "paused": true
+ },
+ "audio": {
+  "context": "running",
+  "music": "ok"
+ }
+}
+
+Recent events (ms since page load):
+      43 life   pageshow
+     373 screen menu / title
+    2446 stall  no frame for 2017 ms (mode menu)
+    2451 stall  main thread busy 2030 ms
+    4101 screen menu / practice
+    5125 net    connection connecting
+    5126 net    connection online
+    5183 match  room lobby, map patio, 4 players (practice)
+    5385 match  room countdown, map patio, 4 players (practice)
+    5386 screen practice / none
+    5386 input  play input on; dropped focus from button
+    5397 input  mouse captured
+    7267 stall  no frame for 1517 ms (mode match)
+    7273 stall  main thread busy 1525 ms
+    9676 match  room playing, map patio, 4 players (practice)
+   10273 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-DjOwnmmm.js:1:7585)
+   10479 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-DjOwnmmm.js:1:7585)
+   10489 error  frame: injected render failure @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:89) | at n (engine-DjOwnmmm.js:1:7585)
+   11089 screen game stopped (frames keep failing)
+   11089 input  play input off (none)
+   11091 input  mouse released
+   11092 screen practice / pause

@@ -1,0 +1,71 @@
+{
+  "env": {
+    "at": "2026-10-22T01:45:09.349Z",
+    "device": "Chromium mobile emulation, 844x390 landscape, DPR 3, touch",
+    "browser": "Chromium 141 headless, SwiftShader (software GL). NOT a phone.",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4
+  },
+  "rows": [
+    {
+      "setting": "auto",
+      "map": "patio",
+      "fps": 11.3,
+      "quality": "low",
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "shadows": false,
+      "heapMB": 16
+    },
+    {
+      "setting": "auto",
+      "map": "plaza",
+      "fps": 11.8,
+      "quality": "low",
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "shadows": false,
+      "heapMB": 18
+    },
+    {
+      "setting": "auto",
+      "map": "fiesta",
+      "fps": 13.8,
+      "quality": "low",
+      "pixelRatio": 1,
+      "canvas": "844x390",
+      "shadows": false,
+      "heapMB": 15
+    },
+    {
+      "setting": "medium",
+      "map": "patio",
+      "fps": 10.5,
+      "quality": "medium",
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "shadows": true,
+      "heapMB": 13
+    },
+    {
+      "setting": "medium",
+      "map": "plaza",
+      "fps": 10.8,
+      "quality": "medium",
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "shadows": true,
+      "heapMB": 18
+    },
+    {
+      "setting": "medium",
+      "map": "fiesta",
+      "fps": 10.2,
+      "quality": "medium",
+      "pixelRatio": 1.5,
+      "canvas": "1266x585",
+      "shadows": true,
+      "heapMB": 15
+    }
+  ]
+}

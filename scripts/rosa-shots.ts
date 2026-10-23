@@ -8,7 +8,8 @@
 //                          three-quarter, side and back
 //   <q>-door-<team>.png    one of each team against the café door
 //   <q>-shade.png, <q>-sun.png   in a building's shade, on bright paving
-//   <q>-grip.png           close-up of the right hand holding each weapon
+//   <q>-grip-*.png         close-up of the right hand holding each weapon
+//   <q>-home.png           the campaign home look with six curlers
 //   sheet-<q>.jpg          contact sheet of all of the above
 //   cost.json              per-Rosa cost (main-pass draws, shadow casters,
 //                          triangles) and a create/dispose leak check
@@ -159,6 +160,25 @@ async function runQuality(browser: any, q: string): Promise<Record<string, unkno
     const file = path.join(OUT, `${q}-${shot.name}.png`);
     await p.screenshot({ path: file });
     files.push({ file, label: `${q}: ${shot.label}` });
+  }
+  if (!ONLY || ONLY.has('home')) {
+    // The campaign's home look (no hat or hood, six recovered curlers), built from the avatar class the page uses.
+    await place(p, { name: 'home', label: '', sol: { x: 30, z: 30, yaw: 0 }, luna: { x: 31, z: 30, yaw: 0 }, eye: [MID.x + 0.2, MID.z + 1.4], look: [MID.x, 1.35, MID.z] });
+    await p.evaluate((mid) => {
+      const e = (window as any).__fps.engine();
+      const Avatar = [...e.avatars.values()][0].constructor;
+      const a = new Avatar(0, { home: true, quality: e.quality });
+      a.setRuleros(6);
+      if (a.model?.bubble) a.model.bubble.visible = false; // no spawn bubble (nothing updates this avatar)
+      a.root.position.set(mid.x, 0, mid.z); a.root.rotation.y = Math.PI - 0.5;
+      e.scene.add(a.root);
+      (window as any).__home = a;
+    }, MID);
+    await sleep(400);
+    const file = path.join(OUT, `${q}-home.png`);
+    await p.screenshot({ path: file });
+    files.push({ file, label: `${q}: campaign home look, six curlers` });
+    await p.evaluate(() => { const a = (window as any).__home; a.root.removeFromParent(); a.dispose(); });
   }
   const c = await cost(p);
   await ctx.close();

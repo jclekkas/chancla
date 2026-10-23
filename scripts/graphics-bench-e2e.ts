@@ -1,6 +1,8 @@
-// Runs the in-game section benchmark (?bench, src/fps/bench.ts) locally for
-// the experiment and the production-equivalent drawing, alternating, and
-// checks that it invalidates itself when it should. Needs an offline build:
+// Runs the in-game section benchmark (src/fps/bench.ts) locally: the
+// controlled comparison (?bench) for the experiment and the production-
+// equivalent drawing, alternating, and the live stress test (?bench=live).
+// Checks that the controlled scene is identical at different frame rates and
+// that runs invalidate themselves when they should. Needs an offline build:
 //
 //   GRAPHICS_EXPERIMENT=1 npm run build && node --import tsx scripts/graphics-bench-e2e.ts
 //
@@ -107,20 +109,39 @@ async function main(): Promise<void> {
       await close();
     }
 
-    // 2. Measurements: A B B A at High, then Low, then an emulated phone at Low.
+    // 2. The controlled scene is the same at the same moment whatever the frame rate:
+    //    one run as fast as it goes, one slowed by a 900 ms busy wait per frame.
+    {
+      const runEq = async (q: string) => { const { page, close } = await open(browser, DESKTOP, `bench&secs=20&warmup=4&${q}`, blocked, errors); const r = await result(page, 400000); await close(); return r; };
+      const fast = await runEq('section=on');
+      const slow = await runEq('section=off&throttle=900');
+      const ok = (r: any) => r.valid && r.scene.maxCameraError <= 1e-3 && r.scene.maxCharacterError <= 1e-3 && r.scene.maxProjectileError <= 1e-3 && r.scene.minCharactersDrawn === 3 && r.scene.minProjectilesDrawn === 6;
+      check('controlled scene: what was drawn matched the script at every checkpoint, at normal speed', ok(fast), fast.scene);
+      check('controlled scene: and with frames slowed by a 900 ms busy wait (the other variant)', ok(slow), slow.scene);
+      check('the two runs drew clearly different numbers of frames, yet ran the same workload', slow.frames < fast.frames * 0.7 && fast.workload.id === slow.workload.id && fast.workload.hash === slow.workload.hash, { fast: fast.frames, slow: slow.frames, workload: `${fast.workload.id}#${fast.workload.hash}` });
+      const even = (r: any) => r.perView.every((v: any) => Math.abs(v.measuredS - 5) < 1);
+      check('each view got an equal share of measured time in both runs', even(fast) && even(slow), { fast: fast.perView.map((v: any) => v.measuredS), slow: slow.perView.map((v: any) => v.measuredS) });
+      check('a throttled run is marked as a test run, not a measurement', slow.testRun === true && /not a measurement/.test(slow.note));
+    }
+
+    // 3. Measurements. Controlled: A B B A at High, then Low, then an emulated phone at Low.
+    //    Live stress test: A B at High (real bots; differences include what was on screen).
     const plan: Array<[string, BrowserContextOptions, string]> = [
       ['desktop', DESKTOP, 'quality=high'], ['desktop', DESKTOP, 'quality=high&section=off'],
       ['desktop', DESKTOP, 'quality=high&section=off'], ['desktop', DESKTOP, 'quality=high'],
       ['desktop', DESKTOP, 'quality=low'], ['desktop', DESKTOP, 'quality=low&section=off'],
       ['phone (emulated)', PHONE, 'quality=low'], ['phone (emulated)', PHONE, 'quality=low&section=off'],
+      ['desktop', DESKTOP, 'quality=high&live'], ['desktop', DESKTOP, 'quality=high&section=off&live'],
     ];
     for (const [device, opts, q] of plan) {
-      const { page, close } = await open(browser, opts, `bench&secs=${SECS}&${q}`, blocked, errors);
-      const r = await result(page, (SECS + 10 + 120) * 1000);
+      const query = q.endsWith('&live') ? `bench=live&secs=${SECS}&${q.replace('&live', '')}` : `bench&secs=${SECS}&${q}`;
+      const { page, close } = await open(browser, opts, query, blocked, errors);
+      const r = await result(page, (SECS + 10 + 240) * 1000);
       r.device = device;
       runs.push(r);
-      console.log(`${device} ${r.variant} ${r.quality}: valid=${r.valid} ${r.avgFps} fps p95 ${r.p95FrameMs} ms, ${r.drawCalls.avg} calls, ${r.triangles.avg} tris, buffer ${r.render.bufferSize.join('x')} @${r.render.pixelRatio}, bots ${r.workload.bots}, throws ${r.workload.throwsByRosa}, max proj ${r.workload.maxProjectilesInFlight}`);
-      check(`${device} ${r.variant} ${r.quality}: valid run with bots and projectiles`, r.valid && r.workload.bots === 3 && r.workload.throwsByRosa > 0 && r.measuredS >= SECS - 1, { invalid: r.invalidReason, bots: r.workload.bots, throws: r.workload.throwsByRosa });
+      console.log(`${device} ${r.mode} ${r.variant} ${r.quality}: valid=${r.valid} ${r.avgFps} fps p95 ${r.p95FrameMs} ms, ${r.drawCalls.avg} calls (${r.drawCalls.min}-${r.drawCalls.max}), ${r.triangles.avg} tris, buffer ${r.render.bufferSize.join('x')} @${r.render.pixelRatio}, views ${r.perView.map((v: any) => v.measuredS).join('/')} s, ${JSON.stringify(r.scene)}`);
+      if (r.mode === 'controlled') check(`${device} controlled ${r.variant} ${r.quality}: valid, scene matched the script`, r.valid && r.scene.maxCharacterError <= 1e-3 && r.measuredS >= SECS - 1, { invalid: r.invalidReason, scene: r.scene });
+      else check(`${device} live ${r.variant} ${r.quality}: valid, Rosa never eliminated, throws happened`, r.valid && r.scene.rosaEliminated === 0 && r.scene.throwsByRosa > 0, { invalid: r.invalidReason, scene: r.scene });
       await close();
     }
   } finally {

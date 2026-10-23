@@ -266,10 +266,13 @@ function setTouchMode(on: boolean): void {
   render();
 }
 
+/** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
+let benchHold = false;
+
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
-  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim());
+  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
   if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
@@ -438,7 +441,7 @@ async function boot(): Promise<void> {
     if (pendingInviteCode && !inMatch && !lastRoom) openOnline();
   });
   (window as unknown as { __fps: unknown }).__fps = debugApi();
-  if (bench && benchRun) bench.runBench(benchRun, { api: debugApi(), startPractice: () => startPractice(), screen: () => top() });
+  if (bench && benchRun) bench.runBench(benchRun, { api: debugApi(), startPractice: () => startPractice(), screen: () => top(), hold: (on) => { benchHold = on; updatePracticePause(); } });
 }
 
 let touchOnly = false;

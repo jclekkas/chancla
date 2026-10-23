@@ -1,60 +1,148 @@
-// Graphics experiment benchmark: offline practice on El Patio, the normal
-// game renderer, one variant per page load. Only offline graphics previews
-// include it (see main.ts); it sends nothing anywhere.
+// Graphics experiment benchmark: El Patio in offline practice, drawn by the
+// normal game renderer, one variant per page load. Only offline graphics
+// previews include it (see main.ts); it sends nothing anywhere.
 //
-//   ?bench                    the upgraded section (Experiment)
-//   ?bench&section=off        the same run without it: production's drawing
+//   ?bench                    controlled comparison, section on (Experiment)
+//   ?bench&section=off        the same, without the section: production's drawing
+//   ?bench=live[&section=off] live gameplay stress test (real bots; not a cost comparison)
 //   &quality=high|medium|low  (default high)   &secs=60   &warmup=10
 //
-// The run: 1 ally and 2 enemy bots (normal difficulty), Rosa held at four
-// spots around the café and the Panadería in turn, panning slowly and
-// throwing every 1.5 s, kept at full health so the view never drops to a
-// death camera. Warm-up frames are not counted. Hiding the tab, resizing,
-// changing quality, opening a menu or the match ending invalidates the run.
-import { MATCH } from '../../shared/config';
+// Controlled comparison: practice starts as usual (so the bots' avatars,
+// teams and name tags are real), then the match is held still and every
+// frame the scene is set from a script that depends only on scene time:
+// Rosa's view, three walking characters and six projectiles in flight. The
+// state is written at the moment the renderer reads it, so both variants
+// draw the same scene at the same timestamp whatever their frame rate.
+// Animation phase and projectile trails still integrate frame time, which
+// can change their shape slightly between frame rates but never what is
+// drawn (meshes, draw calls, triangles).
+//
+// Both modes: warm-up and measurement are separate; the four views get equal
+// time in each; hiding the tab, resizing, changing quality, opening a menu
+// or the match ending invalidates the run; so does Rosa being eliminated.
+import * as THREE from 'three';
 import { setSectionEnabled } from './render/section';
 import type { Quality } from './settings';
 
 declare const __BUILD_ID__: string;
 
-export interface BenchParams { section: boolean; quality: Quality; secs: number; warmup: number }
+export const BENCH_VERSION = 2;
+export type BenchMode = 'controlled' | 'live';
+
+export interface BenchParams { mode: BenchMode; section: boolean; quality: Quality; secs: number; warmup: number; throttleMs: number }
 
 export function benchParams(search: string): BenchParams | null {
   const q = new URLSearchParams(search);
   if (!q.has('bench')) return null;
   const quality = (['high', 'medium', 'low'] as const).find((x) => x === q.get('quality')) ?? 'high';
-  const num = (k: string, d: number, min: number) => { const v = Number(q.get(k)); return Number.isFinite(v) && v >= min ? v : d; };
-  return { section: q.get('section') !== 'off', quality, secs: num('secs', 60, 5), warmup: num('warmup', 10, 2) };
+  const num = (k: string, d: number, min: number) => { const v = Number(q.get(k)); return q.has(k) && Number.isFinite(v) && v >= min ? v : d; };
+  return {
+    mode: q.get('bench') === 'live' ? 'live' : 'controlled',
+    section: q.get('section') !== 'off', quality, secs: num('secs', 60, 4), warmup: num('warmup', 10, 2),
+    throttleMs: num('throttle', 0, 0), // test only: a busy wait per frame, to check the scene does not depend on frame rate
+  };
 }
 
 /** Called before the engine starts, so the first world is built for the tested variant only. */
 export function prepareBench(p: BenchParams): void { setSectionEnabled(p.section); }
 
-// Spots at standing eye height looking at the section (the same as the comparison lab's views).
+// ---------------------------------------------------------------- the scene
+
+// Views at standing eye height looking at the section (the comparison lab's views).
 const STATIONS = [
-  { name: 'café, player height', x: 2.8, z: -3.4, look: [-2.5, 2.2, -8.5] },
-  { name: 'facade close-up', x: -4.2, z: -3.6, look: [0.2, 2.6, -8] },
-  { name: 'wider courtyard', x: 9.5, z: 3.5, look: [-4, 2.2, -8] },
-  { name: 'Panadería side', x: -2.8, z: 3.4, look: [2.5, 2.2, 8.5] },
+  { name: 'café, player height', x: 2.8, z: -3.4, look: [-2.5, 2.2, -8.5], side: 1 },
+  { name: 'facade close-up', x: -4.2, z: -3.6, look: [0.2, 2.6, -8], side: 1 },
+  { name: 'wider courtyard', x: 9.5, z: 3.5, look: [-4, 2.2, -8], side: 1 },
+  { name: 'Panadería side', x: -2.8, z: 3.4, look: [2.5, 2.2, 8.5], side: -1 },
 ] as const;
 const EYE = 1.58;
+// Three characters walking small loops on open paving in front of the café
+// (point-mirrored when the view is on the Panadería side).
+const WALKERS = [
+  { cx: -1.5, cz: -5.6, r: 0.9, w: 0.8, ph: 0 },
+  { cx: 0.8, cz: -4.6, r: 0.9, w: -0.7, ph: 2.1 },
+  { cx: -3.2, cz: -3.6, r: 0.9, w: 0.9, ph: 4.2 },
+] as const;
+// Six projectiles always in flight, thrown in turn between the walkers.
+const PROJ = { count: 6, periodS: 1.6, arc: 1.2 } as const;
+const SCENE = { id: 'cafe-scripted', stations: STATIONS, walkers: WALKERS, proj: PROJ };
+
+/** A short, stable digest of the scene definition: two runs with the same id ran the same script. */
+function digest(s: string): string { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16).padStart(8, '0'); }
+const SCENE_HASH = digest(JSON.stringify(SCENE));
+
+interface Timeline { warmup: number; secs: number }
+/** Which view at scene time t (s), how far through it (0..1), and whether it is measured. Equal time per view in both phases. */
+function stationAt(tl: Timeline, t: number): { i: number; u: number; measured: boolean } {
+  const n = STATIONS.length;
+  if (t < tl.warmup) { const d = tl.warmup / n, i = Math.min(n - 1, Math.floor(t / d)); return { i, u: (t - i * d) / d, measured: false }; }
+  const d = tl.secs / n, k = t - tl.warmup, i = Math.min(n - 1, Math.floor(k / d));
+  return { i, u: Math.min(1, (k - i * d) / d), measured: true };
+}
+
+interface Pose { x: number; z: number; vx: number; vz: number; yaw: number }
+function walker(k: number, t: number, side: number): Pose {
+  const w = WALKERS[k]!, a = w.w * t + w.ph;
+  const x = w.cx + w.r * Math.cos(a), z = w.cz + w.r * Math.sin(a);
+  const vx = -w.r * w.w * Math.sin(a), vz = w.r * w.w * Math.cos(a);
+  return { x: side * x, z: side * z, vx: side * vx, vz: side * vz, yaw: Math.atan2(-side * vx, -side * vz) };
+}
+
+export interface SceneState {
+  t: number; station: number; measured: boolean;
+  cam: { x: number; z: number; yaw: number; pitch: number };
+  walkers: Pose[];
+  proj: Array<{ key: string; weapon: 0 | 1; owner: number; x: number; y: number; z: number }>;
+}
+
+/** The whole controlled scene as a pure function of scene time. */
+export function sceneAt(tl: Timeline, t: number): SceneState {
+  const st = stationAt(tl, t), S = STATIONS[st.i]!;
+  const dx = S.look[0] - S.x, dz = S.look[2] - S.z;
+  const cam = { x: S.x, z: S.z, yaw: Math.atan2(-dx, -dz) + Math.sin(st.u * Math.PI * 2) * 0.35, pitch: Math.atan2(S.look[1] - EYE, Math.hypot(dx, dz)) };
+  const walkers = WALKERS.map((_, k) => walker(k, t, S.side));
+  const proj: SceneState['proj'] = [];
+  for (let j = 0; j < PROJ.count; j++) {
+    const off = (j * PROJ.periodS) / PROJ.count;
+    const c = Math.floor((t + PROJ.periodS - off) / PROJ.periodS); // cycle number, so one of each is always in flight
+    const ts = c * PROJ.periodS + off - PROJ.periodS, u = (t - ts) / PROJ.periodS;
+    const from = walker(j % 3, ts, S.side), to = walker((j + 1) % 3, ts, S.side);
+    proj.push({
+      key: `bench-${j}-${c}`, weapon: j < 4 ? 0 : 1, owner: j % 3,
+      x: from.x + (to.x - from.x) * u, y: 1.4 + (1.0 - 1.4) * u + PROJ.arc * 4 * u * (1 - u), z: from.z + (to.z - from.z) * u,
+    });
+  }
+  return { t, station: st.i, measured: st.measured, cam, walkers, proj };
+}
+
+// ---------------------------------------------------------------- the run
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface Hooks {
   api: any;
   startPractice: () => void;
   screen: () => string;
+  /** Holds the practice match still (host and prediction paused) without opening a menu. */
+  hold: (on: boolean) => void;
 }
 
+interface Stat { avg: number; min: number; max: number }
+interface StationResult { name: string; frames: number; measuredS: number; avgFps: number; p95FrameMs: number; drawCalls: Stat; triangles: Stat }
+
 export interface BenchResult {
-  kind: 'chancla-section-benchmark'; version: 1;
+  kind: 'chancla-section-benchmark'; version: typeof BENCH_VERSION;
+  mode: BenchMode; label: string;
   build: string; variant: 'experiment' | 'production-equivalent'; quality: Quality;
-  valid: boolean; invalidReason: string | null;
-  warmupS: number; measuredS: number; frames: number;
-  avgFps: number; p95FrameMs: number; p99FrameMs: number; medianFrameMs: number; framesOver50ms: number;
+  valid: boolean; invalidReason: string | null; testRun: boolean;
+  workload: { id: string; hash: string; warmupS: number; measuredSPerView: number; views: string[] };
+  measuredS: number; frames: number;
+  avgFps: number; medianFrameMs: number; p95FrameMs: number; p99FrameMs: number; maxFrameMs: number; framesOver50ms: number;
   render: { cssSize: [number, number]; bufferSize: [number, number]; pixelRatio: number; devicePixelRatio: number };
-  drawCalls: { avg: number; max: number }; triangles: { avg: number; max: number };
-  workload: { bots: number; throwsByRosa: number; maxProjectilesInFlight: number; rosaEliminated: number };
+  drawCalls: Stat; triangles: Stat;
+  perView: StationResult[];
+  /** Controlled: checks that what was drawn matched the script at sampled timestamps. Live: what was on screen. */
+  scene: Record<string, number | boolean | string>;
+  throttleMs: number;
   renderer: string; userAgent: string; startedAt: string;
   note: string;
 }
@@ -63,110 +151,208 @@ export function runBench(p: BenchParams, h: Hooks): void {
   const ui = panel(p);
   const engine = h.api.engine(), input = h.api.input();
   if (!engine || !input) { ui.status('3D rendering did not start, so nothing can be measured.'); return; }
-  const r = engine.renderer;
+  const r = engine.renderer as THREE.WebGLRenderer;
+  const tl: Timeline = { warmup: p.warmup, secs: p.secs };
   const startSize = `${innerWidth}x${innerHeight}@${devicePixelRatio}`;
   let invalid: string | null = null;
   const invalidate = (why: string) => { if (!invalid) invalid = why; };
   document.addEventListener('visibilitychange', () => { if (document.hidden) invalidate('the tab was hidden'); });
   window.addEventListener('resize', () => { if (`${innerWidth}x${innerHeight}@${devicePixelRatio}` !== startSize) invalidate('the window size or zoom changed'); });
 
-  // Throw on a steady beat (the normal input path, as if the throw key were pressed).
-  let throwing = false;
-  const sample = input.sample.bind(input);
-  input.sample = () => { const c = sample(); return throwing ? { ...c, fire: true } : c; };
-
   // The view is scripted, so don't wait for a click to capture the mouse
   // (practice pauses until then): use the game's drag-to-look mode instead.
   input.fallback = true;
+  // Live mode throws by holding the throw input down: the game throws at the
+  // weapon's own rate, independent of how often frames are drawn.
+  const sample = input.sample.bind(input);
+  if (p.mode === 'live') input.sample = () => ({ ...sample(), fire: true });
+
   ui.status('Starting practice on El Patio…');
   h.startPractice();
 
-  let t0 = -1, measuring = false, last = 0;
-  const dts: number[] = [];
-  let calls = 0, callsMax = 0, tris = 0, trisMax = 0, maxProj = 0, deaths = 0, wasAlive = true, throwsAt = 0;
   const room = () => [...(h.api.host()?.hub.rooms.values() ?? [])][0];
+  let t0 = -1, done = false, session: any = null, ids: number[] = [], origUpdate: (() => void) | null = null;
+  let lastMain = -1, applied: SceneState | null = null;
+  const frames: Array<{ dt: number; station: number; calls: number; tris: number }> = [];
+  const checks = { n: 0, camErr: 0, walkerErr: 0, projErr: 0, minAvatars: Infinity, minProjectiles: Infinity };
+  let nextCheck = 0;
+  const live = { avatarsInView: 0, projectiles: 0, deaths: 0, throws0: 0, samples: 0 };
+  let wasAlive = true;
 
-  const frame = (now: number) => {
+  /** Controlled: write the scene for this engine frame into the session, at the moment the engine reads it. */
+  const applyScene = () => {
+    const s = session, t = (performance.now() - t0) / 1000;
+    const sc = sceneAt(tl, t);
+    applied = sc;
+    for (const b of [s.body]) { b.x = sc.cam.x; b.z = sc.cam.z; b.y = 0; b.vx = 0; b.vy = 0; b.vz = 0; b.onGround = true; b.crouched = false; }
+    input.yaw = sc.cam.yaw; input.pitch = sc.cam.pitch;
+    ids.forEach((id, k) => {
+      const w = sc.walkers[k]!;
+      s.remotes.set(id, { id, x: w.x, y: 0, z: w.z, yaw: w.yaw, pitch: 0, vx: w.vx, vz: w.vz, alive: true, crouched: false, onGround: true, protected: false, connected: true, hp: 100, weapon: 0, msSinceThrow: 1e6, msSinceHit: 1e6 });
+    });
+    s.projectiles.clear();
+    for (const q of sc.proj) {
+      s.projectiles.set(q.key, { id: q.key, weapon: q.weapon, owner: ids[q.owner] ?? 0, predicted: true, startAt: 0, endAt: 0, endPos: null, done: false, trail: [],
+        pr: { id: 0, owner: ids[q.owner] ?? 0, team: 0, weapon: q.weapon, x: q.x, y: q.y, z: q.z, vx: 0, vy: 0, vz: 0, ageMs: 0, traveled: 0, bounces: 0, fireSeq: 0 } });
+    }
+  };
+
+  /** What the engine actually drew this frame, against the script (controlled), sampled once per scene second. */
+  const checkDrawn = () => {
+    const sc = applied!;
+    if (sc.t < nextCheck) return;
+    nextCheck = Math.floor(sc.t) + 1;
+    const cam = engine.camera as THREE.PerspectiveCamera;
+    checks.n++;
+    checks.camErr = Math.max(checks.camErr, Math.hypot(cam.position.x - sc.cam.x, cam.position.z - sc.cam.z), Math.abs(cam.rotation.y - sc.cam.yaw), Math.abs(cam.rotation.x - sc.cam.pitch));
+    let avatars = 0;
+    ids.forEach((id, k) => {
+      const av = engine.avatars.get(id), w = sc.walkers[k]!;
+      if (!av) { checks.walkerErr = Infinity; return; }
+      if (av.root.visible) avatars++;
+      checks.walkerErr = Math.max(checks.walkerErr, Math.hypot(av.root.position.x - w.x, av.root.position.z - w.z), Math.abs(av.root.rotation.y - w.yaw));
+    });
+    let shown = 0;
+    for (const q of sc.proj) {
+      const slot = [...engine.proj.pools[0], ...engine.proj.pools[1]].find((x: any) => x.key === q.key);
+      if (!slot || !slot.mesh.visible) { checks.projErr = Infinity; continue; }
+      shown++;
+      checks.projErr = Math.max(checks.projErr, Math.hypot(slot.mesh.position.x - q.x, slot.mesh.position.y - q.y, slot.mesh.position.z - q.z));
+    }
+    checks.minAvatars = Math.min(checks.minAvatars, avatars);
+    checks.minProjectiles = Math.min(checks.minProjectiles, shown);
+  };
+
+  // Every count and frame time is taken at the start of the engine's main
+  // render, so each sample is exactly one engine frame (world, shadow pass,
+  // held item).
+  const render = r.render.bind(r);
+  const frustum = new THREE.Frustum(), m = new THREE.Matrix4();
+  r.render = (scene: THREE.Object3D, camera: THREE.Camera) => {
+    if (scene === engine.scene && t0 >= 0 && !done) {
+      const now = performance.now();
+      if (lastMain >= 0) {
+        const t = (lastMain - t0) / 1000, st = stationAt(tl, t);
+        if (st.measured && !invalid) frames.push({ dt: now - lastMain, station: st.i, calls: r.info.render.calls, tris: r.info.render.triangles });
+      }
+      r.info.reset();
+      lastMain = now;
+      if (p.mode === 'controlled' && applied) checkDrawn();
+      if (p.mode === 'live' && stationAt(tl, (now - t0) / 1000).measured) {
+        m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(m);
+        let inView = 0;
+        for (const av of engine.avatars.values()) if (av.root.visible && frustum.containsPoint(av.root.position)) inView++;
+        live.avatarsInView += inView; live.projectiles += session.projectiles.size; live.samples++;
+      }
+      if (p.throttleMs > 0) { const end = now + p.throttleMs; while (performance.now() < end) { /* test only: a slower frame */ } }
+    }
+    render(scene, camera);
+  };
+
+  const tick = () => {
+    if (done) return;
     const s = h.api.session();
-    if (!s || s.phase !== 'playing') {
-      if (t0 < 0) { requestAnimationFrame(frame); return; }
-      invalidate('the match ended'); finish(); return;
-    }
     if (t0 < 0) {
-      if (!s.alive) { requestAnimationFrame(frame); return; }
-      t0 = now; last = now; throwsAt = s.localShot ?? 0;
-      r.info.autoReset = false; r.info.reset();
-      requestAnimationFrame(frame); return;
+      if (!s || s.phase !== 'playing' || !s.alive || !room()) { requestAnimationFrame(tick); return; }
+      session = s;
+      ids = [...room().sim.players.keys()].filter((id: number) => id !== s.id).sort((a: number, b: number) => a - b);
+      if (p.mode === 'controlled') {
+        h.hold(true);
+        origUpdate = s.updateRemotes.bind(s);
+        s.updateRemotes = applyScene; // the engine calls this every frame, just before it places the camera and avatars
+      } else {
+        // Rosa cannot be hurt in the stress test (spawn protection held on for her only), so the view never drops to a death camera.
+        const me = room().sim.players.get(s.id);
+        if (me) Object.defineProperty(me, 'protectedUntil', { configurable: true, get: () => Number.MAX_SAFE_INTEGER, set: () => undefined });
+        live.throws0 = s.localShot ?? 0;
+      }
+      r.info.autoReset = false;
+      t0 = performance.now();
+      requestAnimationFrame(tick); return;
     }
+    const t = (performance.now() - t0) / 1000;
+    if (s !== session || s.phase !== 'playing') invalidate('the match ended');
     if (engine.quality !== p.quality) invalidate('the graphics quality changed');
     if (h.screen() !== 'none') invalidate('a menu was opened');
-    const el = (now - t0) / 1000;
-    const inWarmup = el < p.warmup;
-    if (!inWarmup && !measuring) { measuring = true; dts.length = 0; throwsAt = s.localShot ?? throwsAt; maxProj = 0; deaths = 0; }
-    if (measuring && !invalid) {
-      dts.push(now - last);
-      const c = r.info.render.calls, t = r.info.render.triangles;
-      calls += c; tris += t; callsMax = Math.max(callsMax, c); trisMax = Math.max(trisMax, t);
-      maxProj = Math.max(maxProj, s.projectiles.size);
-      if (wasAlive && !s.alive) deaths++;
+    if (!s.alive) invalidate('Rosa was eliminated');
+    if (p.mode === 'controlled' && !h.api.host()?.paused) invalidate('the scripted scene stopped being held');
+    if (p.mode === 'live') {
+      if (wasAlive && !s.alive) live.deaths++;
+      wasAlive = s.alive;
+      const st = stationAt(tl, t), S = STATIONS[st.i]!;
+      const rm = room(), me = rm?.sim?.players.get(s.id);
+      for (const b of [me?.body, s.body]) if (b) { b.x = S.x; b.z = S.z; b.vx = 0; b.vz = 0; }
+      const dx = S.look[0] - S.x, dz = S.look[2] - S.z;
+      input.yaw = Math.atan2(-dx, -dz) + Math.sin(st.u * Math.PI * 2) * 0.35;
+      input.pitch = Math.atan2(S.look[1] - EYE, Math.hypot(dx, dz));
     }
-    wasAlive = s.alive;
-    r.info.reset();
-    last = now;
-
-    // Where Rosa stands and looks: four spots, an equal share of the run each, panning slowly.
-    const total = p.warmup + p.secs, phase = (el % total) / total;
-    const st = STATIONS[Math.min(STATIONS.length - 1, Math.floor(phase * STATIONS.length))]!;
-    const local = (phase * STATIONS.length) % 1;
-    const rm = room(), me = rm?.sim?.players.get(s.id);
-    for (const b of [me?.body, s.body]) if (b) { b.x = st.x; b.z = st.z; b.vx = 0; b.vz = 0; }
-    if (me) me.hp = MATCH.maxHealth;
-    const dx = st.look[0] - st.x, dz = st.look[2] - st.z;
-    input.yaw = Math.atan2(-dx, -dz) + Math.sin(local * Math.PI * 2) * 0.35;
-    input.pitch = Math.atan2(st.look[1] - EYE, Math.hypot(dx, dz));
-    throwing = (now / 1500) % 1 < 0.1;
-
-    if (invalid) { finish(); return; }
-    if (measuring) ui.status(`Measuring ${Math.min(p.secs, Math.floor(el - p.warmup))} / ${p.secs} s · ${st.name}`);
-    else ui.status(`Warming up ${Math.ceil(p.warmup - el)} s (not counted) · ${st.name}`);
-    if (el >= total) { finish(); return; }
-    requestAnimationFrame(frame);
+    const st = stationAt(tl, t);
+    if (invalid || t >= p.warmup + p.secs) { finish(); return; }
+    ui.status(st.measured ? `Measuring ${Math.floor(t - p.warmup)} / ${p.secs} s · ${STATIONS[st.i]!.name}` : `Warming up ${Math.ceil(p.warmup - t)} s (not counted) · ${STATIONS[st.i]!.name}`);
+    requestAnimationFrame(tick);
   };
-  requestAnimationFrame(frame);
+  requestAnimationFrame(tick);
 
   function finish(): void {
-    throwing = false;
+    done = true;
+    r.render = render;
+    r.info.autoReset = true;
+    input.sample = sample;
+    if (session && origUpdate) session.updateRemotes = origUpdate;
+    if (p.mode === 'controlled') h.hold(false);
     // Free the mouse so the results panel can be used (the game may have captured it).
     if (document.pointerLockElement) document.exitPointerLock();
-    input.sample = sample;
-    r.info.autoReset = true;
     const s = h.api.session();
-    const sorted = [...dts].sort((a, b) => a - b), n = sorted.length;
-    const pct = (q: number) => (n ? sorted[Math.min(n - 1, Math.floor(q * n))]! : 0);
-    const measured = dts.reduce((a, b) => a + b, 0) / 1000;
-    const c = r.domElement as HTMLCanvasElement;
-    const shortRun = p.secs < 60;
+    // Averages are weighted by frame duration (a time average), so a variant
+    // that draws fewer frames still averages over the same scene moments.
+    const stat = (fs: typeof frames, key: 'calls' | 'tris'): Stat => {
+      if (!fs.length) return { avg: 0, min: 0, max: 0 };
+      const w = fs.reduce((a, f) => a + f.dt, 0), xs = fs.map((f) => f[key]);
+      return { avg: Math.round(fs.reduce((a, f) => a + f[key] * f.dt, 0) / (w || 1)), min: Math.min(...xs), max: Math.max(...xs) };
+    };
+    const timing = (dts: number[]) => {
+      const sorted = [...dts].sort((a, b) => a - b), n = sorted.length, sum = dts.reduce((a, b) => a + b, 0);
+      const pct = (q: number) => (n ? sorted[Math.min(n - 1, Math.floor(q * n))]! : 0);
+      return { n, s: sum / 1000, fps: sum ? n / (sum / 1000) : 0, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: n ? sorted[n - 1]! : 0 };
+    };
+    const all = timing(frames.map((f) => f.dt));
+    const perView = STATIONS.map((S, i) => {
+      const fs = frames.filter((f) => f.station === i), tm = timing(fs.map((f) => f.dt));
+      return { name: S.name, frames: tm.n, measuredS: +tm.s.toFixed(2), avgFps: +tm.fps.toFixed(1), p95FrameMs: +tm.p95.toFixed(1), drawCalls: stat(fs, 'calls'), triangles: stat(fs, 'tris') };
+    });
+    if (!invalid && perView.some((v) => v.frames === 0)) invalidate('a view had no measured frames');
+    const tol = 1e-3;
+    if (p.mode === 'controlled' && !invalid && (checks.n < Math.floor(p.secs / 2) || checks.camErr > tol || checks.walkerErr > tol || checks.projErr > tol || checks.minAvatars < ids.length || checks.minProjectiles < PROJ.count)) {
+      invalidate('what was drawn did not match the scripted scene');
+    }
+    const c = r.domElement;
     const res: BenchResult = {
-      kind: 'chancla-section-benchmark', version: 1,
+      kind: 'chancla-section-benchmark', version: BENCH_VERSION, mode: p.mode,
+      label: p.mode === 'controlled' ? 'Controlled comparison: scripted scene, identical in both variants' : 'Live gameplay stress test: real bots, varies run to run; not a section cost comparison',
       build: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev',
       variant: p.section ? 'experiment' : 'production-equivalent', quality: p.quality,
-      valid: !invalid && n > 0, invalidReason: invalid ?? (n ? null : 'no frames measured'),
-      warmupS: p.warmup, measuredS: +measured.toFixed(2), frames: n,
-      avgFps: measured ? +(n / measured).toFixed(1) : 0, p95FrameMs: +pct(0.95).toFixed(1), p99FrameMs: +pct(0.99).toFixed(1), medianFrameMs: +pct(0.5).toFixed(1),
-      framesOver50ms: dts.filter((d) => d > 50).length,
-      render: { cssSize: [c.clientWidth, c.clientHeight], bufferSize: [c.width, c.height], pixelRatio: r.getPixelRatio(), devicePixelRatio: devicePixelRatio },
-      drawCalls: { avg: n ? Math.round(calls / n) : 0, max: callsMax }, triangles: { avg: n ? Math.round(tris / n) : 0, max: trisMax },
-      workload: { bots: Math.max(0, (room()?.sim?.players.size ?? 1) - 1), throwsByRosa: (s?.localShot ?? throwsAt) - throwsAt, maxProjectilesInFlight: maxProj, rosaEliminated: deaths },
+      valid: !invalid && all.n > 0, invalidReason: invalid ?? (all.n ? null : 'no frames measured'), testRun: p.throttleMs > 0 || p.secs < 60,
+      workload: { id: p.mode === 'controlled' ? `${SCENE.id}-v${BENCH_VERSION}` : `live-practice-1v2-normal-v${BENCH_VERSION}`, hash: p.mode === 'controlled' ? SCENE_HASH : 'random (live bots)', warmupS: p.warmup, measuredSPerView: p.secs / STATIONS.length, views: STATIONS.map((x) => x.name) },
+      measuredS: +all.s.toFixed(2), frames: all.n,
+      avgFps: +all.fps.toFixed(1), medianFrameMs: +all.p50.toFixed(1), p95FrameMs: +all.p95.toFixed(1), p99FrameMs: +all.p99.toFixed(1), maxFrameMs: +all.max.toFixed(1),
+      framesOver50ms: frames.filter((f) => f.dt > 50).length,
+      render: { cssSize: [c.clientWidth, c.clientHeight], bufferSize: [c.width, c.height], pixelRatio: r.getPixelRatio(), devicePixelRatio },
+      drawCalls: stat(frames, 'calls'), triangles: stat(frames, 'tris'),
+      perView,
+      scene: p.mode === 'controlled'
+        ? { characters: ids.length, projectiles: PROJ.count, checkpoints: checks.n, maxCameraError: +checks.camErr.toExponential(2), maxCharacterError: +checks.walkerErr.toExponential(2), maxProjectileError: +checks.projErr.toExponential(2), minCharactersDrawn: checks.minAvatars, minProjectilesDrawn: checks.minProjectiles }
+        : { bots: ids.length, throwsByRosa: (s?.localShot ?? live.throws0) - live.throws0, avgCharactersInView: live.samples ? +(live.avatarsInView / live.samples).toFixed(2) : 0, avgProjectilesInFlight: live.samples ? +(live.projectiles / live.samples).toFixed(2) : 0, rosaEliminated: live.deaths },
+      throttleMs: p.throttleMs,
       renderer: rendererName(r), userAgent: navigator.userAgent, startedAt: new Date(performance.timeOrigin).toISOString(),
-      note: `Offline practice, normal game renderer, one variant loaded. Draw calls and triangles are per frame including the shadow pass and the held item.${shortRun ? ' Shorter than 60 s: indicative only.' : ''}`,
+      note: `${p.mode === 'controlled' ? 'Scripted scene through the normal game renderer; one variant loaded.' : 'Live bots; what is on screen differs between runs, so differences between variants include that.'} Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.${p.secs < 60 ? ' Shorter than 60 s: indicative only.' : ''}${p.throttleMs > 0 ? ` Test run with a ${p.throttleMs} ms busy wait per frame: not a measurement.` : ''}`,
     };
     ui.done(res);
   }
 }
 
-function rendererName(r: any): string {
+function rendererName(r: THREE.WebGLRenderer): string {
   try {
-    const gl = r.getContext() as WebGLRenderingContext;
+    const gl = r.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
   } catch { return 'unknown'; }
@@ -177,9 +363,9 @@ function panel(p: BenchParams) {
   const el = document.createElement('div');
   el.id = 'bench-panel';
   el.setAttribute('role', 'status');
-  el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;max-width:min(440px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:rgba(20,12,28,.88);color:#fff;font:13px/1.45 system-ui,sans-serif;padding:10px 12px;border-radius:10px;pointer-events:auto';
+  el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;max-width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:rgba(20,12,28,.88);color:#fff;font:13px/1.45 system-ui,sans-serif;padding:10px 12px;border-radius:10px;pointer-events:auto';
   const head = document.createElement('div');
-  head.innerHTML = `<b>Benchmark</b> · ${p.section ? 'Experiment (upgraded café)' : 'Production drawing (section off)'} · ${p.quality}`;
+  head.innerHTML = `<b>${p.mode === 'controlled' ? 'Controlled comparison' : 'Live stress test'}</b> · ${p.section ? 'Experiment (upgraded café)' : 'Production drawing (section off)'} · ${p.quality}`;
   const status = document.createElement('div');
   el.append(head, status);
   document.body.append(el);
@@ -197,19 +383,20 @@ function panel(p: BenchParams) {
       status.innerHTML = '';
       const lines = res.valid
         ? [`<b>${res.avgFps} FPS</b> average · p95 ${res.p95FrameMs} ms · p99 ${res.p99FrameMs} ms`,
-          `${res.frames} frames in ${res.measuredS} s after ${res.warmupS} s warm-up`,
+          `${res.frames} frames in ${res.measuredS} s after ${res.workload.warmupS} s warm-up (${res.workload.measuredSPerView} s per view)`,
           `${res.render.bufferSize[0]} × ${res.render.bufferSize[1]} px (pixel ratio ${res.render.pixelRatio})`,
-          `${res.drawCalls.avg} draw calls · ${res.triangles.avg.toLocaleString()} triangles per frame`,
-          `${res.workload.bots} bots · ${res.workload.throwsByRosa} throws · up to ${res.workload.maxProjectilesInFlight} in flight`,
+          `${res.drawCalls.avg} draw calls (${res.drawCalls.min}-${res.drawCalls.max}) · ${res.triangles.avg.toLocaleString()} triangles per frame`,
+          res.mode === 'controlled' ? `Scene ${res.workload.id} #${res.workload.hash}: matched the script at ${res.scene.checkpoints} checkpoints` : `Live bots: ${res.scene.avgCharactersInView} characters in view on average (varies by run)`,
           `<span style="opacity:.75">${res.renderer}</span>`]
         : [`<b>Not valid:</b> ${res.invalidReason}. Run it again with the tab in front and the window left alone.`];
+      if (res.testRun) lines.push('<span style="opacity:.75">Test or short run: indicative only.</span>');
       for (const l of lines) { const d = document.createElement('div'); d.innerHTML = l; status.append(d); }
       status.append(
         btn('Copy results', () => { void navigator.clipboard?.writeText(json).then(() => toastIn(status, 'Copied.'), () => toastIn(status, 'Copy was blocked: use Save.')); }),
         btn('Save JSON', () => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-          a.download = `chancla-bench-${res.variant}-${res.quality}-${res.build.split(' ')[0]}.json`;
+          a.download = `chancla-bench-${res.mode}-${res.variant}-${res.quality}-${res.build.split(' ')[0]}.json`;
           document.body.append(a); a.click(); a.remove();
           setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         }),
@@ -220,6 +407,7 @@ function panel(p: BenchParams) {
         link(p.section ? 'Run production drawing' : 'Run experiment', (q) => { if (p.section) q.set('section', 'off'); else q.delete('section'); }),
         link(p.quality === 'high' ? 'Medium' : 'High', (q) => q.set('quality', p.quality === 'high' ? 'medium' : 'high')),
         link('Low', (q) => q.set('quality', 'low')),
+        link(p.mode === 'controlled' ? 'Live stress test' : 'Controlled comparison', (q) => q.set('bench', p.mode === 'controlled' ? 'live' : '')),
       );
       status.append(links);
     },

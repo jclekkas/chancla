@@ -5,8 +5,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
-import { COLORS, contactTexture, surface, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
+import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
+import { buildSection, inSection } from './section';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -75,7 +76,7 @@ class Inst {
 }
 
 const UNIT = new THREE.BoxGeometry(1, 1, 1);
-const LEAF = new THREE.IcosahedronGeometry(0.5, 1);
+const LEAF = new THREE.IcosahedronGeometry(0.5, 0);
 const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
@@ -88,7 +89,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   const batch = new GeoBatch();
   const stucco = stuccoTexture();
   const wood = woodTexture();
-  const mat = (c: number) => quality === 'low' ? toon(c, { map: stucco }) : surface(c, stucco);
+  const mat = (c: number) => toon(c, { map: stucco });
   const woodMat = toon(0xffffff, { map: wood });
 
   // ---------------------------------------------------------------- sky
@@ -128,7 +129,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------------- ground
   const gtex = groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), quality === 'low' ? toon(0xffffff, { map: gtex }) : surface(0xffffff, gtex, 0.055));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: gtex }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
@@ -144,25 +145,14 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   const signs: Array<{ text: string; x: number; y: number; z: number; ry: number; w: number; bg: string; fg: string }> = [];
 
-  // Grounded footprints, batched into a single draw call on every quality.
-  const contact = contactTexture();
-  if (contact) {
-    const shadeMat = new THREE.MeshBasicMaterial({ map: contact, transparent: true,
-      depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-    const footprints = (opts.boxes ?? map.boxes).filter((b) => b.minY === 0 && b.maxY > 0.4);
-    const shadows = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), shadeMat, footprints.length);
-    const stamp = new THREE.Object3D();
-    footprints.forEach((b, i) => {
-      stamp.position.set((b.minX + b.maxX) / 2, 0.006, (b.minZ + b.maxZ) / 2);
-      stamp.rotation.x = -Math.PI / 2;
-      stamp.scale.set((b.maxX - b.minX) * 1.4 + 0.8, (b.maxZ - b.minZ) * 1.4 + 0.8, 1);
-      stamp.updateMatrix(); shadows.setMatrixAt(i, stamp.matrix);
-    });
-    shadows.instanceMatrix.needsUpdate = true;
-    shadows.name = 'ground-contact-shading';
-    group.add(shadows);
+  // Graphics experiment: the café section gets the detailed kit (section.ts);
+  // its boxes skip the generic dressing below. Collision is unchanged.
+  const sectionBoxes: MapBox[] = [];
+  const sectionOn = map === EL_PATIO;
+  for (const bx of opts.boxes ?? map.boxes) {
+    if (sectionOn && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    addBox(bx);
   }
-  for (const bx of opts.boxes ?? map.boxes) addBox(bx);
 
   function addBox(b: MapBox): void {
     const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
@@ -532,6 +522,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
+  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes); group.add(sec.group); calls += sec.calls; }
   const add = (im: THREE.InstancedMesh | null) => { if (im) { group.add(im); calls++; } };
   add(glass.build(UNIT, toon(0x3a2a52, { emissive: 0x120a20 })));
   add(frames.build(UNIT, toon(0xffffff)));

@@ -63,7 +63,11 @@ const BASE = import.meta.env.BASE_URL || '/';
 const PRODUCTION_SERVER = 'wss://chanclawarfare-game-server.onrender.com/ws';
 const PRODUCTION_HOSTS = /^(www\.)?chanclawarfare\.fun$|^chancla(warfare)?\.vercel\.app$|^chancla-git-multiplayer-jclekkas\.vercel\.app$/;
 
+declare const __OFFLINE_ONLY__: boolean;
+const OFFLINE_ONLY = typeof __OFFLINE_ONLY__ !== 'undefined' && __OFFLINE_ONLY__;
+
 function serverUrl(): string | null {
+  if (OFFLINE_ONLY) return null;
   const env = import.meta.env.VITE_GAME_SERVER_URL as string | undefined;
   if (env) return env;
   const h = location.hostname;
@@ -532,7 +536,7 @@ function showNoWebgl(): void {
 async function checkServer(): Promise<void> {
   const el = $('server-status');
   const url = serverUrl();
-  if (!url) { serverOk = false; el.textContent = t('status.serverMissing'); el.className = 'server-status warn'; return; }
+  if (!url) { serverOk = false; el.textContent = t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing'); el.className = 'server-status warn'; return; }
   el.textContent = t('status.serverChecking');
   el.className = 'server-status';
   try {
@@ -632,7 +636,7 @@ function playerName(): string {
 function startOnline(join: string | null): void {
   const url = serverUrl();
   const errEl = $('online-err');
-  if (!url) { errEl.textContent = t('status.serverMissing'); return; }
+  if (!url) { errEl.textContent = t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing'); return; }
   errEl.textContent = t('online.connecting');
   endSession(null);
   practice = false;
@@ -969,7 +973,7 @@ function changeLang(lang: 'en' | 'es'): void {
 function openOnline(): void {
   ($('in-name') as HTMLInputElement).value = store.value.name;
   ($('in-code') as HTMLInputElement).value = pendingInviteCode;
-  $('online-err').textContent = serverUrl() ? '' : t('status.serverMissing');
+  $('online-err').textContent = serverUrl() ? '' : t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing');
   show('online');
   // From an invite: the code is filled in; ask for a name first if there isn't one.
   if (pendingInviteCode) $(store.value.name ? 'btn-join' : 'in-name').focus();

@@ -1,73 +1,180 @@
+// Courtyard Lab: the production arena renderer (world.baseline.ts, a copy of
+// world.ts at production d27f74d) next to the experimental one (world.ts with
+// the café section), rendered the way the game renders them.
+//
+// Matching the game (src/fps/engine.ts): the same WebGLRenderer options per
+// quality (antialias off on Low), pixel-ratio caps (Low 1, Medium 1.5,
+// High 2), PCF shadows (off on Low), clear colour, fog, and the default
+// 85° field of view. Differences, on purpose: preserveDrawingBuffer is on so
+// the canvas can be saved, both variants stay in memory, the world's small
+// animations are frozen at t = 0 so both shots match, and there are no
+// characters, viewmodel, HUD or match running.
+//
+// Offline: courtyard.html has `connect-src 'none'`, and nothing here imports
+// networking code.
 import * as THREE from 'three';
-import { buildWorld as original } from '../fps/render/world.baseline';
-import { buildWorld as upgraded } from '../fps/render/world';
-import { courtyardDetail } from './detail';
+import { buildWorld as productionWorld } from '../fps/render/world.baseline';
+import { buildWorld as experimentWorld } from '../fps/render/world';
+import { MOVE } from '../../shared/config';
 import type { Quality } from '../fps/settings';
 
 declare const __BUILD_ID__: string;
-const stage=document.querySelector<HTMLElement>('#stage')!;
-const status=document.querySelector<HTMLElement>('#status')!;
-const label=document.querySelector<HTMLElement>('#label')!;
-const presets={
-  plaza:{pos:[-15,1.6,6],look:[10,1.4,-2]},
-  facade:{pos:[-9,1.6,0],look:[-6,3,-9]},
-  overview:{pos:[0,34,30],look:[0,0,-1]},
+
+const EYE = MOVE.eyeStand;
+/** Camera presets. The café faces the plaza at z = -8 (x -6..3); the Panadería is its point mirror. */
+export const VIEWS = {
+  player: { label: 'Player height · plaza', pos: [2.8, EYE, -3.4], look: [-2.5, 2.2, -8.5] },
+  facade: { label: 'Facade close-up', pos: [-4.2, EYE, -3.6], look: [0.2, 2.6, -8] },
+  wide: { label: 'Wider courtyard', pos: [9.5, EYE + 0.4, 3.5], look: [-4, 2.2, -8] },
+  panaderia: { label: 'Mirror side (Panadería)', pos: [-2.8, EYE, 3.4], look: [2.5, 2.2, 8.5] },
+  overview: { label: 'Overview', pos: [0, 34, 30], look: [0, 0, -1] },
 } as const;
-function save(blob:Blob,name:string){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
-try {
-  const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
-  renderer.shadowMap.type=THREE.PCFShadowMap;
-  stage.append(renderer.domElement);
-  const camera=new THREE.PerspectiveCamera(70,1,.05,260);
-  const pairs=new Map<Quality,{before:THREE.Scene;after:THREE.Scene}>();
-  let quality:Quality='high', after=true, frames:number[]=[], start=0, last=0;
-  let report:unknown=null;
-  const results:unknown[]=[];
-  function pair(){
-    let p=pairs.get(quality);
-    if(!p){
-      const before=new THREE.Scene(), afterScene=new THREE.Scene();
-      before.fog=new THREE.Fog(0xf3b07a,45,140);afterScene.fog=before.fog.clone();
-      before.add(original(quality).group);afterScene.add(upgraded(quality).group,courtyardDetail());
-      p={before,after:afterScene};pairs.set(quality,p);
-    }
-    return p;
+export type ViewKey = keyof typeof VIEWS;
+
+const PIXEL_CAP: Record<Quality, number> = { low: 1, medium: 1.5, high: 2 };
+const FOV = 85;
+
+const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
+const stage = $('#stage'), status = $('#status'), label = $('#label');
+
+function save(blob: Blob, name: string): void {
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+
+interface Result {
+  build: string; baseline: string; variant: string; quality: Quality; view: ViewKey;
+  canvas: [number, number]; pixelRatio: number; devicePixelRatio: number;
+  meanFps: number; p95FrameMs: number; frames: number; drawCalls: number; triangles: number; geometries: number; textures: number;
+  renderer: string; userAgent: string; note: string;
+}
+
+let renderer: THREE.WebGLRenderer | null = null;
+let rendererQuality: Quality | null = null;
+let glRenderer = 'unknown';
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 260);
+const scenes = new Map<string, THREE.Scene>();
+const state = { quality: 'high' as Quality, after: true, view: 'player' as ViewKey };
+const results: Result[] = [];
+let measure: { start: number; last: number; frames: number[] } | null = null;
+
+function makeRenderer(q: Quality): THREE.WebGLRenderer {
+  renderer?.dispose();
+  renderer?.domElement.remove();
+  const r = new THREE.WebGLRenderer({ antialias: q !== 'low', powerPreference: 'high-performance', alpha: false, stencil: false, preserveDrawingBuffer: true });
+  r.shadowMap.enabled = q !== 'low';
+  r.shadowMap.type = THREE.PCFShadowMap;
+  r.setClearColor(0xf2a36b);
+  stage.prepend(r.domElement);
+  const gl = r.getContext();
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  glRenderer = String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  rendererQuality = q;
+  return r;
+}
+
+function scene(): THREE.Scene {
+  const key = `${state.quality}:${state.after}`;
+  let s = scenes.get(key);
+  if (!s) {
+    s = new THREE.Scene();
+    s.fog = new THREE.Fog(0xf3b07a, 45, 140);
+    const world = (state.after ? experimentWorld : productionWorld)(state.quality);
+    world.update(0); // freeze the little animations so both variants match
+    s.add(world.group);
+    scenes.set(key, s);
   }
-  function resize(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='medium'?1.25:1));renderer.setSize(stage.clientWidth,stage.clientHeight);camera.aspect=stage.clientWidth/stage.clientHeight;camera.updateProjectionMatrix();cancelMeasure();}
-  function cancelMeasure(){start=0;frames=[];document.querySelector<HTMLButtonElement>('#measure')!.disabled=false;}
-  function update(){
-    cancelMeasure();
-    const key=document.querySelector<HTMLSelectElement>('#view')!.value as keyof typeof presets;
-    const v=presets[key];camera.position.set(v.pos[0],v.pos[1],v.pos[2]);camera.lookAt(v.look[0],v.look[1],v.look[2]);
-    renderer.shadowMap.enabled=quality!=='low';
-    const p=pair(); renderer.render(after?p.after:p.before,camera);
-    label.textContent=after?'EXPERIMENT · environment pass':'BEFORE · production environment at d27f74d';
-    for(const id of ['before','after'])document.getElementById(id)!.setAttribute('aria-pressed',String((id==='after')===after));
-    status.textContent=`${quality} · ${renderer.domElement.width} × ${renderer.domElement.height} · ${renderer.info.render.calls} draw calls · ${renderer.info.render.triangles.toLocaleString()} triangles`;
-  }
-  document.getElementById('before')!.onclick=()=>{after=false;update();};
-  document.getElementById('after')!.onclick=()=>{after=true;update();};
-  document.getElementById('view')!.onchange=update;
-  document.getElementById('quality')!.onchange=()=>{quality=document.querySelector<HTMLSelectElement>('#quality')!.value as Quality;resize();update();};
-  document.getElementById('shot')!.onclick=()=>renderer.domElement.toBlob(b=>{if(b)save(b,`chancla-${after?'experiment':'before'}-${document.querySelector<HTMLSelectElement>('#view')!.value}-${quality}.png`);});
-  document.getElementById('measure')!.onclick=()=>{frames=[];start=performance.now();last=start;document.querySelector<HTMLButtonElement>('#measure')!.disabled=true;status.textContent='Measuring 10 seconds; keep this tab visible…';};
-  document.getElementById('report')!.onclick=()=>save(new Blob([JSON.stringify(results,null,2)],{type:'application/json'}),'chancla-courtyard-results.json');
-  document.addEventListener('visibilitychange',()=>{if(document.hidden&&start){cancelMeasure();status.textContent='Measurement cancelled: tab hidden. Run again with the tab visible.';}});
-  new ResizeObserver(()=>{resize();update();}).observe(stage);
-  resize();update();
-  function tick(now:number){
-    if(!document.hidden){const p=pair();renderer.render(after?p.after:p.before,camera);}
-    if(start){
-      // Discard first second for warmup, including shader compilation.
-      if(now-start>1000)frames.push(now-last);
-      last=now;
-      if(now-start>=11000&&frames.length){
-        const sorted=[...frames].sort((a,b)=>a-b),avg=frames.reduce((a,b)=>a+b,0)/frames.length;
-        report={build:__BUILD_ID__,baseline:'d27f74d',variant:after?'experiment':'before',quality,view:document.querySelector<HTMLSelectElement>('#view')!.value,width:renderer.domElement.width,height:renderer.domElement.height,meanFps:1000/avg,p95FrameMs:sorted[Math.floor(sorted.length*.95)],drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,userAgent:navigator.userAgent,note:'Static environment only; preserveDrawingBuffer enabled for capture; not a gameplay benchmark.'};
-        results.push(report);cancelMeasure();document.querySelector<HTMLButtonElement>('#report')!.disabled=false;status.textContent=`Recorded ${(1000/avg).toFixed(1)} FPS average · p95 ${sorted[Math.floor(sorted.length*.95)]!.toFixed(1)} ms. Switch view to compare; Save results exports all measurements.`;
-      }
+  return s;
+}
+
+function resize(): void {
+  if (!renderer) return;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, PIXEL_CAP[state.quality]));
+  renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+  camera.aspect = stage.clientWidth / Math.max(1, stage.clientHeight);
+  camera.updateProjectionMatrix();
+}
+
+function cancel(why: string): void {
+  if (!measure) return;
+  measure = null;
+  $<HTMLButtonElement>('#measure').disabled = false;
+  status.textContent = `Measurement cancelled: ${why}. Run it again.`;
+}
+
+/** Applies the current state and renders one frame. Returns what was drawn. */
+function apply(): { width: number; height: number; drawCalls: number; triangles: number } {
+  if (rendererQuality !== state.quality) { renderer = makeRenderer(state.quality); }
+  resize();
+  const v = VIEWS[state.view];
+  camera.position.set(v.pos[0], v.pos[1], v.pos[2]);
+  camera.lookAt(v.look[0], v.look[1], v.look[2]);
+  renderer!.render(scene(), camera);
+  label.textContent = state.after ? 'EXPERIMENT · café section' : 'BEFORE · production renderer (d27f74d)';
+  for (const id of ['before', 'after']) $(`#${id}`).setAttribute('aria-pressed', String((id === 'after') === state.after));
+  const info = renderer!.info.render;
+  const c = renderer!.domElement;
+  if (!measure) status.textContent = `${state.quality} · ${c.width} × ${c.height} (pixel ratio ${renderer!.getPixelRatio()}) · ${info.calls} draw calls · ${info.triangles.toLocaleString()} triangles`;
+  return { width: c.width, height: c.height, drawCalls: info.calls, triangles: info.triangles };
+}
+
+function change(fn: () => void, why: string): void { cancel(why); fn(); apply(); }
+
+function tick(now: number): void {
+  if (!document.hidden && renderer) renderer.render(scene(), camera);
+  if (measure) {
+    // The first second is warm-up (shader compilation, texture upload) and is not counted.
+    if (now - measure.start > 1000) measure.frames.push(now - measure.last);
+    measure.last = now;
+    if (now - measure.start >= 11000 && measure.frames.length) {
+      const f = measure.frames, sorted = [...f].sort((a, b) => a - b), avg = f.reduce((a, b) => a + b, 0) / f.length;
+      const info = renderer!.info;
+      const r: Result = {
+        build: __BUILD_ID__, baseline: 'd27f74d', variant: state.after ? 'experiment' : 'before', quality: state.quality, view: state.view,
+        canvas: [renderer!.domElement.width, renderer!.domElement.height], pixelRatio: renderer!.getPixelRatio(), devicePixelRatio: window.devicePixelRatio,
+        meanFps: +(1000 / avg).toFixed(2), p95FrameMs: +sorted[Math.floor(sorted.length * 0.95)]!.toFixed(2), frames: f.length,
+        drawCalls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures,
+        renderer: glRenderer, userAgent: navigator.userAgent,
+        note: 'Static view; both variants kept in memory; preserveDrawingBuffer on. Not a gameplay benchmark.',
+      };
+      results.push(r);
+      measure = null;
+      $<HTMLButtonElement>('#measure').disabled = false;
+      $<HTMLButtonElement>('#report').disabled = false;
+      status.textContent = `Recorded ${r.meanFps.toFixed(1)} FPS average · p95 ${r.p95FrameMs.toFixed(1)} ms · ${r.drawCalls} draw calls. Save results exports every measurement.`;
     }
-    requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-}catch(e){document.querySelector<HTMLElement>('#error')!.hidden=false;document.querySelector<HTMLElement>('#error')!.textContent=`3D rendering could not start: ${e instanceof Error?e.message:String(e)}. No performance or visual result has been measured.`;status.textContent='WebGL unavailable';}
+}
+
+try {
+  const viewSel = $<HTMLSelectElement>('#view');
+  viewSel.replaceChildren(...Object.entries(VIEWS).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
+  $('#before').onclick = () => change(() => (state.after = false), 'variant changed');
+  $('#after').onclick = () => change(() => (state.after = true), 'variant changed');
+  viewSel.onchange = () => change(() => (state.view = viewSel.value as ViewKey), 'view changed');
+  $<HTMLSelectElement>('#quality').onchange = () => change(() => (state.quality = $<HTMLSelectElement>('#quality').value as Quality), 'quality changed');
+  $('#shot').onclick = () => renderer!.domElement.toBlob((b) => { if (b) save(b, `chancla-${state.after ? 'experiment' : 'before'}-${state.view}-${state.quality}.png`); });
+  $('#measure').onclick = () => {
+    measure = { start: performance.now(), last: performance.now(), frames: [] };
+    $<HTMLButtonElement>('#measure').disabled = true;
+    status.textContent = 'Measuring for 10 seconds after a 1 second warm-up. Keep this tab visible…';
+  };
+  $('#report').onclick = () => save(new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' }), 'chancla-courtyard-results.json');
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancel('the tab was hidden'); });
+  new ResizeObserver(() => { cancel('the window was resized'); if (renderer) apply(); }).observe(stage);
+  apply();
+  requestAnimationFrame(tick);
+  // Automation hook for the screenshot and measurement scripts.
+  (window as unknown as { __lab: unknown }).__lab = {
+    set(s: Partial<typeof state>) { cancel('changed by script'); Object.assign(state, s); return apply(); },
+    results: () => results,
+    renderer: () => glRenderer,
+  };
+} catch (e) {
+  $('#error').hidden = false;
+  $('#error').textContent = `3D rendering could not start: ${e instanceof Error ? e.message : String(e)}. No performance or visual result has been measured.`;
+  status.textContent = 'WebGL unavailable';
+}

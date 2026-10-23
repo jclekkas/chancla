@@ -14,14 +14,9 @@ export const COLORS = {
 let ramp: THREE.DataTexture | null = null;
 export function toonRamp(): THREE.DataTexture {
   if (ramp) return ramp;
-  // Smooth painted light transitions, preserving readable character silhouettes.
-  const data = new Uint8Array(32 * 4);
-  for (let i = 0; i < 32; i++) {
-    const t = i / 31;
-    const v = Math.round(112 + 143 * (t * t * (3 - 2 * t)));
-    data.set([v, v, v, 255], i * 4);
-  }
-  ramp = new THREE.DataTexture(data, 32, 1, THREE.RGBAFormat);
+  // Shadow, mid, lit: a soft three-step ramp so lighting reads as painted.
+  const data = new Uint8Array([120, 120, 120, 255, 190, 190, 190, 255, 255, 255, 255, 255]);
+  ramp = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
   ramp.minFilter = THREE.NearestFilter;
   ramp.magFilter = THREE.NearestFilter;
   ramp.generateMipmaps = false;
@@ -266,30 +261,4 @@ export class GeoBatch {
     this.buckets.clear();
     return calls;
   }
-}
-
-/** Matte surfaces with restrained relief; one shared material per surface/quality. */
-export function surface(color: number, map: THREE.Texture | null, relief = 0.035): THREE.MeshPhongMaterial {
-  const key = `surface:${color}:${map?.uuid ?? ''}:${relief}`;
-  let m = cache.get(key) as THREE.MeshPhongMaterial | undefined;
-  if (!m) {
-    m = new THREE.MeshPhongMaterial({ color, map, bumpMap: map, bumpScale: relief,
-      specular: 0x151515, shininess: 8 });
-    cache.set(key, m);
-  }
-  return m;
-}
-
-/** Soft baked contact shading: no extra lights or screen-space render pass. */
-export function contactTexture(): THREE.Texture | null {
-  if (texCache.has('contact')) return texCache.get('contact')!;
-  const t = canvas(64, 64, (c) => {
-    const g = c.createRadialGradient(32, 32, 9, 32, 32, 32);
-    g.addColorStop(0, 'rgba(45,26,38,0.26)');
-    g.addColorStop(0.55, 'rgba(45,26,38,0.14)');
-    g.addColorStop(1, 'rgba(45,26,38,0)');
-    c.fillStyle = g; c.fillRect(0, 0, 64, 64);
-  }, false);
-  texCache.set('contact', t);
-  return t;
 }

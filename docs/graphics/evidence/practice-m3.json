@@ -1,0 +1,120 @@
+{
+ "label": "m3",
+ "dist": "dist",
+ "perf": {
+  "player": {
+   "fps": [
+    10,
+    13,
+    13,
+    13,
+    13,
+    13
+   ],
+   "drawCalls": 121,
+   "triangles": 92044,
+   "geometries": 111,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "facade": {
+   "fps": [
+    11,
+    11,
+    11,
+    11,
+    11,
+    11
+   ],
+   "drawCalls": 116,
+   "triangles": 91620,
+   "geometries": 111,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "wide": {
+   "fps": [
+    13,
+    13,
+    10,
+    10,
+    10,
+    10
+   ],
+   "drawCalls": 134,
+   "triangles": 93298,
+   "geometries": 112,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "panaderia": {
+   "fps": [
+    12,
+    12,
+    12,
+    12,
+    12,
+    12
+   ],
+   "drawCalls": 169,
+   "triangles": 100502,
+   "geometries": 112,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "terrace": {
+   "fps": [
+    12,
+    12,
+    12,
+    10,
+    10,
+    10
+   ],
+   "drawCalls": 117,
+   "triangles": 91754,
+   "geometries": 112,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "southrow": {
+   "fps": [
+    10,
+    10,
+    10,
+    10,
+    10,
+    13
+   ],
+   "drawCalls": 124,
+   "triangles": 92072,
+   "geometries": 112,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "solspawn": {
+   "fps": [
+    10,
+    10,
+    10,
+    10,
+    11,
+    11
+   ],
+   "drawCalls": 113,
+   "triangles": 91582,
+   "geometries": 112,
+   "textures": 21,
+   "pixelRatio": 1,
+   "quality": "high"
+  }
+ },
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36"
+}

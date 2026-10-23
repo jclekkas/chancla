@@ -1,0 +1,115 @@
+{
+ "quality": "high",
+ "console": [],
+ "stats": {
+  "player-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 88,
+   "triangles": 38376
+  },
+  "player-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 61,
+   "triangles": 79156
+  },
+  "facade-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 90,
+   "triangles": 38432
+  },
+  "facade-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 63,
+   "triangles": 79212
+  },
+  "wide-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 101,
+   "triangles": 39630
+  },
+  "wide-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 74,
+   "triangles": 80410
+  },
+  "panaderia-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 82,
+   "triangles": 38204
+  },
+  "panaderia-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 55,
+   "triangles": 78984
+  },
+  "terrace-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 86,
+   "triangles": 38354
+  },
+  "terrace-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 57,
+   "triangles": 78866
+  },
+  "southrow-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 91,
+   "triangles": 38404
+  },
+  "southrow-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 64,
+   "triangles": 79184
+  },
+  "northrow-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 85,
+   "triangles": 38220
+  },
+  "northrow-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 58,
+   "triangles": 79000
+  },
+  "solspawn-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 82,
+   "triangles": 38182
+  },
+  "solspawn-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 53,
+   "triangles": 78694
+  },
+  "overview-before": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 107,
+   "triangles": 39736
+  },
+  "overview-after": {
+   "width": 1280,
+   "height": 720,
+   "drawCalls": 80,
+   "triangles": 80516
+  }
+ },
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+}

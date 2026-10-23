@@ -1,0 +1,1396 @@
+[
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "experiment",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 60,
+  "frames": 119,
+  "avgFps": 2,
+  "medianFrameMs": 499.9,
+  "p95FrameMs": 603.3,
+  "p99FrameMs": 680.6,
+  "maxFrameMs": 1032.4,
+  "framesOver50ms": 118,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 484,
+   "min": 401,
+   "max": 515
+  },
+  "triangles": {
+   "avg": 141840,
+   "min": 130434,
+   "max": 145720
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 28,
+    "measuredS": 14.79,
+    "avgFps": 1.9,
+    "p95FrameMs": 603.3,
+    "drawCalls": {
+     "avg": 492,
+     "min": 449,
+     "max": 507
+    },
+    "triangles": {
+     "avg": 143106,
+     "min": 136572,
+     "max": 145194
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 30,
+    "measuredS": 14.93,
+    "avgFps": 2,
+    "p95FrameMs": 623.2,
+    "drawCalls": {
+     "avg": 451,
+     "min": 401,
+     "max": 497
+    },
+    "triangles": {
+     "avg": 137127,
+     "min": 130434,
+     "max": 143302
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 31,
+    "measuredS": 14.92,
+    "avgFps": 2.1,
+    "p95FrameMs": 552.4,
+    "drawCalls": {
+     "avg": 514,
+     "min": 513,
+     "max": 515
+    },
+    "triangles": {
+     "avg": 145695,
+     "min": 145684,
+     "max": 145720
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 30,
+    "measuredS": 15.36,
+    "avgFps": 2,
+    "p95FrameMs": 611.1,
+    "drawCalls": {
+     "avg": 478,
+     "min": 416,
+     "max": 499
+    },
+    "triangles": {
+     "avg": 141458,
+     "min": 132704,
+     "max": 144300
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 70,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:48:19.267Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "production-equivalent",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 59.97,
+  "frames": 155,
+  "avgFps": 2.6,
+  "medianFrameMs": 386.9,
+  "p95FrameMs": 473.6,
+  "p99FrameMs": 518.7,
+  "maxFrameMs": 536.2,
+  "framesOver50ms": 155,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 510,
+   "min": 428,
+   "max": 542
+  },
+  "triangles": {
+   "avg": 101031,
+   "min": 89496,
+   "max": 104940
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 36,
+    "measuredS": 14.9,
+    "avgFps": 2.4,
+    "p95FrameMs": 489.9,
+    "drawCalls": {
+     "avg": 519,
+     "min": 473,
+     "max": 534
+    },
+    "triangles": {
+     "avg": 102210,
+     "min": 95828,
+     "max": 104414
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 38,
+    "measuredS": 15.04,
+    "avgFps": 2.5,
+    "p95FrameMs": 458.1,
+    "drawCalls": {
+     "avg": 478,
+     "min": 428,
+     "max": 524
+    },
+    "triangles": {
+     "avg": 96361,
+     "min": 89496,
+     "max": 102522
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 41,
+    "measuredS": 15.17,
+    "avgFps": 2.7,
+    "p95FrameMs": 441.7,
+    "drawCalls": {
+     "avg": 541,
+     "min": 540,
+     "max": 542
+    },
+    "triangles": {
+     "avg": 104915,
+     "min": 104904,
+     "max": 104940
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 40,
+    "measuredS": 14.86,
+    "avgFps": 2.7,
+    "p95FrameMs": 439.4,
+    "drawCalls": {
+     "avg": 504,
+     "min": 444,
+     "max": 526
+    },
+    "triangles": {
+     "avg": 100615,
+     "min": 91936,
+     "max": 103520
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:49:36.306Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "production-equivalent",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 59.59,
+  "frames": 155,
+  "avgFps": 2.6,
+  "medianFrameMs": 381.5,
+  "p95FrameMs": 464.2,
+  "p99FrameMs": 745.2,
+  "maxFrameMs": 804.7,
+  "framesOver50ms": 155,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 511,
+   "min": 430,
+   "max": 542
+  },
+  "triangles": {
+   "avg": 101081,
+   "min": 89654,
+   "max": 104940
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 38,
+    "measuredS": 14.43,
+    "avgFps": 2.6,
+    "p95FrameMs": 464.2,
+    "drawCalls": {
+     "avg": 519,
+     "min": 476,
+     "max": 534
+    },
+    "triangles": {
+     "avg": 102241,
+     "min": 95936,
+     "max": 104414
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 37,
+    "measuredS": 14.99,
+    "avgFps": 2.5,
+    "p95FrameMs": 469.8,
+    "drawCalls": {
+     "avg": 479,
+     "min": 430,
+     "max": 524
+    },
+    "triangles": {
+     "avg": 96464,
+     "min": 89654,
+     "max": 102522
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 42,
+    "measuredS": 15.3,
+    "avgFps": 2.7,
+    "p95FrameMs": 437.1,
+    "drawCalls": {
+     "avg": 541,
+     "min": 540,
+     "max": 542
+    },
+    "triangles": {
+     "avg": 104915,
+     "min": 104904,
+     "max": 104940
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 38,
+    "measuredS": 14.87,
+    "avgFps": 2.6,
+    "p95FrameMs": 473.8,
+    "drawCalls": {
+     "avg": 504,
+     "min": 447,
+     "max": 526
+    },
+    "triangles": {
+     "avg": 100664,
+     "min": 92254,
+     "max": 103520
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:50:52.238Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "experiment",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 59.82,
+  "frames": 119,
+  "avgFps": 2,
+  "medianFrameMs": 498.9,
+  "p95FrameMs": 607.7,
+  "p99FrameMs": 624.5,
+  "maxFrameMs": 626.1,
+  "framesOver50ms": 119,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 484,
+   "min": 407,
+   "max": 515
+  },
+  "triangles": {
+   "avg": 141846,
+   "min": 130672,
+   "max": 145734
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 29,
+    "measuredS": 14.89,
+    "avgFps": 1.9,
+    "p95FrameMs": 616.8,
+    "drawCalls": {
+     "avg": 493,
+     "min": 454,
+     "max": 507
+    },
+    "triangles": {
+     "avg": 143143,
+     "min": 137952,
+     "max": 145194
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 30,
+    "measuredS": 15.33,
+    "avgFps": 2,
+    "p95FrameMs": 607.7,
+    "drawCalls": {
+     "avg": 451,
+     "min": 407,
+     "max": 497
+    },
+    "triangles": {
+     "avg": 137213,
+     "min": 130672,
+     "max": 143302
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 31,
+    "measuredS": 14.78,
+    "avgFps": 2.1,
+    "p95FrameMs": 541.2,
+    "drawCalls": {
+     "avg": 514,
+     "min": 513,
+     "max": 515
+    },
+    "triangles": {
+     "avg": 145697,
+     "min": 145684,
+     "max": 145734
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 29,
+    "measuredS": 14.81,
+    "avgFps": 2,
+    "p95FrameMs": 624.5,
+    "drawCalls": {
+     "avg": 478,
+     "min": 419,
+     "max": 499
+    },
+    "triangles": {
+     "avg": 141496,
+     "min": 133512,
+     "max": 144300
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:52:10.176Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "experiment",
+  "quality": "low",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 60.2,
+  "frames": 336,
+  "avgFps": 5.6,
+  "medianFrameMs": 173.8,
+  "p95FrameMs": 233.9,
+  "p99FrameMs": 513.1,
+  "maxFrameMs": 563.1,
+  "framesOver50ms": 327,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 269,
+   "min": 188,
+   "max": 300
+  },
+  "triangles": {
+   "avg": 83140,
+   "min": 71482,
+   "max": 86976
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 79,
+    "measuredS": 15.16,
+    "avgFps": 5.2,
+    "p95FrameMs": 233.4,
+    "drawCalls": {
+     "avg": 277,
+     "min": 236,
+     "max": 292
+    },
+    "triangles": {
+     "avg": 84338,
+     "min": 78074,
+     "max": 86436
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 75,
+    "measuredS": 14.86,
+    "avgFps": 5,
+    "p95FrameMs": 382,
+    "drawCalls": {
+     "avg": 237,
+     "min": 188,
+     "max": 281
+    },
+    "triangles": {
+     "avg": 78519,
+     "min": 71482,
+     "max": 84400
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 95,
+    "measuredS": 15,
+    "avgFps": 6.3,
+    "p95FrameMs": 190.6,
+    "drawCalls": {
+     "avg": 299,
+     "min": 298,
+     "max": 300
+    },
+    "triangles": {
+     "avg": 86938,
+     "min": 86926,
+     "max": 86976
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 87,
+    "measuredS": 15.17,
+    "avgFps": 5.7,
+    "p95FrameMs": 211.7,
+    "drawCalls": {
+     "avg": 262,
+     "min": 204,
+     "max": 284
+    },
+    "triangles": {
+     "avg": 82713,
+     "min": 74408,
+     "max": 85542
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:53:28.598Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "production-equivalent",
+  "quality": "low",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 59.91,
+  "frames": 312,
+  "avgFps": 5.2,
+  "medianFrameMs": 188.4,
+  "p95FrameMs": 235.3,
+  "p99FrameMs": 275.9,
+  "maxFrameMs": 372.5,
+  "framesOver50ms": 309,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 283,
+   "min": 201,
+   "max": 314
+  },
+  "triangles": {
+   "avg": 69047,
+   "min": 57246,
+   "max": 72898
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 77,
+    "measuredS": 15.07,
+    "avgFps": 5.1,
+    "p95FrameMs": 241.5,
+    "drawCalls": {
+     "avg": 292,
+     "min": 247,
+     "max": 306
+    },
+    "triangles": {
+     "avg": 70287,
+     "min": 63736,
+     "max": 72358
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 76,
+    "measuredS": 15.02,
+    "avgFps": 5.1,
+    "p95FrameMs": 247.6,
+    "drawCalls": {
+     "avg": 251,
+     "min": 201,
+     "max": 296
+    },
+    "triangles": {
+     "avg": 64451,
+     "min": 57246,
+     "max": 70466
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 82,
+    "measuredS": 14.9,
+    "avgFps": 5.5,
+    "p95FrameMs": 222,
+    "drawCalls": {
+     "avg": 313,
+     "min": 312,
+     "max": 314
+    },
+    "triangles": {
+     "avg": 72860,
+     "min": 72848,
+     "max": 72898
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 77,
+    "measuredS": 14.92,
+    "avgFps": 5.2,
+    "p95FrameMs": 250.5,
+    "drawCalls": {
+     "avg": 276,
+     "min": 217,
+     "max": 298
+    },
+    "triangles": {
+     "avg": 68613,
+     "min": 60090,
+     "max": 71464
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:54:45.532Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "experiment",
+  "quality": "low",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 59.94,
+  "frames": 595,
+  "avgFps": 9.9,
+  "medianFrameMs": 98.8,
+  "p95FrameMs": 129.9,
+  "p99FrameMs": 148.8,
+  "maxFrameMs": 179,
+  "framesOver50ms": 592,
+  "render": {
+   "cssSize": [
+    844,
+    390
+   ],
+   "bufferSize": [
+    844,
+    390
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 3
+  },
+  "drawCalls": {
+   "avg": 274,
+   "min": 213,
+   "max": 302
+  },
+  "triangles": {
+   "avg": 83761,
+   "min": 75154,
+   "max": 86978
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 143,
+    "measuredS": 15,
+    "avgFps": 9.5,
+    "p95FrameMs": 129.5,
+    "drawCalls": {
+     "avg": 282,
+     "min": 257,
+     "max": 295
+    },
+    "triangles": {
+     "avg": 84916,
+     "min": 81854,
+     "max": 86724
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 145,
+    "measuredS": 15.01,
+    "avgFps": 9.7,
+    "p95FrameMs": 133.4,
+    "drawCalls": {
+     "avg": 246,
+     "min": 213,
+     "max": 282
+    },
+    "triangles": {
+     "avg": 79728,
+     "min": 75154,
+     "max": 84544
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 162,
+    "measuredS": 15,
+    "avgFps": 10.8,
+    "p95FrameMs": 111,
+    "drawCalls": {
+     "avg": 300,
+     "min": 299,
+     "max": 302
+    },
+    "triangles": {
+     "avg": 86950,
+     "min": 86930,
+     "max": 86978
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 145,
+    "measuredS": 14.93,
+    "avgFps": 9.7,
+    "p95FrameMs": 133.2,
+    "drawCalls": {
+     "avg": 268,
+     "min": 213,
+     "max": 287
+    },
+    "triangles": {
+     "avg": 83453,
+     "min": 75302,
+     "max": 86470
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  "startedAt": "2026-10-23T15:56:02.861Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "phone (emulated)"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "controlled",
+  "label": "Controlled comparison: scripted scene, identical in both variants",
+  "build": "e6bf732 (local)",
+  "variant": "production-equivalent",
+  "quality": "low",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "cafe-scripted-v2",
+   "hash": "e4bfadc0",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 60.02,
+  "frames": 514,
+  "avgFps": 8.6,
+  "medianFrameMs": 114.5,
+  "p95FrameMs": 145.9,
+  "p99FrameMs": 165.2,
+  "maxFrameMs": 245.1,
+  "framesOver50ms": 512,
+  "render": {
+   "cssSize": [
+    844,
+    390
+   ],
+   "bufferSize": [
+    844,
+    390
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 3
+  },
+  "drawCalls": {
+   "avg": 288,
+   "min": 229,
+   "max": 316
+  },
+  "triangles": {
+   "avg": 69705,
+   "min": 61148,
+   "max": 72900
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 130,
+    "measuredS": 15.03,
+    "avgFps": 8.7,
+    "p95FrameMs": 140.3,
+    "drawCalls": {
+     "avg": 296,
+     "min": 271,
+     "max": 309
+    },
+    "triangles": {
+     "avg": 70863,
+     "min": 67776,
+     "max": 72646
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 114,
+    "measuredS": 14.92,
+    "avgFps": 7.6,
+    "p95FrameMs": 157.9,
+    "drawCalls": {
+     "avg": 260,
+     "min": 229,
+     "max": 296
+    },
+    "triangles": {
+     "avg": 65659,
+     "min": 61148,
+     "max": 70466
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 135,
+    "measuredS": 15.05,
+    "avgFps": 9,
+    "p95FrameMs": 130.6,
+    "drawCalls": {
+     "avg": 314,
+     "min": 313,
+     "max": 316
+    },
+    "triangles": {
+     "avg": 72872,
+     "min": 72852,
+     "max": 72900
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 135,
+    "measuredS": 15.02,
+    "avgFps": 9,
+    "p95FrameMs": 129.8,
+    "drawCalls": {
+     "avg": 282,
+     "min": 229,
+     "max": 301
+    },
+    "triangles": {
+     "avg": 69393,
+     "min": 61604,
+     "max": 72392
+    }
+   }
+  ],
+  "scene": {
+   "characters": 3,
+   "projectiles": 6,
+   "checkpoints": 71,
+   "maxCameraError": 0,
+   "maxCharacterError": 0,
+   "maxProjectileError": 0,
+   "minCharactersDrawn": 3,
+   "minProjectilesDrawn": 6
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  "startedAt": "2026-10-23T15:57:18.534Z",
+  "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "phone (emulated)"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "live",
+  "label": "Live gameplay stress test: real bots, varies run to run; not a section cost comparison",
+  "build": "e6bf732 (local)",
+  "variant": "experiment",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "live-practice-1v2-normal-v2",
+   "hash": "random (live bots)",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 60.03,
+  "frames": 134,
+  "avgFps": 2.2,
+  "medianFrameMs": 441,
+  "p95FrameMs": 519.3,
+  "p99FrameMs": 551,
+  "maxFrameMs": 874.6,
+  "framesOver50ms": 134,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 393,
+   "min": 265,
+   "max": 519
+  },
+  "triangles": {
+   "avg": 131285,
+   "min": 113944,
+   "max": 148608
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 33,
+    "measuredS": 14.74,
+    "avgFps": 2.2,
+    "p95FrameMs": 541.1,
+    "drawCalls": {
+     "avg": 325,
+     "min": 282,
+     "max": 398
+    },
+    "triangles": {
+     "avg": 120383,
+     "min": 114902,
+     "max": 131186
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 35,
+    "measuredS": 15.25,
+    "avgFps": 2.3,
+    "p95FrameMs": 510.6,
+    "drawCalls": {
+     "avg": 370,
+     "min": 265,
+     "max": 461
+    },
+    "triangles": {
+     "avg": 128952,
+     "min": 113944,
+     "max": 142974
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 31,
+    "measuredS": 14.88,
+    "avgFps": 2.1,
+    "p95FrameMs": 539.2,
+    "drawCalls": {
+     "avg": 465,
+     "min": 393,
+     "max": 519
+    },
+    "triangles": {
+     "avg": 140970,
+     "min": 131702,
+     "max": 148608
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 35,
+    "measuredS": 15.17,
+    "avgFps": 2.3,
+    "p95FrameMs": 483.1,
+    "drawCalls": {
+     "avg": 410,
+     "min": 348,
+     "max": 486
+    },
+    "triangles": {
+     "avg": 134725,
+     "min": 124754,
+     "max": 147104
+    }
+   }
+  ],
+  "scene": {
+   "bots": 3,
+   "throwsByRosa": 153,
+   "avgCharactersInView": 1.39,
+   "avgProjectilesInFlight": 9.87,
+   "rosaEliminated": 0
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:58:34.296Z",
+  "note": "Live bots; what is on screen differs between runs, so differences between variants include that. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ },
+ {
+  "kind": "chancla-section-benchmark",
+  "version": 2,
+  "mode": "live",
+  "label": "Live gameplay stress test: real bots, varies run to run; not a section cost comparison",
+  "build": "e6bf732 (local)",
+  "variant": "production-equivalent",
+  "quality": "high",
+  "valid": true,
+  "invalidReason": null,
+  "testRun": false,
+  "workload": {
+   "id": "live-practice-1v2-normal-v2",
+   "hash": "random (live bots)",
+   "warmupS": 10,
+   "measuredSPerView": 15,
+   "views": [
+    "café, player height",
+    "facade close-up",
+    "wider courtyard",
+    "Panadería side"
+   ]
+  },
+  "measuredS": 60.16,
+  "frames": 177,
+  "avgFps": 2.9,
+  "medianFrameMs": 337.1,
+  "p95FrameMs": 390.5,
+  "p99FrameMs": 413.4,
+  "maxFrameMs": 669.2,
+  "framesOver50ms": 176,
+  "render": {
+   "cssSize": [
+    1280,
+    720
+   ],
+   "bufferSize": [
+    1280,
+    720
+   ],
+   "pixelRatio": 1,
+   "devicePixelRatio": 1
+  },
+  "drawCalls": {
+   "avg": 388,
+   "min": 268,
+   "max": 547
+  },
+  "triangles": {
+   "avg": 85286,
+   "min": 67992,
+   "max": 106838
+  },
+  "perView": [
+   {
+    "name": "café, player height",
+    "frames": 44,
+    "measuredS": 14.85,
+    "avgFps": 3,
+    "p95FrameMs": 378.7,
+    "drawCalls": {
+     "avg": 325,
+     "min": 270,
+     "max": 383
+    },
+    "triangles": {
+     "avg": 75698,
+     "min": 67992,
+     "max": 84954
+    }
+   },
+   {
+    "name": "facade close-up",
+    "frames": 44,
+    "measuredS": 15.16,
+    "avgFps": 2.9,
+    "p95FrameMs": 390.5,
+    "drawCalls": {
+     "avg": 387,
+     "min": 268,
+     "max": 519
+    },
+    "triangles": {
+     "avg": 85826,
+     "min": 68854,
+     "max": 106838
+    }
+   },
+   {
+    "name": "wider courtyard",
+    "frames": 44,
+    "measuredS": 14.8,
+    "avgFps": 3,
+    "p95FrameMs": 379,
+    "drawCalls": {
+     "avg": 446,
+     "min": 364,
+     "max": 494
+    },
+    "triangles": {
+     "avg": 92894,
+     "min": 79946,
+     "max": 100936
+    }
+   },
+   {
+    "name": "Panadería side",
+    "frames": 45,
+    "measuredS": 15.35,
+    "avgFps": 2.9,
+    "p95FrameMs": 399.8,
+    "drawCalls": {
+     "avg": 395,
+     "min": 324,
+     "max": 547
+    },
+    "triangles": {
+     "avg": 86696,
+     "min": 77076,
+     "max": 106304
+    }
+   }
+  ],
+  "scene": {
+   "bots": 3,
+   "throwsByRosa": 130,
+   "avgCharactersInView": 1.24,
+   "avgProjectilesInFlight": 7.39,
+   "rosaEliminated": 0
+  },
+  "throttleMs": 0,
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "startedAt": "2026-10-23T15:59:52.186Z",
+  "note": "Live bots; what is on screen differs between runs, so differences between variants include that. Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.",
+  "device": "desktop"
+ }
+]

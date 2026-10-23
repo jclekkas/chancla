@@ -2,6 +2,133 @@
 
 Production is out of scope. Do not merge this branch to main, promote a deployment, change production domains or environment variables, or modify the Render service without new, explicit approval from the owner.
 
+## Milestone 3: El Patio, integrated
+
+The café kit now draws the whole El Patio arena. Materials, paving and light are reworked for El Patio, and the first-person hand and chancla are new. Three parallel workstreams did the work, each owning separate files, and the lead integrated and verified it:
+
+| Workstream | Files |
+| --- | --- |
+| Environment geometry | `section.ts`, `patio-shapes.ts` |
+| Materials, paving, light | `patio-materials.ts` |
+| First person | `viewmodel.ts`, `fp-hand.ts`, `fp-chancla.ts`, `fp-geo.ts` |
+| Lead: integration | `world.ts`, the lab, the tests |
+
+Other maps, the Arcade, campaign layouts and the shared character models are unchanged.
+
+### What changed
+
+**Environment (whole arena):**
+- **Houses:** every house, row house and spawn compound gets the café's units on its visible faces only:
+  - windows with reveals, sills, lintels and louvered shutters
+  - closed panelled doors with lanterns
+  - balconies and window boxes
+  - base band, pilasters, cornice and barrel-tile roof edge
+  - a paved strip with a kerb
+- **Hidden faces:** a hidden-face test leaves out faces covered by a neighbour, with clean corners and no overlapping coplanar faces.
+- **Walls:** base band, string course and stone coping.
+- **Spawn exits:** a timber beam and ceiling, with the cornice running across.
+- **Terrace:** the dark painted arches (which read as openings) are now a blind arcade.
+- **Stairs, parapets, crates and bins:** risers face the lower step on all four flights; parapets get a stone cap and one course of tiles; crates and bins stay inside their footprints.
+- **Foliage:** double-sided leaf tufts replace the round blobs, with the same spacing and no larger than before.
+- **Skyline:** the distant buildings get cornices and tile roofs.
+- **Left as production:** the fountain, statue and kiosks.
+
+**Materials and light (El Patio only):**
+- **Paving:** a low-contrast terracotta with dark grout replaces the bright cream grid, with gentle per-tile variation and worn tiles. Production's ground zones (streets, team courts) are kept as tints, and the fountain's path rings as a flat mesh.
+- **Surfaces:** calmer plaster, cantera, talavera and louvers; a vertical-grain door wood; a leaf material that stays green in shade.
+- **Light:** a slightly warmer afternoon, with sun intensity 2.4 → 2.64 and hemisphere light 1.35 → 1.215.
+- **Ground texture memory:** about 18.9 MB → 2.8 MB at High.
+
+**First person (the shooter only; the shared hand and sandal models used by the Arcade are untouched):**
+- **Chancla:** a flip-flop with a tapered two-layer sole, toe post, strap and flower.
+- **Grip:** fingers and thumb wrap the sole edge, closing to a fist after release.
+- **La Pesada:** held by the heel, in profile.
+- **Materials:** separate toon materials for skin, sleeve, cuff and item, with thin outlines.
+- **Motion:** a wind-up, wrist-flick release, follow-through and eased recovery.
+- **Unchanged:** release at 90 / 160 ms, the hide and reappear rule, cooldowns and switch timing.
+- **Bug fixed:** the team colour no longer tints the chancla sole.
+
+**Fixed along the way:**
+- **Campaign layouts:** campaign missions also build on El Patio's map, so since milestone 1 the café kit had been drawing into them. They are drawn exactly as in production again.
+- **Benchmark view time:** a frame's time is now split between the views it overlaps, so slow frames no longer shorten the last view.
+
+### Before and after (in game, offline practice, 1280 × 720, High, same spots)
+
+The `m3-game-*` files hold the same spot from production, milestone 2 and this build.
+
+| | Production | Milestone 2 | Milestone 3 |
+| --- | --- | --- | --- |
+| Player height | ![](evidence/m3-game-player-prod.jpg) | ![](evidence/m3-game-player-m2.jpg) | ![](evidence/m3-game-player-m3.jpg) |
+| South alley | ![](evidence/m3-game-southrow-prod.jpg) | ![](evidence/m3-game-southrow-m2.jpg) | ![](evidence/m3-game-southrow-m3.jpg) |
+| Casa Sol courtyard | ![](evidence/m3-game-solspawn-prod.jpg) | ![](evidence/m3-game-solspawn-m2.jpg) | ![](evidence/m3-game-solspawn-m3.jpg) |
+| Terrace and stairs | ![](evidence/m3-game-terrace-prod.jpg) | ![](evidence/m3-game-terrace-m2.jpg) | ![](evidence/m3-game-terrace-m3.jpg) |
+| Wider courtyard | ![](evidence/m3-game-wide-prod.jpg) | ![](evidence/m3-game-wide-m2.jpg) | ![](evidence/m3-game-wide-m3.jpg) |
+| Enemy at the café door | ![](evidence/m3-game-readability-prod.jpg) | ![](evidence/m3-game-readability-m2.jpg) | ![](evidence/m3-game-readability-m3.jpg) |
+
+The lab captures are `m3-lab-<view>-before-high.jpg` (production's renderer) and `m3-lab-<view>-after-<quality>.jpg` (this build), for nine views.
+
+### Rendering cost (exact counts, comparison lab, production → this build)
+
+| Quality | Draw calls | Triangles |
+| --- | --- | --- |
+| High | 82-107 → 53-80 (**27-29 fewer**) | 38.2-39.7k → 78.7-80.5k (**+40.8k**) |
+| Medium | **27-29 fewer** | **+35.9k** |
+| Low | 47-72 → 31-58 (**14-16 fewer**) | 33.2-34.4k → 47.3-48.5k (**+14.1k**) |
+
+- **Why draw calls go down:** the kit draws all of El Patio as 11 merged meshes (one per material kind), 3 of which cast shadows, and they replace many separate production meshes.
+- **Triangles:**
+  - At High, the kit is about 55.5k triangles, about 15.8k of which also go through the shadow pass.
+  - The first-person view adds about 3.9k triangles and is 14-18 draw calls cheaper than before.
+- **No culling:** the whole kit is one set of meshes, so it is never culled. Splitting it into a 2×2 or 3×3 grid was measured: 34-42 more draw calls to save 3-12k triangles, so the kit stays unsplit.
+
+### Benchmark (controlled comparison and live stress test, 60 s each)
+
+Results: `bench/bench-m3-60s.json`. These ran on headless Chromium 141 with SwiftShader, a **software renderer on a shared CPU, not a GPU**. The phone row is emulated. The per-view seconds in this file predate the view-time fix; frame rates, percentiles and counts are unaffected.
+
+| Run | This build | Production drawing |
+| --- | --- | --- |
+| Controlled, desktop High (A B B A) | 484 / 484 calls, 141.8k tris, 2.0 / 2.0 FPS, p95 603 / 608 ms | 510 / 511 calls, 101.0k tris, 2.6 / 2.6 FPS, p95 474 / 464 ms |
+| Controlled, desktop Low | 269 calls, 83.1k tris, 5.6 FPS, p95 234 ms | 283 calls, 69.0k tris, 5.2 FPS, p95 235 ms |
+| Controlled, emulated phone Low | 274 calls, 83.8k tris, 9.9 FPS, p95 130 ms | 288 calls, 69.7k tris, 8.6 FPS, p95 146 ms |
+| Live stress, desktop High (real bots, varies by run) | 393 calls, 131.3k tris, 2.2 FPS | 388 calls, 85.3k tris, 2.9 FPS |
+
+On this software renderer, High is about 23% slower than production and Low about 8-15% faster. A software renderer is limited by triangles and fill rate in a way a GPU is not, so these numbers **do not show Mac or phone performance**. Real-device results are still outstanding.
+
+### Checks (this build)
+
+| Check | Result |
+| --- | --- |
+| typecheck; offline build without the production server address; benchmark absent from the normal build | pass |
+| vitest | 275/275 |
+| `graphics-practice-e2e.ts`: collision at the café facade and door with the new geometry; movement, jump, aim and throw; Esc and Resume; phone stick, look, Throw, Jump and Menu; no external requests | 20/20 |
+| `e2e:menu`, `e2e:desktop` (input with the new first-person view) | 28/28, 23/23 |
+| `e2e:play` on a normal build (practice, campaign layouts after the routing fix, Arcade, online against a local server) | 69/69 |
+| `graphics-bench-e2e.ts`: invalidation, export, settings restore, ten 60 s runs valid, live run with no eliminations | 24/25 |
+| Frame-rate equivalence, after the view-time fix | 7/7 |
+
+The one failure in the full benchmark run was the slowed test run's per-view seconds. The view-time fix resolved it, and the equivalence check was rerun.
+
+### Simplified or deferred
+- **Held vs thrown chancla:** the thrown projectile and the third-person characters still use the shared slide model, so you hold a flip-flop and a slide flies out.
+- **Kiosks, fountain and statue** keep production's drawing.
+- **Shadow acne:** north-facing walls still show the fine diagonal stripes, as production does. They come from the arena-wide shadow bias.
+- **Notches:** a small one at the perimeter wall corners at 9 m.
+- **Readability:** the enemy at the café door stands against a brown door instead of a flat wall. She is still clear in the shot, but slightly less contrasted.
+- **Fixed poses:** the hand's grip poses are fixed (only a fist squeeze, no finger animation).
+
+### Real-device checklist (about 15 minutes)
+1. **M4 Mac, High, Chrome or Safari:**
+   - `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench` (save JSON), then `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&section=off` (save).
+   - Repeat both in the reverse order.
+   - Optionally, `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench=live`.
+2. **Phone, Low, landscape:** `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&quality=low`, then `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&quality=low&section=off`.
+3. **Play** practice on El Patio on both devices. Look for:
+   - flicker or shimmer on walls, roofs and stairs
+   - pieces that float, or that look passable but aren't
+   - whether enemies stand out everywhere, especially in the alleys and spawn courts
+   - how the throw feels with both weapons
+4. Send the JSON files and any screenshots.
+
 ## Milestone 1: one upgraded courtyard section, in the real game
 
 **What changed.** The café block on El Patio ("Café Chancla") and everything that sits in front of it (the stone stairs up to its roof, the tiled bench, the planter, a new paved strip) are now drawn by a reusable kit, `src/fps/render/section.ts`. The map is point-symmetric, so the mirrored block ("Panadería Rosa", marigold walls) on the other team's side gets the same treatment automatically. The rest of the arena is drawn exactly as in production.

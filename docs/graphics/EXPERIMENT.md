@@ -119,6 +119,8 @@ Open the preview with `?bench`, or with `?bench&section=off` for the identical r
 - **Options:** `&quality=high|medium|low`, `&secs=`, `&warmup=`. Runs under 60 s are labelled indicative.
 - **Where it exists:** only offline graphics previews include it. It is not in a normal build (checked by searching the built files).
 
+(The milestone 2 evidence files say `build: 621dad5 (local)` because they were built from the uncommitted working tree that was then committed unchanged as 4dbfc68.)
+
 Local runs (`scripts/graphics-bench-e2e.ts`): headless Chromium 141 on SwiftShader, a **software renderer on a shared cloud CPU, not a GPU**, run in A/B/B/A order. The phone rows are Chromium emulating an iPhone screen, not a phone. Raw data: `bench/bench-60s.json`.
 
 | Run (60 s each, 3 bots) | Experiment | Production drawing |

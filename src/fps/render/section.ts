@@ -9,14 +9,28 @@
 // with tiled risers, a tiled bench, a planter and a paved strip, each placed
 // in a facade's own frame (along the wall, up, and out of it). All geometry
 // for both sections bakes into one mesh per material kind; colours that only
-// differ by tint share a material through vertex colours (11 draw calls).
+// differ by tint share a material through vertex colours (10 draw calls).
+// Only walls, stone and the larger tinted pieces cast shadows (3 more draws
+// in the shadow pass); flush or thin details (glass, louvers, tiles, iron,
+// flowers) do not, which also keeps sub-texel shadow shimmer away. Low
+// quality (no shadows) gets lighter geometry.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MapBox } from '../../../shared/map';
+import type { Quality } from '../settings';
 import { COLORS, boxGeo, toonRamp, woodTexture } from './materials';
 
 /** Where the section is: the café block, its stairs, bench and planter (and the point-mirrored copy). */
 const ZONE = { minX: -8.3, maxX: 3.6, minZ: -11.2, maxZ: -4.4 };
+
+/**
+ * The section can be switched off for the benchmark's production-equivalent
+ * run: the same boxes then go through the arena's normal drawing, exactly as
+ * in production.
+ */
+let enabled = true;
+export function setSectionEnabled(on: boolean): void { enabled = on; }
+export function sectionEnabled(): boolean { return enabled; }
 
 export function inSection(b: MapBox): boolean {
   const inside = (z: typeof ZONE) => b.minX >= z.minX && b.maxX <= z.maxX && b.minZ >= z.minZ && b.maxZ <= z.maxZ;
@@ -51,50 +65,53 @@ function rng(seed: number): () => number {
   return () => { s = (s + 0x6d2b79f5) >>> 0; let t = Math.imul(s ^ (s >>> 15), s | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-/** Fine lime plaster: low-contrast trowel marks, no blotches (1 tile = 2 m). */
+/** Soft circles that wrap at the edges, so the texture tiles without seams. */
+function mottle(c: CanvasRenderingContext2D, size: number, seed: number, count: number, r0: number, r1: number, shade: (r: () => number) => string): void {
+  const r = rng(seed);
+  for (let i = 0; i < count; i++) {
+    const x = r() * size, y = r() * size, rad = r0 + r() * (r1 - r0), col = shade(r);
+    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+      const cx = x + ox, cy = y + oy;
+      if (cx + rad < 0 || cx - rad > size || cy + rad < 0 || cy - rad > size) continue;
+      const g = c.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      g.addColorStop(0, col); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+    }
+  }
+}
+
+/** Lime plaster: broad, faint clouding only. Fine streaks shimmered at a distance (1 tile = 2 m). */
 function plasterTexture(): THREE.CanvasTexture | null {
   return tex('plaster', 256, 256, (c) => {
-    const r = rng(11);
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 260; i++) {
-      const g = 236 + Math.floor(r() * 19);
-      c.fillStyle = `rgba(${g},${g - 3},${g - 8},${0.22 + r() * 0.2})`;
-      c.beginPath(); c.ellipse(r() * 256, r() * 256, 10 + r() * 22, 2 + r() * 4, (r() - 0.5) * 0.6, 0, Math.PI * 2); c.fill();
-    }
-    // A faint rising-damp tint low on the wall is added by geometry, not here,
-    // so the texture tiles vertically.
+    mottle(c, 256, 11, 70, 24, 70, (r) => { const g = 228 + Math.floor(r() * 18); return `rgba(${g},${g - 4},${g - 12},${0.1 + r() * 0.1})`; });
   });
 }
 
-/** Cantera stone: warm grey with soft grain, for steps, caps and the threshold. */
+/** Cantera stone: soft, low-contrast speckle for steps, caps and the threshold (no pixel grain). */
 function canteraTexture(): THREE.CanvasTexture | null {
   return tex('cantera', 128, 128, (c) => {
-    const r = rng(23);
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, 128, 128);
-    for (let i = 0; i < 500; i++) {
-      const g = 214 + Math.floor(r() * 38);
-      c.fillStyle = `rgba(${g},${g - 6},${g - 14},0.5)`;
-      c.fillRect(r() * 128, r() * 128, 1 + r() * 3, 1 + r() * 2);
-    }
+    mottle(c, 128, 23, 90, 3, 9, (r) => { const g = 218 + Math.floor(r() * 26); return `rgba(${g},${g - 8},${g - 20},${0.18 + r() * 0.14})`; });
   });
 }
 
-/** Talavera-style tiles: blue and yellow on white, 4×4 tiles per texture (1 tile = 0.3 m). */
+/** Talavera-style tiles: muted cobalt and ochre on cream, 4×4 tiles per texture. Placed with whole tiles per panel (see tilePanel). */
 function talaveraTexture(): THREE.CanvasTexture | null {
   return tex('talavera', 256, 256, (c) => {
     const s = 64;
     for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
       const x = tx * s, y = ty * s;
-      c.fillStyle = '#f7f1e3'; c.fillRect(x, y, s, s);
-      c.strokeStyle = '#d9cfb8'; c.lineWidth = 2; c.strokeRect(x + 1, y + 1, s - 2, s - 2);
+      c.fillStyle = '#f2e8d4'; c.fillRect(x, y, s, s);
+      c.strokeStyle = '#d2c3a6'; c.lineWidth = 2; c.strokeRect(x + 1, y + 1, s - 2, s - 2);
       const cx = x + s / 2, cy = y + s / 2;
-      c.fillStyle = '#2d4f9e';
+      c.fillStyle = '#4f6aa3';
       for (let k = 0; k < 4; k++) {
         const a = k * Math.PI / 2 + Math.PI / 4;
         c.beginPath(); c.ellipse(cx + Math.cos(a) * 13, cy + Math.sin(a) * 13, 11, 5, a, 0, Math.PI * 2); c.fill();
       }
-      c.fillStyle = '#f0b43a'; c.beginPath(); c.arc(cx, cy, 6, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#2d4f9e';
+      c.fillStyle = '#d9a648'; c.beginPath(); c.arc(cx, cy, 6, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#4f6aa3';
       for (const [qx, qy] of [[x, y], [x + s, y], [x, y + s], [x + s, y + s]] as const) { c.beginPath(); c.arc(qx, qy, 9, 0, Math.PI * 2); c.fill(); }
     }
   });
@@ -143,15 +160,6 @@ function paverTexture(): THREE.CanvasTexture | null {
   });
 }
 
-/** A vertical fade from soft shade to clear: contact shading at a wall base. */
-function fadeTexture(): THREE.CanvasTexture | null {
-  return tex('fade', 4, 64, (c) => {
-    const g = c.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, 'rgba(40,24,30,0.38)'); g.addColorStop(0.5, 'rgba(40,24,30,0.12)'); g.addColorStop(1, 'rgba(40,24,30,0)');
-    c.fillStyle = g; c.fillRect(0, 0, 4, 64);
-  });
-}
-
 // ------------------------------------------------------------- facade frame
 
 interface Frame { len: number; m: THREE.Matrix4 }
@@ -182,19 +190,22 @@ const STUCCO: Record<string, number> = {
 // --------------------------------------------------------------- batching
 // Materials that differ only in colour share one material: the colour goes
 // into the vertices. One merged mesh per kind.
-type Kind = 'plaster' | 'cantera' | 'flat' | 'louver' | 'talavera' | 'glass' | 'wood' | 'lamp' | 'pavers' | 'shade';
+// 'detail' is 'flat' without shadows: iron, brass, roof tiles, flowers.
+type Kind = 'plaster' | 'cantera' | 'flat' | 'detail' | 'louver' | 'talavera' | 'glass' | 'wood' | 'lamp' | 'pavers';
 interface Mat { k: Kind; c: number | null }
-const TINTED: ReadonlySet<Kind> = new Set<Kind>(['plaster', 'cantera', 'flat', 'louver']);
+const TINTED: ReadonlySet<Kind> = new Set<Kind>(['plaster', 'cantera', 'flat', 'detail', 'louver', 'pavers']);
+const CASTS: ReadonlySet<Kind> = new Set<Kind>(['plaster', 'cantera', 'flat']);
 
 class KindBatch {
   private b = new Map<Kind, THREE.BufferGeometry[]>();
   private tmp = new THREE.Color();
   add(m: Mat, g: THREE.BufferGeometry): void {
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    const keep = TINTED.has(m.k) && g.getAttribute('color') ? 'color' : ''; // a geometry may bring its own shading (pavers)
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== keep) g.deleteAttribute(k);
     const n = (g.getAttribute('position') as THREE.BufferAttribute).count;
     if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2), 2));
     if (!g.index) g.setIndex(Array.from({ length: n }, (_, i) => i));
-    if (TINTED.has(m.k)) {
+    if (TINTED.has(m.k) && !keep) {
       this.tmp.setHex(m.c ?? 0xffffff); // sRGB hex to the linear working space, like a material colour
       const col = new Float32Array(n * 3);
       for (let i = 0; i < n; i++) { col[i * 3] = this.tmp.r; col[i * 3 + 1] = this.tmp.g; col[i * 3 + 2] = this.tmp.b; }
@@ -213,7 +224,7 @@ class KindBatch {
       if (!merged) continue;
       const mesh = new THREE.Mesh(merged, materials[k]);
       mesh.name = `section-${k}`;
-      mesh.castShadow = k !== 'pavers' && k !== 'shade';
+      mesh.castShadow = CASTS.has(k);
       mesh.receiveShadow = true;
       group.add(mesh);
       calls++;
@@ -224,7 +235,8 @@ class KindBatch {
 }
 
 /** Builds the section. Returns the group and its draw-call count. */
-export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; calls: number } {
+export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'): { group: THREE.Group; calls: number } {
+  const lite = quality === 'low'; // no shadows on Low, so the smallest details go too
   const group = new THREE.Group();
   group.name = 'section-cafe';
   const batch = new KindBatch();
@@ -235,57 +247,83 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
     plaster: toonOf({ vertexColors: true, map: plaster }),
     cantera: toonOf({ vertexColors: true, map: cantera }),
     flat: toonOf({ vertexColors: true }),
+    detail: toonOf({ vertexColors: true }),
     louver: toonOf({ vertexColors: true, map: louverTexture() }),
     talavera: toonOf({ map: talavera }),
     glass: toonOf({ map: glassTexture() }),
     wood: toonOf({ color: 0x9a6440, map: woodTexture() }),
     lamp: toonOf({ color: 0xffe3a0, emissive: 0xc88a2a }),
-    pavers: toonOf({ map: paverTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-    shade: new THREE.MeshBasicMaterial({ map: fadeTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
+    pavers: toonOf({ vertexColors: true, map: paverTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
   };
   const M = {
-    trim: { k: 'plaster', c: 0xfbf1dc }, cantera: { k: 'cantera', c: 0xe6cfa6 }, pot: { k: 'cantera', c: COLORS.terracottaDark },
+    trim: { k: 'plaster', c: 0xfbf1dc },
+    // Small trim (caps, keystones, corbels): untextured and casting no shadow. Its shadow is
+    // smaller than a shadow-map texel and drew a sawtooth on the lintel under it.
+    trimSmall: { k: 'detail', c: 0xfbf1dc }, cantera: { k: 'cantera', c: 0xe6cfa6 }, pot: { k: 'cantera', c: COLORS.terracottaDark },
     talavera: { k: 'talavera', c: null }, glass: { k: 'glass', c: null }, wood: { k: 'wood', c: null }, lamp: { k: 'lamp', c: null },
-    iron: { k: 'flat', c: 0x2a1d2c }, woodDark: { k: 'flat', c: 0x4c2d1c }, brass: { k: 'flat', c: COLORS.gold },
-    tileA: { k: 'flat', c: COLORS.terracotta }, tileB: { k: 'flat', c: 0xb24a33 }, tileC: { k: 'flat', c: 0xd66a4b },
-    eave: { k: 'flat', c: 0x7a3a2a }, soil: { k: 'flat', c: 0x5b3a22 },
-    leaf: { k: 'flat', c: COLORS.leaf }, leafDark: { k: 'flat', c: COLORS.leafDark }, pink: { k: 'flat', c: COLORS.pink }, marigold: { k: 'flat', c: COLORS.marigold },
+    iron: { k: 'detail', c: 0x2a1d2c }, woodDark: { k: 'detail', c: 0x4c2d1c }, brass: { k: 'detail', c: COLORS.gold },
+    tileA: { k: 'detail', c: COLORS.terracotta }, tileB: { k: 'detail', c: 0xb24a33 }, tileC: { k: 'detail', c: 0xd66a4b },
+    eave: { k: 'flat', c: 0x7a3a2a }, soil: { k: 'flat', c: 0x5b3a22 }, spout: { k: 'flat', c: 0xb24a33 },
+    leaf: { k: 'flat', c: COLORS.leaf }, leafDark: { k: 'flat', c: COLORS.leafDark },
+    vine: { k: 'detail', c: COLORS.leaf }, vineDark: { k: 'detail', c: COLORS.leafDark }, pink: { k: 'detail', c: COLORS.pink }, marigold: { k: 'detail', c: COLORS.marigold },
   } satisfies Record<string, Mat>;
   const wallMat = (c: number): Mat => ({ k: 'plaster', c });
   const shutterMat = (c: number): Mat => ({ k: 'louver', c });
-  const pavers: Mat = { k: 'pavers', c: null }, shadeMat: Mat = { k: 'shade', c: null };
-  const LEAF = new THREE.IcosahedronGeometry(0.5, 1); // rounder than the arena's faceted foliage (detail 0)
-  const POT = new THREE.CylinderGeometry(0.5, 0.38, 1, 14);
-  const TILE = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, false, 0, Math.PI);
+  const pavers: Mat = { k: 'pavers', c: null };
+  // Planter foliage is seen up close, so it stays round; flowers and wall greenery are small and high up.
+  const LEAF = new THREE.IcosahedronGeometry(0.5, lite ? 0 : 1);
+  const BUD = new THREE.IcosahedronGeometry(0.5, 0);
+  const POT = new THREE.CylinderGeometry(0.5, 0.38, 1, lite ? 8 : 10);
+  // Roof tiles are far above the eye line: six-sided on High, four on Medium and Low.
+  const TILE = new THREE.CylinderGeometry(0.5, 0.5, 1, quality === 'high' ? 6 : 4, 1, false, 0, Math.PI);
 
-  /** A box in a facade frame: a = along, y = up, n = out of the wall. */
+  /** A box in a facade frame: a = along, y = up, n = out of the wall. Faces against the wall or the ground are never seen, so they are left out. */
   const fbox = (f: Frame, mat: Mat, a0: number, y0: number, n0: number, a1: number, y1: number, n1: number, uv = 1) => {
-    batch.add(mat, boxGeo(a0, y0, n0, a1, y1, n1, uv).applyMatrix4(f.m));
+    const faces = 63 & ~(n0 <= 0 ? 32 : 0) & ~(y0 <= 0 ? 8 : 0);
+    batch.add(mat, boxGeo(a0, y0, n0, a1, y1, n1, uv, faces).applyMatrix4(f.m));
   };
   /** A mesh (unit geometry) in a facade frame. */
   const fmesh = (f: Frame, mat: Mat, geo: THREE.BufferGeometry, a: number, y: number, n: number, sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0) => {
     const local = new THREE.Matrix4().compose(new THREE.Vector3(a, y, n), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
     batch.addMesh(mat, geo, new THREE.Matrix4().multiplyMatrices(f.m, local));
   };
-  /** A flat plane lying on the ground in a facade frame (a0..a1 along, n0..n1 out), for paving and contact shade. */
-  const groundQuad = (f: Frame, mat: Mat, a0: number, n0: number, a1: number, n1: number, y: number, uvScale: number) => {
-    const g = new THREE.PlaneGeometry(a1 - a0, n1 - n0);
+  /**
+   * Paving lying flush on the ground in a facade frame (along 0..len, out 0..depth),
+   * with the wall's contact shade baked into its vertex colours: darker at
+   * the wall, clear from `shade` metres out. World-scale UVs keep one paver size.
+   */
+  const paving = (f: Frame, len: number, depth: number, shade: number, uvScale: number) => {
+    const g = new THREE.PlaneGeometry(len, depth, 1, 2);
     g.rotateX(-Math.PI / 2);
-    g.translate((a0 + a1) / 2, y, (n0 + n1) / 2);
-    // World-scale UVs so the pavers keep one size everywhere.
-    const uv = g.getAttribute('uv') as THREE.BufferAttribute, p = g.getAttribute('position') as THREE.BufferAttribute;
+    g.translate(len / 2, 0.008, depth / 2);
+    const p = g.getAttribute('position') as THREE.BufferAttribute;
+    // Rows at 0, depth/2, depth: move the middle row to where the shade ends.
+    for (let i = 0; i < p.count; i++) if (Math.abs(p.getZ(i) - depth / 2) < 1e-6) p.setZ(i, Math.min(shade, depth));
+    const col = new Float32Array(p.count * 3), uv = g.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const k = 0.62 + 0.38 * Math.min(1, p.getZ(i) / shade);
+      col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.applyMatrix4(f.m);
     for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) / uvScale, p.getZ(i) / uvScale);
-    batch.add(mat, g.applyMatrix4(f.m));
+    batch.add(pavers, g);
   };
-  /** Contact shade on a wall's foot: a strip on the ground fading away from the wall. */
-  const contactStrip = (f: Frame, a0: number, a1: number, depth: number) => {
-    const g = new THREE.PlaneGeometry(a1 - a0, depth);
-    g.rotateX(-Math.PI / 2);
-    g.translate((a0 + a1) / 2, 0.012, depth / 2);
+  /**
+   * A talavera panel on one side face of a world box, with whole tiles: the
+   * UVs are fitted so tile edges meet the panel edges (about 0.3 m tiles).
+   */
+  const tilePanel = (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, face: 1 | 2 | 16 | 32) => {
+    const g = boxGeo(minX, minY, minZ, maxX, maxY, maxZ, 1, face);
+    const along = face <= 2 ? maxZ - minZ : maxX - minX;
+    const nx = Math.max(1, Math.round(along / 0.3)) / 4, ny = Math.max(1, Math.round((maxY - minY) / 0.3)) / 4; // 4 tiles per texture
     const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-    for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) > 0.5 ? 0 : 1); // dark at the wall
-    batch.add(shadeMat, g.applyMatrix4(f.m));
+    const corner = [[0, 0], [nx, 0], [nx, ny], [0, ny]] as const;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, corner[i % 4]![0], corner[i % 4]![1]);
+    batch.add(M.talavera, g);
   };
+  /** Which side of a prop faces the plaza (the map is point-symmetric about the origin): the face to dress. */
+  const plazaFace = (b: MapBox): 16 | 32 => ((b.minZ + b.maxZ) / 2 < 0 ? 16 : 32);
 
   // -------------------------------------------------------------- components
 
@@ -295,34 +333,34 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
     fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.17);                       // jambs: a 0.16 m reveal
     fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.17);
     fbox(f, M.trim, a - hw - 0.14, top, 0, a + hw + 0.14, top + 0.16, 0.2);         // lintel
-    fbox(f, M.trim, a - hw - 0.2, top + 0.16, 0, a + hw + 0.2, top + 0.22, 0.26);   // its cap
-    fbox(f, M.trim, a - 0.08, top - 0.04, 0, a + 0.08, top + 0.2, 0.23);            // keystone
+    fbox(f, M.trimSmall, a - hw - 0.2, top + 0.16, 0, a + hw + 0.2, top + 0.22, 0.26); // its cap
+    fbox(f, M.trimSmall, a - 0.08, top - 0.04, 0, a + 0.08, top + 0.2, 0.23);       // keystone
     fbox(f, M.cantera, a - hw - 0.16, bot - 0.08, 0, a + hw + 0.16, bot, 0.25);     // sill
-    for (const s of [-1, 1]) fbox(f, M.trim, a + s * (hw - 0.02) - 0.05, bot - 0.22, 0, a + s * (hw - 0.02) + 0.05, bot - 0.08, 0.17); // corbels
+    for (const s of [-1, 1]) fbox(f, M.trimSmall, a + s * (hw - 0.02) - 0.05, bot - 0.22, 0, a + s * (hw - 0.02) + 0.05, bot - 0.08, 0.17); // corbels
     // Louvered shutters folded back against the wall.
     for (const s of [-1, 1]) fbox(f, shutterMat(shutter), a + s * (hw + 0.12) - (s > 0 ? 0 : 0.42), bot + 0.02, 0.02, a + s * (hw + 0.12) + (s > 0 ? 0.42 : 0), top - 0.02, 0.06, 0.6);
     if (ground) {
       // Wrought bars inside the reveal, with a top and bottom rail.
-      for (let i = -2; i <= 2; i++) fbox(f, M.iron, a + i * 0.17 - 0.013, bot + 0.02, 0.1, a + i * 0.17 + 0.013, top - 0.02, 0.126);
+      if (!lite) for (let i = -2; i <= 2; i++) fbox(f, M.iron, a + i * 0.17 - 0.013, bot + 0.02, 0.1, a + i * 0.17 + 0.013, top - 0.02, 0.126);
       for (const y of [bot + 0.12, top - 0.12]) fbox(f, M.iron, a - hw, y - 0.015, 0.1, a + hw, y + 0.015, 0.13);
     } else if (balcony) {
       // Juliet balcony: a molded slab on two corbels, iron railing, flower pots. Above head height.
       const sy = bot - 0.1;
       fbox(f, M.cantera, a - 0.75, sy - 0.08, 0, a + 0.75, sy, 0.34);
       fbox(f, M.trim, a - 0.68, sy - 0.14, 0, a + 0.68, sy - 0.08, 0.28);
-      for (const s of [-1, 1]) fbox(f, M.trim, a + s * 0.55 - 0.06, sy - 0.32, 0, a + s * 0.55 + 0.06, sy - 0.14, 0.22);
-      for (let i = -6; i <= 6; i++) fbox(f, M.iron, a + i * 0.115 - 0.012, sy, 0.3, a + i * 0.115 + 0.012, sy + 0.62, 0.324);
+      for (const s of [-1, 1]) fbox(f, M.trimSmall, a + s * 0.55 - 0.06, sy - 0.32, 0, a + s * 0.55 + 0.06, sy - 0.14, 0.22);
+      for (let i = -6; i <= 6; i += lite ? 2 : 1) fbox(f, M.iron, a + i * 0.115 - 0.012, sy, 0.3, a + i * 0.115 + 0.012, sy + 0.62, 0.324);
       for (const y of [sy + 0.05, sy + 0.6]) fbox(f, M.iron, a - 0.74, y - 0.02, 0.29, a + 0.74, y + 0.02, 0.33);
       for (const s of [-0.45, 0, 0.45]) {
         fmesh(f, M.pot, POT, a + s, sy + 0.1, 0.17, 0.2, 0.2, 0.2);
-        fmesh(f, s ? M.pink : M.marigold, LEAF, a + s, sy + 0.28, 0.17, 0.26, 0.22, 0.26);
+        fmesh(f, s ? M.pink : M.marigold, BUD, a + s, sy + 0.28, 0.17, 0.26, 0.22, 0.26);
       }
     } else {
       // Window box with trailing greenery.
       fbox(f, M.pot, a - 0.44, bot - 0.08, 0.06, a + 0.44, bot + 0.1, 0.24);
-      for (const s of [-0.3, 0, 0.3]) fmesh(f, s ? M.leaf : M.leafDark, LEAF, a + s, bot + 0.2, 0.15, 0.32, 0.26, 0.26);
-      fmesh(f, M.pink, LEAF, a - 0.15, bot + 0.3, 0.2, 0.12, 0.12, 0.12);
-      fmesh(f, M.marigold, LEAF, a + 0.17, bot + 0.29, 0.2, 0.12, 0.12, 0.12);
+      for (const s of [-0.3, 0, 0.3]) fmesh(f, s ? M.vine : M.vineDark, BUD, a + s, bot + 0.2, 0.15, 0.32, 0.26, 0.26);
+      fmesh(f, M.pink, BUD, a - 0.15, bot + 0.3, 0.2, 0.12, 0.12, 0.12);
+      fmesh(f, M.marigold, BUD, a + 0.17, bot + 0.29, 0.2, 0.12, 0.12, 0.12);
     }
   }
 
@@ -332,7 +370,7 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
     fbox(f, M.trim, a - hw - 0.14, 0, 0, a - hw, top, 0.18);
     fbox(f, M.trim, a + hw, 0, 0, a + hw + 0.14, top, 0.18);
     fbox(f, M.trim, a - hw - 0.18, top, 0, a + hw + 0.18, top + 0.2, 0.22);
-    fbox(f, M.trim, a - hw - 0.26, top + 0.2, 0, a + hw + 0.26, top + 0.27, 0.3);
+    fbox(f, M.trimSmall, a - hw - 0.26, top + 0.2, 0, a + hw + 0.26, top + 0.27, 0.3);
     // Two closed wooden leaves with raised panels, a center stile and brass handles.
     fbox(f, M.wood, a - hw, 0, 0, a + hw, top, 0.03, 0.6);
     fbox(f, M.woodDark, a - 0.02, 0.02, 0.03, a + 0.02, top - 0.02, 0.05);
@@ -351,7 +389,7 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
       fbox(f, M.iron, la - 0.11, 2.02, 0.16, la + 0.11, 2.06, 0.38);
       fbox(f, M.lamp, la - 0.09, 2.06, 0.18, la + 0.09, 2.3, 0.36);
       fbox(f, M.iron, la - 0.12, 2.3, 0.15, la + 0.12, 2.35, 0.39);
-      for (const c of [-1, 1]) for (const d of [0.18, 0.36]) fbox(f, M.iron, la + c * 0.09 - 0.012, 2.06, d - 0.012, la + c * 0.09 + 0.012, 2.3, d + 0.012);
+      if (!lite) for (const c of [-1, 1]) for (const d of [0.18, 0.36]) fbox(f, M.iron, la + c * 0.09 - 0.012, 2.06, d - 0.012, la + c * 0.09 + 0.012, 2.3, d + 0.012);
     }
   }
 
@@ -370,7 +408,7 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
     }
     // Rain spouts (canales) near both ends: a classic detail and a landmark at the roofline.
     for (const a of [0.5, f.len - 0.5]) {
-      fbox(f, M.tileB, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, 0.62);
+      fbox(f, M.spout, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, 0.62);
       fbox(f, M.eave, a - 0.05, h - 0.28, 0.08, a + 0.05, h - 0.24, 0.62);
     }
   }
@@ -418,37 +456,49 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
       const sw = Math.min(f.len - 0.6, 4.2), sh = sw * 0.21, sa = f.len / 2;
       fbox(f, M.woodDark, sa - sw / 2 - 0.08, 3.3 - sh / 2 - 0.08, 0, sa + sw / 2 + 0.08, 3.3 + sh / 2 + 0.08, 0.05);
       // Paved strip along the front (flush), with contact shade at the wall foot.
-      groundQuad(f, pavers, 0, 0, f.len, 1.4, 0.008, 2.4);
+      paving(f, f.len, 1.4, 0.7, 2.4);
       fbox(f, M.cantera, 0, 0, 1.4, f.len, 0.03, 1.55, 0.8);                        // flush curb line
-      contactStrip(f, 0, f.len, 0.7);
-      contactStrip(side, 0, side.len, 0.7);
+      paving(side, side.len, 0.8, 0.7, 2.4);                                        // narrower strip on the side, same contact shade
       continue;
     }
     if (b.mat === 'step') {
-      // Stone steps: cantera treads with a slight nosing, tiled risers, plaster stringers.
-      batch.add(M.cantera, boxGeo(b.minX, b.maxY - 0.06, b.minZ, b.maxX, b.maxY, b.maxZ, 0.8));
-      batch.add(M.trim, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 2, 1 | 2 | 8 | 32));
-      batch.add(M.talavera, boxGeo(b.minX, Math.max(0, b.maxY - 0.45), b.maxZ - 0.0, b.maxX, b.maxY - 0.06, b.maxZ, 1.2, 16));
-      batch.add(M.cantera, boxGeo(b.minX, b.maxY - 0.04, b.maxZ, b.maxX, b.maxY, b.maxZ + 0.03, 0.8, 4 | 16 | 1 | 2));
+      // Stone steps: a cantera tread with a slight nosing, one course of whole
+      // tiles under it on the riser (the side facing the plaza, which flips on
+      // the mirrored stairs), plaster stringers.
+      const rf = plazaFace(b), out = rf === 16 ? 1 : -1, rz = rf === 16 ? b.maxZ : b.minZ;
+      batch.add(M.cantera, boxGeo(b.minX, b.maxY - 0.06, b.minZ, b.maxX, b.maxY, b.maxZ, 0.8, 63 & ~8));
+      batch.add(M.trim, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 2, 1 | 2 | 16 | 32));
+      const tz = rz + out * 0.004; // just proud of the riser, so it never fights it for depth
+      tilePanel(b.minX, Math.max(0.02, b.maxY - 0.36), Math.min(rz, tz), b.maxX, b.maxY - 0.06, Math.max(rz, tz), rf);
+      batch.add(M.cantera, boxGeo(b.minX, b.maxY - 0.04, Math.min(rz, rz + out * 0.03), b.maxX, b.maxY, Math.max(rz, rz + out * 0.03), 0.8, 1 | 2 | 4 | 8 | rf));
       continue;
     }
     if (b.mat === 'stone') {
-      // The bench in front of the café: tiled sides, a stone cap with a small overhang.
-      batch.add(M.talavera, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.08, b.maxZ, 1.2, 1 | 2 | 16 | 32));
+      // The bench in front of the café: plaster body, one tiled panel of whole
+      // tiles on the plaza side, a stone cap with a small overhang, a plinth.
+      const rf = plazaFace(b), out = rf === 16 ? 1 : -1, rz = rf === 16 ? b.maxZ : b.minZ, tz = rz + out * 0.004;
+      batch.add(M.trim, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.08, b.maxZ, 1, 1 | 2 | 16 | 32));
+      tilePanel(b.minX + 0.1, 0.18, Math.min(rz, tz), b.maxX - 0.1, 0.78, Math.max(rz, tz), rf);
       batch.add(M.cantera, boxGeo(b.minX - 0.03, b.maxY - 0.08, b.minZ - 0.03, b.maxX + 0.03, b.maxY, b.maxZ + 0.03, 0.8));
-      batch.add(M.trim, boxGeo(b.minX - 0.01, 0, b.minZ - 0.01, b.maxX + 0.01, 0.1, b.maxZ + 0.01, 1, 1 | 2 | 16 | 32));
+      batch.add(M.cantera, boxGeo(b.minX - 0.01, 0, b.minZ - 0.01, b.maxX + 0.01, 0.1, b.maxZ + 0.01, 0.8, 1 | 2 | 16 | 32));
       continue;
     }
     if (b.mat === 'planter') {
-      // Planter: terracotta body with a tile band, a stone cap, and rounder foliage.
-      batch.add(M.pot, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 1));
-      batch.add(M.talavera, boxGeo(b.minX - 0.005, b.maxY - 0.38, b.minZ - 0.005, b.maxX + 0.005, b.maxY - 0.2, b.maxZ + 0.005, 1.2, 1 | 2 | 16 | 32));
-      batch.add(M.cantera, boxGeo(b.minX - 0.04, b.maxY - 0.06, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0.8, 63 & ~4));
-      batch.add(M.cantera, boxGeo(b.minX - 0.04, b.maxY - 0.06, b.minZ - 0.04, b.minX + 0.08, b.maxY, b.maxZ + 0.04, 0.8, 4));
-      batch.add(M.cantera, boxGeo(b.maxX - 0.08, b.maxY - 0.06, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0.8, 4));
-      batch.add(M.cantera, boxGeo(b.minX + 0.08, b.maxY - 0.06, b.minZ - 0.04, b.maxX - 0.08, b.maxY, b.minZ + 0.08, 0.8, 4));
-      batch.add(M.cantera, boxGeo(b.minX + 0.08, b.maxY - 0.06, b.maxZ - 0.08, b.maxX - 0.08, b.maxY, b.maxZ + 0.04, 0.8, 4));
-      batch.add(M.soil, boxGeo(b.minX + 0.08, b.maxY - 0.09, b.minZ + 0.08, b.maxX - 0.08, b.maxY - 0.07, b.maxZ - 0.08, 1, 4));
+      // Planter: terracotta body with one course of whole tiles on each side,
+      // an open top (soil 6 cm down) and a stone rim. The rim's four pieces
+      // do not overlap, and nothing shares the rim's top plane, so no flicker.
+      const e = 0.004, ty0 = b.maxY - 0.42, ty1 = b.maxY - 0.12;
+      batch.add(M.pot, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 1, 1 | 2 | 16 | 32));
+      tilePanel(b.maxX, ty0, b.minZ + 0.06, b.maxX + e, ty1, b.maxZ - 0.06, 1);
+      tilePanel(b.minX - e, ty0, b.minZ + 0.06, b.minX, ty1, b.maxZ - 0.06, 2);
+      tilePanel(b.minX + 0.06, ty0, b.maxZ, b.maxX - 0.06, ty1, b.maxZ + e, 16);
+      tilePanel(b.minX + 0.06, ty0, b.minZ - e, b.maxX - 0.06, ty1, b.minZ, 32);
+      const r0 = b.maxY - 0.06, o = 0.04, t = 0.12;
+      batch.add(M.cantera, boxGeo(b.minX - o, r0, b.minZ - o, b.maxX + o, b.maxY, b.minZ - o + t, 0.8));
+      batch.add(M.cantera, boxGeo(b.minX - o, r0, b.maxZ + o - t, b.maxX + o, b.maxY, b.maxZ + o, 0.8));
+      batch.add(M.cantera, boxGeo(b.minX - o, r0, b.minZ - o + t, b.minX - o + t, b.maxY, b.maxZ + o - t, 0.8));
+      batch.add(M.cantera, boxGeo(b.maxX + o - t, r0, b.minZ - o + t, b.maxX + o, b.maxY, b.maxZ + o - t, 0.8));
+      batch.add(M.soil, boxGeo(b.minX - o + t, r0 - 0.01, b.minZ - o + t, b.maxX + o - t, r0, b.maxZ + o - t, 1, 4));
       // Same spacing and no larger than the arena's planter bushes, so the
       // foliage never hides more of the line of sight than it does in production.
       const alongX = w >= d, long = Math.max(w, d), n = Math.max(2, Math.round(long / 0.5));
@@ -456,8 +506,8 @@ export function buildSection(boxes: readonly MapBox[]): { group: THREE.Group; ca
         const t = (i + 0.5) / n;
         const x = alongX ? b.minX + w * t : (b.minX + b.maxX) / 2, z = alongX ? (b.minZ + b.maxZ) / 2 : b.minZ + d * t;
         const s = 0.46 + (i % 3) * 0.06;
-        batch.addMesh(i % 2 ? M.leaf : M.leafDark, LEAF, new THREE.Matrix4().compose(new THREE.Vector3(x, b.maxY + s * 0.32, z), new THREE.Quaternion(), new THREE.Vector3(s, s * 0.8, s)));
-        if (i % 2 === 0) batch.addMesh(i % 4 ? M.marigold : M.pink, LEAF, new THREE.Matrix4().compose(new THREE.Vector3(x + 0.1, b.maxY + s * 0.62, z + 0.05), new THREE.Quaternion(), new THREE.Vector3(0.17, 0.17, 0.17)));
+        batch.addMesh(i % 2 ? M.leaf : M.leafDark, LEAF, new THREE.Matrix4().compose(new THREE.Vector3(x, b.maxY - 0.04 + s * 0.32, z), new THREE.Quaternion(), new THREE.Vector3(s, s * 0.8, s)));
+        if (i % 2 === 0) batch.addMesh(i % 4 ? M.marigold : M.pink, BUD, new THREE.Matrix4().compose(new THREE.Vector3(x + 0.1, b.maxY - 0.04 + s * 0.62, z + 0.05), new THREE.Quaternion(), new THREE.Vector3(0.17, 0.17, 0.17)));
       }
       continue;
     }

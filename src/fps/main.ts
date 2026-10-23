@@ -387,6 +387,17 @@ async function boot(): Promise<void> {
   setInterval(() => { if (top() === 'settings') renderSoundStatus(); }, 1000);
   readInvite();
 
+  // Offline graphics previews only: ?bench runs the section benchmark (src/fps/bench.ts).
+  // The settings it needs apply to this page load only and are put back when it leaves.
+  const bench = OFFLINE_ONLY && /[?&]bench(=|&|$)/.test(location.search) ? await import('./bench') : null;
+  const benchRun = bench?.benchParams(location.search) ?? null;
+  if (bench && benchRun) {
+    const saved = { qualityMode: store.value.qualityMode, quality: store.value.quality, practiceMap: store.value.practiceMap, practiceAllies: store.value.practiceAllies, practiceEnemies: store.value.practiceEnemies, practiceDifficulty: store.value.practiceDifficulty };
+    store.update({ qualityMode: benchRun.quality, quality: benchRun.quality, practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 2, practiceDifficulty: 'normal' });
+    window.addEventListener('pagehide', () => store.update(saved));
+    bench.prepareBench(benchRun);
+  }
+
   if (webglAvailable()) {
     try {
       bootProgress(35, 'loading.engine');
@@ -427,6 +438,7 @@ async function boot(): Promise<void> {
     if (pendingInviteCode && !inMatch && !lastRoom) openOnline();
   });
   (window as unknown as { __fps: unknown }).__fps = debugApi();
+  if (bench && benchRun) bench.runBench(benchRun, { api: debugApi(), startPractice: () => startPractice(), screen: () => top() });
 }
 
 let touchOnly = false;

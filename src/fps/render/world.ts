@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
 import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
-import { buildSection, inSection } from './section';
+import { buildSection, inSection, sectionEnabled } from './section';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -148,7 +148,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // Graphics experiment: the café section gets the detailed kit (section.ts);
   // its boxes skip the generic dressing below. Collision is unchanged.
   const sectionBoxes: MapBox[] = [];
-  const sectionOn = map === EL_PATIO;
+  const sectionOn = map === EL_PATIO && sectionEnabled();
   for (const bx of opts.boxes ?? map.boxes) {
     if (sectionOn && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
     addBox(bx);
@@ -522,7 +522,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
-  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes); group.add(sec.group); calls += sec.calls; }
+  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality); group.add(sec.group); calls += sec.calls; }
   const add = (im: THREE.InstancedMesh | null) => { if (im) { group.add(im); calls++; } };
   add(glass.build(UNIT, toon(0x3a2a52, { emissive: 0x120a20 })));
   add(frames.build(UNIT, toon(0xffffff)));

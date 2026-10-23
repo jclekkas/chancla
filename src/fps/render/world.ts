@@ -5,10 +5,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
-import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, woodTexture } from './materials';
+import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, toonRamp, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
-import { patioGroundTexture, patioLight } from './patio-materials';
+import { patioGround, patioLight } from './patio-materials';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -133,11 +133,17 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   group.add(sun, sun.target);
 
   // ------------------------------------------------------------- ground
-  const gtex = patioKit ? patioGroundTexture(quality) : groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: gtex }));
-  ground.rotation.x = -Math.PI / 2;
+  // El Patio: one repeating paving texture, with production's ground zones
+  // (streets, team courts) kept as vertex tints, and the fountain's path
+  // rings as a flat mesh (they were painted into production's ground canvas).
+  const pg = patioKit ? patioGround(quality, decor.ground, true) : null;
+  const ground = pg
+    ? new THREE.Mesh(pg.geometry, pg.material)
+    : new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18) }));
+  if (!pg) ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
+  if (pg) group.add(fountainRings());
   const beyond = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), toon(0xc9a27a));
   beyond.rotation.x = -Math.PI / 2;
   beyond.position.y = -0.02;
@@ -479,6 +485,13 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     const hgt = 6 + ((i * 7) % 5) * 1.6;
     const m = new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * r, hgt / 2, Math.sin(a) * r), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(9, hgt, 6));
     batch.addMesh(toon([0xd8765a, 0xf1dfbc, 0x7cc7bb, 0xf0b45a, 0x8a6aa8][i % 5]!, { map: stucco }), UNIT, m);
+    if (patioKit) {
+      // El Patio: the skyline gets the same roofline as the arena's houses
+      // (a cream cornice and a terracotta tile slab), instanced: no new draws.
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      trims.add(x, hgt + 0.1, z, 9.3, 0.2, 6.3, -a, COLORS.cream);
+      trims.add(x, hgt + 0.32, z, 9.6, 0.24, 6.6, -a, i % 2 ? COLORS.terracotta : COLORS.terracottaDark);
+    }
   }
 
   // ------------------------------------------------------------- signs
@@ -562,6 +575,24 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       pinata?.step(dt, t);
     },
   };
+}
+
+/** The cream path ring and thin violet ring around El Patio's fountain, flush with the ground. */
+function fountainRings(): THREE.Mesh {
+  const part = (r0: number, r1: number, hex: number) => {
+    const g = new THREE.RingGeometry(r0, r1, 64, 1);
+    g.rotateX(-Math.PI / 2);
+    const col = new THREE.Color(hex), n = g.getAttribute('position').count, c = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    return g;
+  };
+  const geo = mergeGeometries([part(3.9, 4.5, 0xe6d3ad), part(4.625, 4.875, 0x6e4a80)], false)!;
+  const m = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ gradientMap: toonRamp(), vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  m.position.y = 0.004;
+  m.receiveShadow = true;
+  m.name = 'fountain-rings';
+  return m;
 }
 
 function shade(hex: number, k: number): number {

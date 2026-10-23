@@ -40,6 +40,9 @@ const SPOTS = {
   facade: { x: -4.2, z: -3.6, look: [0.2, 2.6, -8] },
   wide: { x: 9.5, z: 3.5, look: [-4, 2.2, -8] },
   panaderia: { x: -2.8, z: 3.4, look: [2.5, 2.2, 8.5] },
+  terrace: { x: -9.5, z: -3.2, look: [-10.5, 2.0, -9.5] },
+  southrow: { x: 10, z: -12.6, look: [-2, 3.6, -15.6] },
+  solspawn: { x: -12, z: 4, look: [-17.5, 2.5, -1] },
 } as const;
 const EYE = 1.58;
 

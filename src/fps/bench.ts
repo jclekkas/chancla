@@ -7,6 +7,7 @@
 //                             drawing; the first-person view is this build's in both:
 //                             an environment-only comparison)
 //   ?bench=live[&section=off] live gameplay stress test (real bots; not a cost comparison)
+//   ?bench&scene=combat       controlled character and combat workload (see COMBAT below)
 //   &quality=high|medium|low  (default high)   &secs=60   &warmup=10
 //
 // Controlled comparison: practice starts as usual (so the bots' avatars,
@@ -31,7 +32,8 @@ declare const __BUILD_ID__: string;
 export const BENCH_VERSION = 3;
 export type BenchMode = 'controlled' | 'live';
 
-export interface BenchParams { mode: BenchMode; section: boolean; quality: Quality; secs: number; warmup: number; throttleMs: number }
+export type BenchScene = 'cafe' | 'combat';
+export interface BenchParams { mode: BenchMode; scene: BenchScene; section: boolean; quality: Quality; secs: number; warmup: number; throttleMs: number }
 
 export function benchParams(search: string): BenchParams | null {
   const q = new URLSearchParams(search);
@@ -40,6 +42,7 @@ export function benchParams(search: string): BenchParams | null {
   const num = (k: string, d: number, min: number) => { const v = Number(q.get(k)); return q.has(k) && Number.isFinite(v) && v >= min ? v : d; };
   return {
     mode: q.get('bench') === 'live' ? 'live' : 'controlled',
+    scene: q.get('scene') === 'combat' ? 'combat' : 'cafe',
     section: q.get('section') !== 'off', quality, secs: num('secs', 60, 4), warmup: num('warmup', 10, 2),
     throttleMs: num('throttle', 0, 0), // test only: a busy wait per frame, to check the scene does not depend on frame rate
   };
@@ -131,7 +134,11 @@ export function aggregate(samples: readonly FrameSample[], tl: Timeline): { all:
   return { all: one(counted, tl.secs), perView };
 }
 
-interface Pose { x: number; z: number; vx: number; vz: number; yaw: number }
+interface Pose {
+  x: number; z: number; vx: number; vz: number; yaw: number;
+  /** Combat scene only (defaults: on the ground, La Chancla, nothing recent, all ruleros). */
+  y?: number; onGround?: boolean; weapon?: 0 | 1; msSinceMelee?: number; msSinceThrow?: number; msSinceHit?: number; ruleros?: number;
+}
 function walker(k: number, t: number, side: number): Pose {
   const w = WALKERS[k]!, a = w.w * t + w.ph;
   const x = w.cx + w.r * Math.cos(a), z = w.cz + w.r * Math.sin(a);
@@ -165,6 +172,86 @@ export function sceneAt(tl: Timeline, t: number): SceneState {
   }
   return { t, station: st.i, measured: st.measured, cam, walkers, proj };
 }
+
+// ---------------------------------------------------------------- the combat workload
+
+// Character and combat presentation (?bench&scene=combat): the same three
+// characters, in front of the café at combat distance, act out a fixed
+// 2.4 s cycle. A (La Pesada) lands El Revés to B's face, knocking a roller
+// off (B's roller comes back at the next cycle, like a respawn); B answers
+// with El Chanclazo that misses; C strafes, jumps and throws La Chancla at
+// the wall twice. The hit, the miss and the impacts go through the
+// engine's normal handlers (onEvent, proj.impact), so each build draws its
+// own effects for exactly the same events at the same scene times.
+const COMBAT_STATIONS = [
+  { name: 'duel, 2 m', x: -0.4, z: -3.1, look: [-0.4, 1.35, -5.2], side: 1 },
+  { name: 'duel, 5 m', x: 4.4, z: -4.4, look: [-0.4, 1.25, -5.2], side: 1 },
+  { name: 'skirmish, 9 m', x: -9.4, z: -3.6, look: [-0.4, 1.1, -5.0], side: 1 },
+  { name: 'from the café door, 3 m', x: -2.2, z: -7.6, look: [-0.4, 1.2, -4.6], side: 1 },
+] as const;
+const CYCLE_S = 2.4;
+const DUEL = { a: [-1.0, -5.2], b: [0.2, -5.2], hitS: 0.33, answerS: 1.2, whiffS: 1.2 + 0.19 } as const;
+const THROWER = { cx: -2.6, cz: -3.4, amp: 0.8, w: 2.2, jumpS: 1.25, jumpV: 7.0, g: 21, throwS: [0.4, 1.6], flightS: 0.5, target: [-3.6, 1.6, -8.4] } as const;
+const COMBAT = { id: 'combat-scripted', stations: COMBAT_STATIONS, cycleS: CYCLE_S, duel: DUEL, thrower: THROWER };
+const COMBAT_HASH = digest(JSON.stringify(COMBAT));
+
+/** A scripted event: what the engine is told, and when (scene seconds). */
+export type ScriptedEvent =
+  | { at: number; kind: 'hit'; cycle: number }
+  | { at: number; kind: 'whiff'; cycle: number }
+  | { at: number; kind: 'impact'; cycle: number; n: number; pos: [number, number, number] };
+
+function throwerPose(t: number): Pose {
+  const T = THROWER, u = t - Math.floor(t / CYCLE_S) * CYCLE_S;
+  const x = T.cx + T.amp * Math.sin(T.w * t), vx = T.amp * T.w * Math.cos(T.w * t);
+  const air = u - T.jumpS, airT = (2 * T.jumpV) / T.g;
+  const up = air >= 0 && air < airT;
+  const y = up ? T.jumpV * air - 0.5 * T.g * air * air : 0;
+  const last = T.throwS.filter((s) => s <= u).pop();
+  return { x, z: T.cz, vx, vz: 0, yaw: Math.atan2(-(T.target[0] - x), -(T.target[2] - T.cz)), y, onGround: !up, weapon: 0, msSinceThrow: last === undefined ? 1e6 : (u - last) * 1000 };
+}
+
+/** The combat workload as a pure function of scene time. */
+export function combatAt(tl: Timeline, t: number): SceneState {
+  const st = stationAt(tl, t), S = COMBAT_STATIONS[st.i]!;
+  const dx = S.look[0] - S.x, dz = S.look[2] - S.z;
+  const cam = { x: S.x, z: S.z, yaw: Math.atan2(-dx, -dz) + Math.sin(st.u * Math.PI * 2) * 0.12, pitch: Math.atan2(S.look[1] - EYE, Math.hypot(dx, dz)) };
+  const c = Math.floor(t / CYCLE_S), u = t - c * CYCLE_S;
+  const a: Pose = { x: DUEL.a[0], z: DUEL.a[1], vx: 0, vz: 0, yaw: -Math.PI / 2, weapon: 1, msSinceMelee: u * 1000 };
+  const b: Pose = {
+    x: DUEL.b[0], z: DUEL.b[1], vx: 0, vz: 0, yaw: Math.PI / 2, weapon: 0,
+    msSinceMelee: u >= DUEL.answerS ? (u - DUEL.answerS) * 1000 : 1e6,
+    msSinceHit: u >= DUEL.hitS ? (u - DUEL.hitS) * 1000 : 1e6,
+    ruleros: u >= DUEL.hitS ? 15 & ~(1 << (c % 4)) : 15,
+  };
+  const th = throwerPose(t);
+  const proj: SceneState['proj'] = [];
+  THROWER.throwS.forEach((s0, n) => {
+    const k = (u - s0) / THROWER.flightS;
+    if (k < 0 || k >= 1) return;
+    const from = throwerPose(c * CYCLE_S + s0), tg = THROWER.target, y0 = 1.4 + (from.y ?? 0);
+    proj.push({ key: `combat-${c}-${n}`, weapon: 0, owner: 2, x: from.x + (tg[0] - from.x) * k, y: y0 + (tg[1] - y0) * k + 0.6 * 4 * k * (1 - k), z: from.z + (tg[2] - from.z) * k });
+  });
+  return { t, station: st.i, measured: st.measured, cam, walkers: [a, b, th], proj };
+}
+
+/** Events with scene times in (t0, t1], in time order. */
+export function combatEvents(t0: number, t1: number): ScriptedEvent[] {
+  const out: ScriptedEvent[] = [];
+  for (let c = Math.max(0, Math.floor(t0 / CYCLE_S)); c * CYCLE_S <= t1; c++) {
+    const base = c * CYCLE_S;
+    const evs: ScriptedEvent[] = [
+      { at: base + DUEL.hitS, kind: 'hit', cycle: c },
+      { at: base + DUEL.whiffS, kind: 'whiff', cycle: c },
+      ...THROWER.throwS.map((s0, n): ScriptedEvent => ({ at: base + s0 + THROWER.flightS, kind: 'impact', cycle: c, n, pos: [THROWER.target[0], THROWER.target[1], THROWER.target[2]] })),
+    ];
+    for (const e of evs) if (e.at > t0 && e.at <= t1) out.push(e);
+  }
+  return out.sort((x, y) => x.at - y.at);
+}
+
+/** Projectiles the scripted scenes keep in flight at all times (for the drawn-versus-script check). */
+const MIN_PROJ = { cafe: PROJ.count, combat: 0 } as const;
 
 // ---------------------------------------------------------------- the run
 
@@ -213,6 +300,10 @@ export function runBench(p: BenchParams, h: Hooks): void {
   if (!engine || !input) { ui.status('3D rendering did not start, so nothing can be measured.'); return; }
   const r = engine.renderer as THREE.WebGLRenderer;
   const tl: Timeline = { warmup: p.warmup, secs: p.secs };
+  const combat = p.mode === 'controlled' && p.scene === 'combat';
+  const VIEWS = combat ? COMBAT_STATIONS : STATIONS;
+  const at = combat ? combatAt : sceneAt;
+  let lastT = -1;
   const startSize = `${innerWidth}x${innerHeight}@${devicePixelRatio}`;
   let invalid: string | null = null;
   const invalidate = (why: string) => { if (!invalid) invalid = why; };
@@ -243,19 +334,34 @@ export function runBench(p: BenchParams, h: Hooks): void {
   /** Controlled: write the scene for this engine frame into the session, at the moment the engine reads it. */
   const applyScene = () => {
     const s = session, t = (performance.now() - t0) / 1000;
-    const sc = sceneAt(tl, t);
+    const sc = at(tl, t);
     applied = sc;
     for (const b of [s.body]) { b.x = sc.cam.x; b.z = sc.cam.z; b.y = 0; b.vx = 0; b.vy = 0; b.vz = 0; b.onGround = true; b.crouched = false; }
     input.yaw = sc.cam.yaw; input.pitch = sc.cam.pitch;
     ids.forEach((id, k) => {
       const w = sc.walkers[k]!;
-      s.remotes.set(id, { id, x: w.x, y: 0, z: w.z, yaw: w.yaw, pitch: 0, vx: w.vx, vz: w.vz, alive: true, crouched: false, onGround: true, protected: false, connected: true, hp: 100, weapon: 0, msSinceThrow: 1e6, msSinceHit: 1e6, msSinceMelee: 1e6, ruleros: 15 });
+      s.remotes.set(id, { id, x: w.x, y: w.y ?? 0, z: w.z, yaw: w.yaw, pitch: 0, vx: w.vx, vz: w.vz, alive: true, crouched: false, onGround: w.onGround ?? true, protected: false, connected: true, hp: 100, weapon: w.weapon ?? 0, msSinceThrow: w.msSinceThrow ?? 1e6, msSinceHit: w.msSinceHit ?? 1e6, msSinceMelee: w.msSinceMelee ?? 1e6, ruleros: w.ruleros ?? 15 });
     });
+    if (combat) {
+      // The engine reads each character's ruleros from the newest snapshot.
+      for (const tp of s.snap?.p ?? []) { const k = ids.indexOf(tp[0]); if (k >= 0) tp[14] = sc.walkers[k]!.ruleros ?? 15; }
+      for (const e of combatEvents(lastT, t)) fire(e);
+      lastT = t;
+    }
     s.projectiles.clear();
     for (const q of sc.proj) {
       s.projectiles.set(q.key, { id: q.key, weapon: q.weapon, owner: ids[q.owner] ?? 0, predicted: true, startAt: 0, endAt: 0, endPos: null, done: false, trail: [],
         pr: { id: 0, owner: ids[q.owner] ?? 0, team: 0, weapon: q.weapon, x: q.x, y: q.y, z: q.z, vx: 0, vy: 0, vz: 0, ageMs: 0, traveled: 0, bounces: 0, fireSeq: 0 } });
     }
+  };
+
+  /** One scripted event through the engine's normal handlers (never involving Rosa, so no HUD). */
+  const fire = (e: ScriptedEvent) => {
+    const s = session, rt = s.renderTime();
+    const [a, b] = ids, A = s.remotes.get(a), B = s.remotes.get(b);
+    if (e.kind === 'hit' && A && B) engine.onEvent({ k: 'hit', a, v: b, d: 45, hp: 55, head: true, w: 1, splash: false, p: [B.x - 0.2, 1.5, B.z], m: 900000 + e.cycle * 4, tm: rt, ru: [e.cycle % 4] });
+    else if (e.kind === 'whiff') engine.onEvent({ k: 'whiff', id: 900000 + e.cycle * 4 + 1, a: b, w: 0, tm: rt });
+    else if (e.kind === 'impact') engine.proj.impact(0, e.pos, false);
   };
 
   /** What the engine actually drew this frame, against the script (controlled), sampled once per scene second. */
@@ -353,7 +459,7 @@ export function runBench(p: BenchParams, h: Hooks): void {
     }
     const st = stationAt(tl, t);
     if (invalid || t >= p.warmup + p.secs) { finish(); return; }
-    ui.status(st.measured ? `Measuring ${Math.floor(t - p.warmup)} / ${p.secs} s · ${STATIONS[st.i]!.name}` : `Warming up ${Math.ceil(p.warmup - t)} s (not counted) · ${STATIONS[st.i]!.name}`);
+    ui.status(st.measured ? `Measuring ${Math.floor(t - p.warmup)} / ${p.secs} s · ${VIEWS[st.i]!.name}` : `Warming up ${Math.ceil(p.warmup - t)} s (not counted) · ${VIEWS[st.i]!.name}`);
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -369,10 +475,10 @@ export function runBench(p: BenchParams, h: Hooks): void {
     if (document.pointerLockElement) document.exitPointerLock();
     const s = h.api.session();
     const agg = aggregate(samples, tl), all = agg.all;
-    const perView = STATIONS.map((S, i) => { const { firstPerson: _fp, ...v } = agg.perView[i]!; void _fp; return { name: S.name, ...v }; });
+    const perView = VIEWS.map((S, i) => { const { firstPerson: _fp, ...v } = agg.perView[i]!; void _fp; return { name: S.name, ...v }; });
     if (!invalid && perView.some((v) => v.frames === 0)) invalidate('a view had no measured frames');
     const tol = 1e-3;
-    if (p.mode === 'controlled' && !invalid && (checks.n < Math.floor(p.secs / 2) || checks.camErr > tol || checks.walkerErr > tol || checks.projErr > tol || checks.minAvatars < ids.length || checks.minProjectiles < PROJ.count)) {
+    if (p.mode === 'controlled' && !invalid && (checks.n < Math.floor(p.secs / 2) || checks.camErr > tol || checks.walkerErr > tol || checks.projErr > tol || checks.minAvatars < ids.length || checks.minProjectiles < MIN_PROJ[combat ? 'combat' : 'cafe'])) {
       invalidate('what was drawn did not match the scripted scene');
     }
     const c = r.domElement;
@@ -382,7 +488,7 @@ export function runBench(p: BenchParams, h: Hooks): void {
       build: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev',
       variant: p.section ? 'experiment' : 'environment-off', comparison: 'environment-only', quality: p.quality,
       valid: !invalid && all.frames > 0, invalidReason: invalid ?? (all.frames ? null : 'no frames measured'), testRun: p.throttleMs > 0 || p.secs < 60,
-      workload: { id: p.mode === 'controlled' ? `${SCENE.id}-v${BENCH_VERSION}` : `live-practice-1v2-normal-v${BENCH_VERSION}`, hash: p.mode === 'controlled' ? SCENE_HASH : 'random (live bots)', warmupS: p.warmup, measuredSPerView: p.secs / STATIONS.length, views: STATIONS.map((x) => x.name) },
+      workload: { id: p.mode === 'controlled' ? `${combat ? COMBAT.id : SCENE.id}-v${BENCH_VERSION}` : `live-practice-1v2-normal-v${BENCH_VERSION}`, hash: p.mode === 'controlled' ? (combat ? COMBAT_HASH : SCENE_HASH) : 'random (live bots)', warmupS: p.warmup, measuredSPerView: p.secs / VIEWS.length, views: VIEWS.map((x) => x.name) },
       measuredS: +all.sampledS.toFixed(2), frames: all.frames,
       avgFps: +all.avgFps.toFixed(1), medianFrameMs: all.medianFrameMs, p95FrameMs: all.p95FrameMs, p99FrameMs: all.p99FrameMs, maxFrameMs: all.maxFrameMs,
       framesOver50ms: all.framesOver50ms,
@@ -390,7 +496,7 @@ export function runBench(p: BenchParams, h: Hooks): void {
       drawCalls: all.drawCalls, triangles: all.triangles, firstPerson: all.firstPerson,
       perView, sampling: SAMPLING_RULE,
       scene: p.mode === 'controlled'
-        ? { characters: ids.length, projectiles: PROJ.count, checkpoints: checks.n, maxCameraError: +checks.camErr.toExponential(2), maxCharacterError: +checks.walkerErr.toExponential(2), maxProjectileError: +checks.projErr.toExponential(2), minCharactersDrawn: checks.minAvatars, minProjectilesDrawn: checks.minProjectiles }
+        ? { characters: ids.length, projectiles: combat ? 'two thrown per 2.4 s cycle' : PROJ.count, checkpoints: checks.n, maxCameraError: +checks.camErr.toExponential(2), maxCharacterError: +checks.walkerErr.toExponential(2), maxProjectileError: +checks.projErr.toExponential(2), minCharactersDrawn: checks.minAvatars, minProjectilesDrawn: checks.minProjectiles }
         : { bots: ids.length, throwsByRosa: (s?.localShot ?? live.throws0) - live.throws0, avgCharactersInView: live.samples ? +(live.avatarsInView / live.samples).toFixed(2) : 0, avgProjectilesInFlight: live.samples ? +(live.projectiles / live.samples).toFixed(2) : 0, rosaEliminated: live.deaths },
       throttleMs: p.throttleMs,
       renderer: rendererName(r), userAgent: navigator.userAgent, startedAt: new Date(performance.timeOrigin).toISOString(),

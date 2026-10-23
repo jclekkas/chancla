@@ -39,7 +39,15 @@ const LEGS = 1 + 3 * JOINTS.indexOf('legL');
 function pose(rig: RosaRig): number[] {
   const out: number[] = [rig.hips.position.y];
   for (const j of JOINTS) { const r = rig[j].rotation; out.push(r.x, r.y, r.z); }
+  // The feet are set by quaternion (their Euler angles can flip near a gimbal): compare those whole.
+  for (const j of ['footL', 'footR'] as const) { const q = rig[j].quaternion; out.push(q.x, q.y, q.z, q.w); }
   return out;
+}
+const FEET_EULER = 1 + 3 * JOINTS.indexOf('footL'), FEET_Q = 1 + 3 * JOINTS.length;
+/** Rotation between two unit quaternions stored at p[i..i+3]. */
+function qAngle(a: number[], b: number[], i: number): number {
+  const d = Math.abs(a[i]! * b[i]! + a[i + 1]! * b[i + 1]! + a[i + 2]! * b[i + 2]! + a[i + 3]! * b[i + 3]!);
+  return 2 * Math.acos(Math.min(1, d));
 }
 
 interface Frame { t: number; feet: THREE.Vector3[]; pose: number[] }
@@ -264,9 +272,14 @@ describe('Rosa animation: robustness', () => {
           if (i === 0 || f.cut || !frames[i - 1]!.alive) continue;
           // No pops: no joint turns more than this between two 16 ms frames
           // (hips height x4; the legs, IK-driven, swing faster in a run: x0.75).
-          for (let j = 0; j < f.p.length; j++) {
+          for (let j = 0; j < FEET_Q; j++) {
+            if (j >= FEET_EULER) continue;
             const d = (j === 0 ? Math.abs(f.p[j]! - frames[i - 1]!.p[j]!) * 4 : Math.abs(wrap(f.p[j]! - frames[i - 1]!.p[j]!))) * (j >= LEGS ? 0.75 : 1);
             if (d > worst) { worst = d; worstAt = `frame ${i}, channel ${j} [${frames[i - 1]!.info} -> ${f.info}]`; }
+          }
+          for (const q of [FEET_Q, FEET_Q + 4]) {
+            const d = qAngle(f.p, frames[i - 1]!.p, q) * 0.75;
+            if (d > worst) { worst = d; worstAt = `frame ${i}, foot ${q} [${frames[i - 1]!.info} -> ${f.info}]`; }
           }
         }
         expect(worst, `largest per-frame change ${worst.toFixed(3)} at ${worstAt} (seed ${seed})`).toBeLessThan(0.85);

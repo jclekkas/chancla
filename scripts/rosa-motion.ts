@@ -216,8 +216,10 @@ async function main(): Promise<void> {
     await p.clock.install();
     await p.clock.pauseAt((await p.evaluate(() => Date.now())) + 200);
     // Warm up (shaders, the first frames on the fake clock) standing still.
-    await p.evaluate(() => { const M = (window as any).__mo; M.scene = 'idle'; M.view = 'side'; M.t0 = performance.now(); });
-    for (let i = 0; i < 40; i++) await p.clock.runFor(1000 / 60);
+    // (The first seconds on the fake clock drop frames: a walk is played through them unfilmed.)
+    await p.evaluate(() => { const M = (window as any).__mo; M.scene = 'walk3'; M.view = 'side'; M.dur = 3; M.t0 = performance.now(); });
+    for (let i = 0; i < 240; i++) await p.clock.runFor(1000 / 60);
+    await p.evaluate(() => { (window as any).__mo.scene = ''; });
 
     const run = async (sc: Scene, view: View, shots: boolean): Promise<number[][]> => {
       await p.evaluate(({ name, view, pre, dur }) => { const M = (window as any).__mo; M.scene = name; M.view = view; M.dur = dur; M.t0 = performance.now() + pre * 1000; M.samples = []; M.fired = {}; M.lastT = -1e9; }, { name: sc.name, view, pre: sc.pre, dur: sc.dur });
@@ -250,7 +252,9 @@ async function main(): Promise<void> {
       if (MEASURED.includes(sc.name)) {
         // A longer run, unfilmed, for the foot-slip numbers.
         const m: Scene = { ...sc, dur: 3.0, fps: 60, pre: 0.2 };
-        const samples = await run(m, 'side', false);
+        let samples = await run(m, 'side', false);
+        // The very first run after the clock switch can come back short: run it again.
+        if (samples.filter((r) => r[0]! >= 0.8).length < 100) samples = await run(m, 'side', false);
         report[sc.name] = footSlip(samples);
         if (process.env.DEBUG) console.log(samples.length, samples.slice(0, 5).map((r) => r[0]!.toFixed(3)).join(" "), samples.slice(-3).map((r) => r[0]!.toFixed(3)).join(" "));
         console.log(sc.name.padEnd(10), JSON.stringify(report[sc.name]));

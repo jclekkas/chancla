@@ -207,6 +207,7 @@ export class RosaAnimator {
   // Gait.
   private walking = false;
   private gaitIdle = true;
+  private splay = 0;
   private bx = 0; private bz = 0; // her ground position this frame (world, plus any walk-on-the-spot offset)
   private gait = new Spring();
   private run = new Spring();
@@ -493,6 +494,7 @@ export class RosaAnimator {
     for (let i = HY; i <= HRZ; i++) o[i] = raw[i]! + this.off[i]!;
 
     // ---- Legs: IK to the feet ----
+    this.splay = 0.5 * cr;
     this.solveLeg(ft[0], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LLX);
     this.solveLeg(ft[1], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LRX);
     for (let i = LLX; i <= SRX; i++) o[i] = raw[i]! + this.off[i]!;
@@ -778,7 +780,8 @@ export class RosaAnimator {
     t = x * c + y * s; y = -x * s + y * c; x = t;
     x -= f.side * RIG.legX; y -= RIG.legY;
     // The knee points the way the foot does (a foot still planted after a turn).
-    const psi = clamp(wrapAngle(f.yaw - rootYaw - hry) * 0.8, -0.6, 0.6);
+    // Crouched, the knees splay out a little (a granny squat that keeps them inside the skirt).
+    const psi = clamp(wrapAngle(f.yaw - rootYaw - hry) * 0.8, -0.6, 0.6) - f.side * this.splay;
     c = Math.cos(psi); s = Math.sin(psi);
     t = x * c - z * s; z = x * s + z * c; x = t;
     const l = clamp(Math.hypot(x, y, z), 0.25, REACH * 0.9999);

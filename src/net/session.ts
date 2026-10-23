@@ -539,6 +539,24 @@ export class GameSession {
     this.correction.x *= k; this.correction.y *= k; this.correction.z *= k;
   }
 
+  /**
+   * Neutral input for `ticks` ticks at once, sent straight away. Used when
+   * practice pauses: what was already sent, and the slow-down after it, get
+   * simulated before the match freezes, so she is standing still when it
+   * resumes (8 ticks stop a full-speed walk on the ground; knockback and a
+   * jump keep their normal physics).
+   */
+  settle(ticks: number): void {
+    for (let i = 0; i < ticks; i++) this.tick({ mx: 0, mz: 0, yaw: this.yaw, pitch: this.pitch, fire: false, jump: false, crouch: false, melee: false, weapon: this.wantWeapon });
+    this.flush();
+  }
+
+  /** Inputs predicted but not yet acknowledged by the server (diagnostics). */
+  get pendingInputs(): number { return this.pending.length; }
+
+  /** The last confirmed hit on you: when, how hard, and by what (diagnostics: knockback). */
+  lastHitOnMe: { at: number; d: number; w: number; melee: boolean } | null = null;
+
   // Sends queued inputs. Call once per rendered frame (or tick).
   flush(): void {
     // Inputs produced while disconnected are dropped; the server never sees
@@ -627,6 +645,7 @@ export class GameSession {
       this.seenMelee.add(meleeKey);
       if (this.seenMelee.size > 512) this.seenMelee.delete(this.seenMelee.values().next().value!);
     }
+    if (e.k === 'hit' && e.v === this.id) this.lastHitOnMe = { at: Math.round(this.now()), d: e.d, w: e.w, melee: e.m !== undefined };
     const mine = 'o' in e ? e.o === this.id : 'a' in e ? e.a === this.id || ('v' in e && e.v === this.id) : 'id' in e && e.id === this.id;
     switch (e.k) {
       case 'throw':

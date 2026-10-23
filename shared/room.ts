@@ -341,6 +341,23 @@ export class Room {
     return true;
   }
 
+  /**
+   * Runs ticks now until no connected player has inputs waiting (at most
+   * `max`). The practice host calls this as it pauses, so nothing already
+   * sent is left to be applied after the pause. Returns the ticks run.
+   */
+  drainInputs(max = 40): number {
+    if (!this.sim || (this.phase !== 'countdown' && this.phase !== 'playing')) return 0;
+    let n = 0;
+    const waiting = () => [...this.members.values()].some((m) => !!m.conn && (this.sim?.players.get(m.id)?.queue.length ?? 0) > 0);
+    while (n < max && waiting()) {
+      this.tick();
+      n++;
+      if ((this.phase as RoomPhase) === 'results') break;
+    }
+    return n;
+  }
+
   private tick(): void {
     const sim = this.sim!;
     for (const m of this.members.values()) {

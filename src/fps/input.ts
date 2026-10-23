@@ -83,6 +83,10 @@ export class FpsInput {
   private pendingMelee = false;
   /** Melee presses seen (tests and diagnostics). */
   meleePresses = 0;
+  /** The last time held input was dropped, and why (diagnostics). */
+  private lastRelease: { reason: string; at: number } | null = null;
+  /** Key presses ignored because Ctrl, Cmd or Option was held (diagnostics). */
+  private modifierIgnored = 0;
   private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
   /** Called by release(): the touch overlay forgets the fingers it was tracking. */
   onTouchRelease: (() => void) | null = null;
@@ -137,7 +141,7 @@ export class FpsInput {
       if (down && this.heldCount) this.release('Cmd/Ctrl pressed');
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) { if (!down) this.keys.delete(e.code); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) { if (!down) this.keys.delete(e.code); else this.modifierIgnored++; return; }
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName;
     const field = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || !!target?.isContentEditable;
@@ -249,9 +253,17 @@ export class FpsInput {
     };
   }
 
+  /** The movement the held keys resolve to, without consuming presses (diagnostics). */
+  private peek(): { mx: number; mz: number } {
+    let mx = this.touch.mx, mz = this.touch.mz;
+    for (const k of this.keys) { const v = MOVE[k]; if (v) { mx += v[0]; mz += v[1]; } }
+    return { mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1) };
+  }
+
   // Drops everything held (focus loss, menus, death).
   release(reason?: string): void {
     if (reason && this.heldCount) diagLog('input', `released held input (${reason})`);
+    this.lastRelease = { reason: reason ?? 'unspecified', at: performance.now() };
     this.keys.clear();
     this.mouseFire = false;
     this.keyFire = false;
@@ -274,6 +286,10 @@ export class FpsInput {
       mode: this.touchMode ? 'touch' : this.locked ? 'mouse (captured)' : this.fallback ? 'mouse (drag to look)' : 'mouse (not captured)',
       enabled: this.enabled, locked: this.locked, pointerLockElement: !!document.pointerLockElement, fallback: this.fallback,
       held: this.heldCount, focus: describeEl(document.activeElement),
+      // Key codes only (never what was typed): which bindings the game believes are down.
+      heldKeys: [...this.keys], resolved: (() => { const c = this.peek(); return { mx: c.mx, mz: c.mz }; })(),
+      lastRelease: this.lastRelease ? { reason: this.lastRelease.reason, msAgo: Math.round(performance.now() - this.lastRelease.at) } : null,
+      modifierIgnored: this.modifierIgnored, windowFocused: document.hasFocus(), hidden: document.hidden,
     };
   }
 

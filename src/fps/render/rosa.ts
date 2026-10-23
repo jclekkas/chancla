@@ -70,30 +70,48 @@ export interface AvatarState {
   ruleros?: number;
 }
 
-// Third-person melee: keyframes for the right arm (shoulder pitch, outer
-// yaw sweep, forearm bend) and a torso twist, on the attack's own clock.
-// Contact sits inside the attack's real contact window.
-interface ArmKey { t: number; ax: number; ay: number; fx: number; tw: number }
+// Third-person melee: keyframes for the right arm on the attack's own clock,
+// in Rosa's body coordinates (she faces -z; her right is +x):
+//   ax  shoulder lift (pi/2: the upper arm level, pointing ahead)
+//   ay  shoulder sweep about the vertical (+ across to her left, - out to her right)
+//   ez  elbow bend across the body (- folds the hand to her left, + to her right)
+//   fx  elbow bend up and down
+//   wy  wrist roll about the forearm (turns the sandal's sole to face the travel)
+//   tw  torso twist (+ shoulders turned to her left)
+// The striking phase sits inside the attack's real contact window (config.ts).
+interface ArmKey { t: number; ax: number; ay: number; ez: number; fx: number; wy: number; tw: number }
+const REST: Omit<ArmKey, 't'> = { ax: -0.5, ay: 0, ez: 0, fx: -0.6, wy: 0, tw: 0 };
 const MELEE_KEYS: Record<WeaponId, ArmKey[]> = {
-  // El Chanclazo: cocked back to her right, a quick forehand across, a short follow-through.
+  // El Chanclazo: a quick forehand. The hand is cocked back out to her right,
+  // the palm leads across her body to the left, a short follow-through.
   0: [
-    { t: 0, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
-    { t: 90, ax: 1.25, ay: -0.95, fx: -0.95, tw: -0.3 },
-    { t: 155, ax: 1.4, ay: 0.25, fx: -0.25, tw: 0.25 },
-    { t: 300, ax: 1.05, ay: 0.95, fx: -0.35, tw: 0.4 },
-    { t: 700, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+    { t: 0, ...REST },
+    { t: 85, ax: 1.35, ay: -0.85, ez: 0.85, fx: -0.15, wy: 1.2, tw: -0.3 },
+    { t: 120, ax: 1.5, ay: -0.45, ez: 0.45, fx: -0.05, wy: 1.4, tw: -0.15 },
+    { t: 190, ax: 1.55, ay: 0.55, ez: -0.15, fx: 0, wy: 1.5, tw: 0.25 },
+    { t: 320, ax: 1.25, ay: 0.95, ez: -0.45, fx: -0.2, wy: 1.2, tw: 0.35 },
+    { t: 700, ...REST },
   ],
-  // El Revés: the arm drawn across her chest, the shoulder turned, then a big
-  // backhand out to her right with an exaggerated follow-through.
+  // El Revés: a big backhand. Wind-up: the arm comes across her chest to her
+  // left, elbow folded so the hand is at her left shoulder, shoulders turned.
+  // Strike (the contact window, 300-390 ms): the arm sweeps out from left to
+  // right at face height, the elbow opening, the back of the hand leading and
+  // the sole turned to face the way it travels. Follow-through: out to her
+  // right, extended; then a natural recovery.
   1: [
-    { t: 0, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
-    { t: 280, ax: 1.2, ay: 1.15, fx: -1.45, tw: 0.55 },
-    { t: 345, ax: 1.4, ay: -0.2, fx: -0.15, tw: -0.25 },
-    { t: 600, ax: 1.1, ay: -1.35, fx: -0.1, tw: -0.7 },
-    { t: 1100, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+    { t: 0, ...REST },
+    { t: 150, ax: 1.3, ay: 0.7, ez: -1.0, fx: -0.25, wy: -0.6, tw: 0.3 },
+    { t: 285, ax: 1.6, ay: 1.05, ez: -1.5, fx: -0.15, wy: -1.25, tw: 0.6 },
+    { t: 300, ax: 1.62, ay: 1.0, ez: -1.45, fx: -0.12, wy: -1.35, tw: 0.58 },
+    { t: 345, ax: 1.72, ay: 0.05, ez: -0.35, fx: 0, wy: -1.55, tw: 0.05 },
+    { t: 390, ax: 1.7, ay: -0.6, ez: 0.0, fx: 0, wy: -1.55, tw: -0.3 },
+    { t: 560, ax: 1.55, ay: -1.35, ez: 0.12, fx: -0.05, wy: -1.3, tw: -0.62 },
+    { t: 760, ax: 1.0, ay: -0.95, ez: -0.1, fx: -0.3, wy: -0.6, tw: -0.3 },
+    { t: 1100, ...REST },
   ],
 };
 
+const ARM_FIELDS = ['ax', 'ay', 'ez', 'fx', 'wy', 'tw'] as const;
 function sampleArm(keys: ArmKey[], t: number): ArmKey {
   if (t <= keys[0]!.t) return keys[0]!;
   for (let i = 0; i < keys.length - 1; i++) {
@@ -101,7 +119,9 @@ function sampleArm(keys: ArmKey[], t: number): ArmKey {
     if (t <= b.t) {
       const k = (t - a.t) / Math.max(1, b.t - a.t);
       const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-      return { t, ax: a.ax + (b.ax - a.ax) * e, ay: a.ay + (b.ay - a.ay) * e, fx: a.fx + (b.fx - a.fx) * e, tw: a.tw + (b.tw - a.tw) * e };
+      const out = { t } as ArmKey;
+      for (const f of ARM_FIELDS) out[f] = a[f] + (b[f] - a[f]) * e;
+      return out;
     }
   }
   return keys[keys.length - 1]!;
@@ -154,6 +174,8 @@ export class Avatar {
   private armR = new THREE.Group();
   private foreL = new THREE.Group();
   private foreR = new THREE.Group();
+  /** The right wrist: holds the hand and whatever is in it, so the sandal can roll about the forearm. */
+  private wristR = new THREE.Group();
   private legL = new THREE.Group();
   private legR = new THREE.Group();
   private shinL = new THREE.Group();
@@ -340,19 +362,25 @@ export class Avatar {
       lo.position.y = -0.15;
       fore.add(lo);
       const hand = new THREE.Mesh(geo.hand, skin);
-      hand.position.y = -0.31;
-      fore.add(hand);
+      if (fore === this.foreR) {
+        this.wristR.position.y = -0.31;
+        fore.add(this.wristR);
+        this.wristR.add(hand);
+      } else {
+        hand.position.y = -0.31;
+        fore.add(hand);
+      }
     }
     // The same flip-flop as the first-person view and thrown chanclas (shooter only).
     const std = chanclaModel();
     std.scale.setScalar(1.25);
     std.rotation.set(Math.PI / 2, 0, 0);
-    std.position.set(0, -0.36, -0.06);
+    std.position.set(0, -0.05, -0.06);
     const heavy = buildPesada();
     heavy.scale.setScalar(1.25);
     heavy.rotation.set(Math.PI / 2, 0, 0);
-    heavy.position.set(0, -0.38, -0.05);
-    this.foreR.add(std, heavy);
+    heavy.position.set(0, -0.07, -0.05);
+    this.wristR.add(std, heavy);
     this.weapons = [std, heavy];
 
     this.bubble = new THREE.Mesh(geo.bubble, new THREE.MeshBasicMaterial({ color: TEAM[team].accent, transparent: true, opacity: 0.18, depthWrite: false }));
@@ -514,19 +542,21 @@ export class Avatar {
         fx = -0.2 - 0.4 * k;
       }
     }
-    let ay = 0;
+    let ay = 0, ez = 0, wy = 0;
     // Melee swing: overrides the throw pose; the sandal stays in her hand.
     const tm = s.msSinceMelee ?? 1e9;
     const mdef = MELEE[s.weapon]!;
     const swinging = tm < mdef.cycleMs;
     if (swinging) {
       const k = sampleArm(MELEE_KEYS[s.weapon], tm);
+      // Reduced motion: the same swing, smaller (closer to the rest pose).
       const m = reducedMotion ? 0.6 : 1;
-      ax = -0.5 + (k.ax + 0.5) * m; ay = k.ay * m; fx = -0.6 + (k.fx + 0.6) * m; twist = k.tw * m;
+      ax = REST.ax + (k.ax - REST.ax) * m; ay = k.ay * m; ez = k.ez * m; fx = REST.fx + (k.fx - REST.fx) * m; wy = k.wy * m; twist = k.tw * m;
     }
     this.armR.rotation.order = 'YXZ'; // the sweep turns about the vertical, outside the arm's lift
     this.armR.rotation.set(ax, ay, 0.1);
-    this.foreR.rotation.x = fx;
+    this.foreR.rotation.set(fx, 0, ez);
+    this.wristR.rotation.set(0, wy, 0);
     this.torso.rotation.y += twist;
     const inHand = swinging || tThrow > def.cooldownMs * 0.55 || tThrow < (s.weapon === 1 ? 160 : 90);
     this.weapons[0]!.visible = s.weapon === 0 && inHand;

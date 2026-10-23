@@ -34,9 +34,9 @@ async function advance(p: Page, ms: number): Promise<void> {
   for (let t = 0; t < ms; t += 100) await p.clock.runFor(100);
 }
 
-async function shoot(p: Page, n: number): Promise<void> {
+async function shoot(p: Page, n: number, stepMs = 1000 / 30): Promise<void> {
   for (let i = 0; i < n; i++) {
-    await p.clock.runFor(1000 / 30);
+    await p.clock.runFor(stepMs);
     await p.screenshot({ path: path.join(OUT, `f-${String(frame++).padStart(4, '0')}.png`) });
   }
 }
@@ -72,6 +72,51 @@ async function botSwing(p: Page, who: 'ally' | 'foe', at: [number, number, numbe
     q.weapon = weapon; q.switchMs = 0;
     room.sim.queueInput(q.id, { seq: q.lastSeq + 1, mx: 0, mz: 0, yaw, pitch, buttons: 8, weapon });
   }, { who, at, weapon });
+}
+
+// The movement fix and the reworked Revés (SCENES=fix).
+async function fixScenes(p: Page): Promise<void> {
+  // 1. Arrow keys: move, release, a clean stop; then the other way.
+  await stage(p, { me: [-4, 4.5], look: [-4, 1.5, -6] });
+  await shoot(p, 6);
+  marks.push({ frame, label: 'Arrow keys: hold Up, release: a clean stop' });
+  await p.keyboard.down('ArrowUp'); await shoot(p, 20); await p.keyboard.up('ArrowUp'); await shoot(p, 22);
+  marks.push({ frame, label: 'Hold Left, release: a clean stop' });
+  await p.keyboard.down('ArrowLeft'); await shoot(p, 16); await p.keyboard.up('ArrowLeft'); await shoot(p, 20);
+  // 2. Esc while walking, key released in the menu, Resume: she stays put, then moves again.
+  marks.push({ frame, label: 'Esc while walking; key released in the menu' });
+  await p.keyboard.down('ArrowUp'); await shoot(p, 12);
+  await p.keyboard.press('Escape'); await shoot(p, 4);
+  await p.keyboard.up('ArrowUp'); await shoot(p, 14);
+  if (await p.isVisible('#btn-resume')) await p.click('#btn-resume');
+  marks.push({ frame, label: 'Resume: she stays put (no drift)' });
+  await shoot(p, 28);
+  marks.push({ frame, label: 'Arrows work again: Right, release, stop' });
+  await p.keyboard.down('ArrowRight'); await shoot(p, 14); await p.keyboard.up('ArrowRight'); await shoot(p, 20);
+  // 3. El Revés in first person, to the face, a rulero flies.
+  await p.keyboard.press('Digit2'); await shoot(p, 12);
+  await stage(p, { me: [-3, 3.4], look: [-1.7, 1.55, 3.4], foe: [-1.7, 3.4, Math.PI / 2], hp: 100, weapon: 1 });
+  await shoot(p, 8);
+  marks.push({ frame, label: 'El Revés, first person: wind-up, contact, follow-through' });
+  await p.keyboard.press('KeyV');
+  await shoot(p, 45);
+  // 4. Three-quarter view from behind the attacker's right shoulder, the
+  // recipient's face toward the camera: a bot's El Revés, real speed.
+  await p.evaluate(() => { (window as any).__fps.input().weapon = 0; });
+  // Spectator shots: your own first-person hand is hidden so it does not cover the pair (stated in the caption).
+  await p.evaluate(() => { (window as any).__fps.engine().vm.root.scale.setScalar(1e-4); });
+  await stage(p, { me: [-5.0, 5.4], look: [-2.0, 1.5, 3.3], ally: [-3.0, 3.4, -Math.PI / 2], foe: [-1.7, 3.4, Math.PI / 2], hp: 100, weapon: 0 });
+  await shoot(p, 10);
+  marks.push({ frame, label: 'El Revés, three-quarter view (own hand hidden): real speed' });
+  await botSwing(p, 'ally', [-1.7, 1.52, 3.4], 1);
+  await shoot(p, 40);
+  // 5. The same, slowed down four times (clock 1/120 s per frame).
+  await advance(p, 900);
+  await stage(p, { me: [-5.0, 5.4], look: [-2.0, 1.5, 3.3], ally: [-3.0, 3.4, -Math.PI / 2], foe: [-1.7, 3.4, Math.PI / 2], hp: 100, weapon: 0 });
+  await shoot(p, 8);
+  marks.push({ frame, label: 'SLOW MOTION x4: El Revés, three-quarter view (own hand hidden)' });
+  await botSwing(p, 'ally', [-1.7, 1.52, 3.4], 1);
+  await shoot(p, 96, 1000 / 120);
 }
 
 async function main(): Promise<void> {
@@ -114,6 +159,8 @@ async function main(): Promise<void> {
     });
     await advance(p, 600);
 
+    if (process.env.SCENES === 'fix') await fixScenes(p);
+    else {
     // 1. El Chanclazo: a hit.
     await stage(p, { me: [-3, 3.4], look: [-1.7, 1.55, 3.4], foe: [-1.7, 3.4, Math.PI / 2], hp: 100, weapon: 0 });
     await shoot(p, 8);
@@ -152,6 +199,7 @@ async function main(): Promise<void> {
     marks.push({ frame, label: 'Third person: El Revés, a rulero flies' });
     await botSwing(p, 'ally', [-1.7, 1.52, 3.4], 1);
     await shoot(p, 50);
+    }
     await ctx.close();
   } finally {
     await browser.close();

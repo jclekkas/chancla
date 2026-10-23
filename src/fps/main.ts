@@ -268,12 +268,25 @@ function setTouchMode(on: boolean): void {
 
 /** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
 let benchHold = false;
+/** The last practice pause: when, and how many ticks it took to use up what was already sent (diagnostics). */
+let lastSettle: { at: number; ticks: number } | null = null;
 
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
   const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
-  if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
+  if (shouldPause && !host.paused) {
+    // Settle before freezing: held keys go, a few neutral ticks are sent,
+    // and the host uses up everything already sent. Pausing mid-stride with
+    // inputs still queued made Rosa carry on walking (0.3-0.9 m) after
+    // Resume with no key held. The benchmark's hold keeps its scripted scene.
+    input?.release();
+    let settled = 0;
+    if (!benchHold && session) { session.settle(8); settled = host.settle(); }
+    host.pause(); engine.paused = true;
+    lastSettle = { at: Math.round(performance.now()), ticks: settled };
+    diagLog('input', `practice paused (settled ${settled} ticks)`);
+  }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
 
@@ -328,7 +341,22 @@ async function boot(): Promise<void> {
     held: input?.heldCount ?? null,
     lang: getLang(),
   }));
-  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden }));
+  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden, engineInput: !!engine?.inputActive }));
+  // Movement, to tell a stuck key from knockback, a correction or a stale command.
+  diagProvide('movement', () => {
+    const s = session;
+    if (!s) return { session: 'none' };
+    const room = host ? [...host.hub.rooms.values()][0] : null;
+    const sp = room?.sim?.players.get(s.id);
+    const now = Math.round(performance.now());
+    return {
+      speed: +Math.hypot(s.body.vx, s.body.vz).toFixed(2), onGround: s.body.onGround, alive: s.alive, phase: s.phase,
+      pendingInputs: s.pendingInputs, hostQueue: sp ? sp.queue.length : null, hostSpeed: sp ? +Math.hypot(sp.body.vx, sp.body.vz).toFixed(2) : null,
+      corrections: s.corrections, maxCorrection: +s.maxCorrection.toFixed(3), lastCorrection: +s.lastCorrection.toFixed(3),
+      lastHitOnMe: s.lastHitOnMe ? { ...s.lastHitOnMe, msAgo: now - s.lastHitOnMe.at } : null,
+      lastPracticePause: lastSettle ? { ...lastSettle, msAgo: now - lastSettle.at } : null,
+    };
+  });
   diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
   diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({

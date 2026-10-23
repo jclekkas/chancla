@@ -1,0 +1,686 @@
+{
+ "browser": "Chromium (Playwright, headless, Linux)",
+ "checks": [
+  {
+   "name": "ArrowUp: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.89,
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "ArrowUp"
+    ]
+   }
+  },
+  {
+   "name": "ArrowUp: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowDown: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.79,
+    "cmd": [
+     0,
+     -1
+    ],
+    "keys": [
+     "ArrowDown"
+    ]
+   }
+  },
+  {
+   "name": "ArrowDown: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowLeft: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.29,
+    "cmd": [
+     -1,
+     0
+    ],
+    "keys": [
+     "ArrowLeft"
+    ]
+   }
+  },
+  {
+   "name": "ArrowLeft: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowRight: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 1.18,
+    "cmd": [
+     1,
+     0
+    ],
+    "keys": [
+     "ArrowRight"
+    ]
+   }
+  },
+  {
+   "name": "ArrowRight: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyW: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.59,
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "KeyW"
+    ]
+   }
+  },
+  {
+   "name": "KeyW: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyS: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.79,
+    "cmd": [
+     0,
+     -1
+    ],
+    "keys": [
+     "KeyS"
+    ]
+   }
+  },
+  {
+   "name": "KeyS: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyA: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.79,
+    "cmd": [
+     -1,
+     0
+    ],
+    "keys": [
+     "KeyA"
+    ]
+   }
+  },
+  {
+   "name": "KeyA: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyD: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 1.18,
+    "cmd": [
+     1,
+     0
+    ],
+    "keys": [
+     "KeyD"
+    ]
+   }
+  },
+  {
+   "name": "KeyD: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "rapid Left/Right alternation: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "Left and Right held together cancel out",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "name": "releasing Left of Left+Right leaves Right moving her",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     1,
+     0
+    ],
+    "keys": [
+     "ArrowRight"
+    ]
+   }
+  },
+  {
+   "name": "Left+Right: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "Up+Right diagonal: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.12,
+    "cmd": [
+     1,
+     1
+    ],
+    "keys": [
+     "ArrowUp",
+     "ArrowRight"
+    ]
+   }
+  },
+  {
+   "name": "releasing Up of Up+Right leaves exactly Right",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     1,
+     0
+    ],
+    "keys": [
+     "ArrowRight"
+    ]
+   }
+  },
+  {
+   "name": "diagonal: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowUp + W, ArrowUp released: W still moves her forward",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "KeyW"
+    ]
+   }
+  },
+  {
+   "name": "then W released with ArrowUp held again: ArrowUp still moves her",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "ArrowUp"
+    ]
+   }
+  },
+  {
+   "name": "ArrowUp/W twins: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "throwing, V and switching do not drop a held arrow",
+   "ok": true,
+   "detail": {
+    "cmd": [
+     -1,
+     0
+    ],
+    "keys": [
+     "ArrowLeft"
+    ]
+   }
+  },
+  {
+   "name": "arrow with throw, V and switches: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "knocked back by El Revés (hp 100) while holding Right: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "Esc while walking, key released, Resume: she does not carry on walking (no stale movement)",
+   "ok": true,
+   "detail": {
+    "moved": 0,
+    "serverMoved": 0,
+    "keys": [],
+    "screen": "pause"
+   }
+  },
+  {
+   "name": "hidden tab while walking, key released, Resume: she does not carry on walking (no stale movement)",
+   "ok": true,
+   "detail": {
+    "moved": 0,
+    "serverMoved": 0,
+    "keys": [],
+    "screen": "pause"
+   }
+  },
+  {
+   "name": "Esc with an arrow held: the menu opens and nothing stays held",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "screen": "pause"
+   }
+  },
+  {
+   "name": "in Settings the arrow keys still adjust a slider (menus keep normal keyboard use)",
+   "ok": true
+  },
+  {
+   "name": "after Esc, Settings (slider), Resume: ArrowUp: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.29,
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "ArrowUp"
+    ]
+   }
+  },
+  {
+   "name": "after Esc, Settings, Resume: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "arrow keys never scroll the page during play",
+   "ok": true,
+   "detail": {
+    "x": 0,
+    "y": 0,
+    "docTop": 0
+   }
+  },
+  {
+   "name": "Cmd+Tab away with ArrowLeft held, released elsewhere, back (simulated): released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "focus lost with ArrowRight held and its keyup never delivered (simulated): released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowDown keyup lost under Cmd (simulated): released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "losing the mouse capture with an arrow held drops it",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "locked": false
+   }
+  },
+  {
+   "name": "after recapturing the mouse: ArrowRight: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 1.18,
+    "cmd": [
+     1,
+     0
+    ],
+    "keys": [
+     "ArrowRight"
+    ]
+   }
+  },
+  {
+   "name": "after recapture: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "eliminated with ArrowUp held, respawned: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "after respawn: ArrowDown: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.79,
+    "cmd": [
+     0,
+     -1
+    ],
+    "keys": [
+     "ArrowDown"
+    ]
+   }
+  },
+  {
+   "name": "after respawn: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "prediction and the practice host agree (no visible corrections from plain movement)",
+   "ok": true,
+   "detail": {
+    "corrections": 0,
+    "maxCorrection": 0
+   }
+  },
+  {
+   "name": "ArrowUp with the CPU slowed 6x: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "ArrowLeft with the CPU slowed 6x: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyW with the CPU slowed 6x: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "KeyD with the CPU slowed 6x: released, nothing held, Rosa stops and stays stopped",
+   "ok": true,
+   "detail": {
+    "keys": [],
+    "cmd": [
+     0,
+     0
+    ],
+    "speed": 0,
+    "serverSpeed": 0,
+    "drift": 0,
+    "serverDrift": 0
+   }
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": []
+  }
+ ]
+}

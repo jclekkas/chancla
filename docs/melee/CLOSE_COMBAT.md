@@ -8,6 +8,81 @@ An isolated gameplay experiment on branch `codex/close-combat`. It is built on t
   - no production server address in the bundle.
 - The protocol is version 5 and does not match production's server (version 4).
 
+## Fixes from Mac playtesting
+
+### 1. Arrow keys stop responding; Rosa drifts
+
+**Reproduced, and fixed:** pausing practice froze Rosa mid-stride.
+- **What the pause did:** opening the menu (Esc, Settings, losing the mouse capture, or the window being hidden by switching apps) paused the practice host straight away.
+  - Rosa kept her walking velocity.
+  - The host often still held a few movement inputs (up to 6, about 100 ms) that the client had sent but the host had not simulated yet.
+- **The effect:** on Resume, with no key held, she carried on walking: 0.28 m every time in our runs, and up to 0.88 m on the authoritative body when inputs were queued.
+- **The chain, traced end to end:**
+  - the keys were released correctly (no key stayed held);
+  - the move command was neutral;
+  - the host then applied the old commands and the remaining momentum after the pause.
+- **The fix:** practice now settles before it pauses.
+  - Held input is dropped, and the client sends 8 neutral ticks.
+  - The host uses up every input already sent (`Room.drainInputs`), then freezes.
+  - Ordinary physics runs throughout, so knockback and jumps are untouched, and nothing zeroes velocity per frame.
+  - It is synchronous, so it also works for a hidden tab, where frames and timers stop.
+  - Online play does not pause, and its menu already sends neutral input.
+
+**Ruled out, with checks** (`scripts/movement-e2e.ts`, Chromium), using arrows and WASD:
+- **Held keys:** no key stays logically held after release. Every arrow and WASD key passes, as do rapid alternation, opposite keys together, diagonals released one at a time, and an arrow mixed with its WASD twin (releasing one keeps the other).
+- **Keys swallowed:** keys are not swallowed by focus or menus. The Settings slider still takes the arrow keys; in play they never scroll the page.
+- **Prediction:** prediction and the host agree (0 corrections from plain movement), including with the CPU slowed 6 times.
+- **Knockback:** a Revés hit while holding an arrow settles normally after release.
+- **Melee input:** the new melee handling does not interfere. Throwing, V and weapon switches keep a held arrow, and releasing it stops her.
+
+**Not reproduced: the Mac itself.** Linux Chromium cannot produce a keyup that macOS never delivers: Cmd held, a key released in another app, or system pop-ups (emoji or dictation from the Globe key) that take the keyboard without a blur.
+- Those cases are **simulated**: the keydown is sent, the keyup is withheld, and the Cmd, blur or visibility events a Mac would send are delivered.
+- The game clears them. A real-Mac retest is needed.
+
+**Diagnostics** (Menu, then Copy diagnostics) now include:
+- **Input:** the held movement key codes (never field contents), the resolved move command, focus, pointer lock and window focus, the last release and why, and presses ignored because of Ctrl, Cmd or Option.
+- **Movement:** speed (client and host), queued and pending inputs, prediction corrections, the last hit taken (knockback) and what the last practice pause settled.
+
+**Fails before, passes after:**
+- On the previous build (0bf1b15), the movement e2e fails the two new checks: she moved 0.279 m on screen and 0.379 m on the host after Esc and Resume, and 0.279 m after a hidden tab.
+- On the fixed build it passes 51/51, with 0.000 m.
+- `tests/practice-pause.test.ts` shows the same in Node: pausing without settling leaves more than 0.2 m of movement; a settled pause less than 1 mm.
+
+### 2. El Revés did not read as a backhand
+
+The combat values are unchanged: 45 damage, a 300 ms wind-up, contact at 300-390 ms, a 1,100 ms cycle, the +300 ms miss recovery, and the same reach, head rule and rulero rule.
+
+**Third person (`render/rosa.ts`):** the swing was a forward reach with the elbow folding up and down, followed by a downward drop.
+- **The rig:** the right arm now has a horizontal elbow bend and a wrist pivot holding the sandal.
+- **Wind-up:** the forearm comes across her chest to her left, the hand at her left shoulder; the elbow is folded and the shoulders are turned left.
+- **Strike** (inside 300-390 ms): the arm sweeps out from her left to her right at face height. The elbow opens, and the wrist turns so the flat wooden sole leads, with the back of the hand to the front.
+- **Follow-through:** extended out to her right, then a natural recovery.
+- **El Chanclazo:** the mirror image, quicker. It is cocked out to her right and swings across to her left, palm leading.
+
+**First person (`render/viewmodel.ts`):** the Revés keyframes had the elbow's yaw sign inverted, so the hand never crossed to the left and the swing played as a forehand.
+- **El Revés now:** the hand draws across to the left of the view at face height, crosses the centre of the view (where the face is) mid-contact, and follows through off the right.
+- **El Chanclazo:** goes the other way.
+
+**Reduced motion:** still applies (third person at 60% amplitude, first person at 50%).
+
+**Evidence:**
+- **Pose sheets** at fixed moments of each swing, labelled with time and phase, in `poses/`: three-quarter from behind the attacker with the recipient's face, front-left of the attacker, and first person. `scripts/melee-poses.ts` renders them.
+- **Footage:** `fix-footage.mp4`. It shows:
+  - arrow-key movement with clean stops;
+  - Esc while walking, then Resume with no drift;
+  - El Revés in first person;
+  - El Revés from three-quarter, at real speed and **4x slow motion** (labelled);
+  - the wind-up, contact, follow-through and the flying rulero.
+
+  It is offline practice with positions staged before each swing (nothing is moved mid-swing). In the spectator shots your own first-person hand is hidden, as captioned. The renderer is software, in Linux Chromium.
+
+### Mac retest (about 5 minutes)
+1. **Arrow keys:** in practice, hold each arrow and release it; she should stop at once. Try two arrows together, and an arrow with its WASD twin.
+2. **V:** walk with an arrow held, press V, and press 2 then V. The arrow should keep moving her, and she should stop on release.
+3. **Esc and Resume:** walk, press Esc, release the key, then choose Resume. She must not move.
+4. **Cmd+Tab:** hold an arrow, Cmd+Tab away, release the arrow in the other app, then come back and Resume. Nothing should be held and she should not move.
+5. **If it happens again:** open Menu, choose Copy diagnostics, and send it. The input and movement sections show which cause it was.
+
 ## What it is
 
 - **One melee input:** V on a keyboard, or one touch button. The chancla in hand picks the attack.

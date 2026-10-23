@@ -79,25 +79,33 @@ function throwKeys(weapon: WeaponId, release: number, show: number, end: number)
 
 function meleeKeys(weapon: WeaponId): Key[] {
   const d = MELEE[weapon]!;
-  const hit0 = d.windupMs, hit1 = d.windupMs + d.activeMs;
+  const hit0 = d.windupMs, hit1 = d.windupMs + d.activeMs, mid = (hit0 + hit1) / 2;
+  // Signs in camera space: +x right, +y up, -z ahead; a positive yaw turns the
+  // hand about the elbow toward the LEFT of the view, a negative one to the right.
   if (weapon === 1) {
-    // El Revés: drawn across the chest (wind-up), then out to the right.
+    // El Revés: the hand is drawn across to the left of the view at face
+    // height, wrist cocked (wind-up); through the contact window it sweeps
+    // out to the right, crossing the centre of the view where the face is,
+    // the back of the hand leading; then it carries on out to the right.
+    // The path is mostly position; the small rotations only orient the hand.
     return [
       { t: 0, p: {}, ease: easeOut2 },
-      { t: hit0 * 0.55, p: { x: -0.3, y: -0.03, z: 0.06, pitch: 0.08, yaw: -0.7, roll: -0.5, flick: -0.6 }, ease: easeOut2 },
-      { t: hit0, p: { x: -0.44, y: -0.02, z: 0.1, pitch: 0.12, yaw: -0.98, roll: -0.72, flick: -0.85 }, ease: easeInOut },
-      { t: hit1, p: { x: 0.02, y: 0.05, z: -0.16, pitch: -0.02, yaw: 0.45, roll: 0.35, flick: 0.9 }, ease: easeIn3 },
-      { t: hit1 + 230, p: { x: 0.15, y: -0.02, z: -0.06, pitch: -0.25, yaw: 0.95, roll: 0.6, flick: 1.0 }, ease: easeOut3 },
+      { t: hit0 * 0.55, p: { x: -0.3, y: 0.12, z: 0.05, pitch: 0.2, yaw: 0.25, roll: 0.1, flick: -0.55 }, ease: easeOut2 },
+      { t: hit0, p: { x: -0.48, y: 0.17, z: 0.04, pitch: 0.25, yaw: 0.35, roll: 0.15, flick: -0.85 }, ease: easeInOut },
+      { t: mid, p: { x: -0.3, y: 0.26, z: -0.12, pitch: 0.18, yaw: 0.05, roll: 0, flick: 0.2 }, ease: easeIn3 },
+      { t: hit1, p: { x: -0.04, y: 0.2, z: -0.12, pitch: 0.1, yaw: -0.35, roll: -0.2, flick: 0.9 }, ease: easeOut3 },
+      { t: hit1 + 220, p: { x: 0.16, y: 0.0, z: -0.05, pitch: -0.12, yaw: -0.8, roll: -0.35, flick: 1.0 }, ease: easeOut3 },
       { t: d.cycleMs, p: {}, ease: settle },
     ];
   }
-  // El Chanclazo: cocked back to the right, a quick forehand across.
+  // El Chanclazo: a quick forehand, cocked back to the right, then across to
+  // the left, palm leading, with a short follow-through.
   return [
     { t: 0, p: {}, ease: easeOut2 },
-    { t: hit0 * 0.55, p: { x: 0.08, y: 0.06, z: 0.06, pitch: 0.15, yaw: 0.55, roll: 0.35, flick: -0.7 }, ease: easeOut2 },
-    { t: hit0, p: { x: -0.08, y: 0.05, z: -0.13, pitch: 0.0, yaw: -0.2, roll: -0.05, flick: 0.4 }, ease: easeIn3 },
-    { t: hit1, p: { x: -0.3, y: 0.0, z: -0.12, pitch: -0.05, yaw: -0.75, roll: -0.25, flick: 1.0 }, ease: easeOut3 },
-    { t: hit1 + 140, p: { x: -0.36, y: -0.08, z: -0.06, pitch: -0.3, yaw: -0.9, roll: -0.3, flick: 0.6 }, ease: easeOut2 },
+    { t: hit0 * 0.6, p: { x: 0.08, y: 0.08, z: 0.06, pitch: 0.12, yaw: -0.6, roll: -0.3, flick: -0.7 }, ease: easeOut2 },
+    { t: hit0, p: { x: -0.04, y: 0.12, z: -0.12, pitch: 0.1, yaw: -0.1, roll: -0.05, flick: 0.3 }, ease: easeIn3 },
+    { t: hit1, p: { x: -0.26, y: 0.08, z: -0.12, pitch: 0.02, yaw: 0.6, roll: 0.25, flick: 1.0 }, ease: easeOut3 },
+    { t: hit1 + 140, p: { x: -0.34, y: -0.04, z: -0.06, pitch: -0.25, yaw: 0.85, roll: 0.3, flick: 0.6 }, ease: easeOut2 },
     { t: d.cycleMs, p: {}, ease: settle },
   ];
 }

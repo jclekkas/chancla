@@ -116,13 +116,7 @@ export class Engine {
     this.world = buildWorld(s.quality);
     this.scene.add(this.world.group, this.proj.group, this.ruleros.group);
     this.buildPickups();
-    for (const team of [0, 1] as const) {
-      const a = new Avatar(team);
-      a.root.position.set(team === 0 ? -1.6 : 1.6, 0, 3.4);
-      a.root.rotation.y = team === 0 ? -0.5 : 0.5;
-      this.menuAvatars.push(a);
-      this.scene.add(a.root);
-    }
+    this.buildMenuAvatars();
 
     this.vmScene.add(new THREE.HemisphereLight(0xffe7c4, 0x7a4a5a, 2.2));
     const vmSun = new THREE.DirectionalLight(0xfff0d0, 1.6);
@@ -234,7 +228,25 @@ export class Engine {
       this.world = buildWorld(s.quality, this.worldOpts);
       this.scene.add(this.world.group);
       this.renderer.shadowMap.needsUpdate = true;
+      // Characters are built per quality: rebuild them (match ones come back on the next frame).
+      for (const av of this.avatars.values()) { this.scene.remove(av.root); av.dispose(); }
+      this.avatars.clear();
+      const menuShown = this.menuAvatars[0]?.root.visible ?? true;
+      for (const av of this.menuAvatars) { this.scene.remove(av.root); av.dispose(); }
+      this.buildMenuAvatars();
+      for (const av of this.menuAvatars) av.root.visible = menuShown;
       this.resize();
+    }
+  }
+
+  private buildMenuAvatars(): void {
+    this.menuAvatars = [];
+    for (const team of [0, 1] as const) {
+      const a = new Avatar(team, { quality: this.quality });
+      a.root.position.set(team === 0 ? -1.6 : 1.6, 0, 3.4);
+      a.root.rotation.y = team === 0 ? -0.5 : 0.5;
+      this.menuAvatars.push(a);
+      this.scene.add(a.root);
     }
   }
 
@@ -742,7 +754,7 @@ export class Engine {
       const team = this.teamOf(r.id);
       let av = this.avatars.get(r.id);
       if (av && av.team !== team) { this.scene.remove(av.root); av.dispose(); av = undefined; }
-      if (!av) { av = new Avatar(team); this.avatars.set(r.id, av); this.scene.add(av.root); }
+      if (!av) { av = new Avatar(team, { quality: this.quality }); this.avatars.set(r.id, av); this.scene.add(av.root); }
       seen.add(r.id);
       av.root.position.set(r.x, r.y, r.z);
       av.root.rotation.y = r.yaw;

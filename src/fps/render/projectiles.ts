@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import type { WeaponId } from '../../../shared/config';
 import { chanclaModel } from './fp-chancla';
-import { buildPesada } from './rosa';
+import { buildPesada } from './pesada';
 import { Trail, trailMaterial } from '../../fx/trail';
 import { Particles } from '../../fx/particles';
 import type { ClientProjectile } from '../../net/session';

@@ -9,7 +9,7 @@
 // footbed facing +Y, the sole's underside at y = 0.
 import * as THREE from 'three';
 import { PALETTE } from '../../world/palette';
-import { buildPesada } from './rosa';
+import { buildPesada } from './pesada';
 import { merge, painted, sweep, trs } from './fp-geo';
 
 export const CHANCLA = {

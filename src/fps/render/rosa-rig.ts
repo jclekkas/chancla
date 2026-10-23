@@ -35,8 +35,6 @@ export const RIG = {
   ankleY: 0.0,
 } as const;
 
-/** Stride: metres covered per full walk cycle (two steps), for feet that keep up with real speed. */
-export const STRIDE_M = 1.35;
 
 export interface RosaRig {
   root: THREE.Group;

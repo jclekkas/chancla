@@ -1,7 +1,7 @@
 {
-  "at": "2026-10-23T00:37:39.782Z",
+  "at": "2026-10-23T00:41:28.168Z",
   "environment": "Chromium 141 headless (SwiftShader), Linux container, pointer lock available. Safari focus and Cmd-keyup behaviour simulated, not run.",
-  "passed": 17,
+  "passed": 21,
   "total": 21,
   "checks": [
     {
@@ -30,20 +30,20 @@
     },
     {
       "name": "a key sent from a hidden field that kept focus still moves Rosa, and is not typed into the field",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "during": 0,
+        "during": 1,
         "after": 0,
         "value": "Mac Rosa"
       }
     },
     {
       "name": "while the mouse is captured: no unreachable hamburger, a \"Menu · Esc\" label instead",
-      "ok": false,
+      "ok": true,
       "detail": {
         "locked": true,
-        "menuBtn": true,
-        "hint": ""
+        "menuBtn": false,
+        "hint": "Menu · Esc"
       }
     },
     {
@@ -64,7 +64,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 3,
+        "threw": 1,
         "turned": -0.361,
         "held": 0,
         "locked": true,
@@ -73,9 +73,9 @@
     },
     {
       "name": "W released under Cmd (macOS sends no keyup): Rosa does not keep walking",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "mz": 1
+        "mz": 0
       }
     },
     {
@@ -92,7 +92,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 2,
+        "threw": 3,
         "turned": -0.361,
         "held": 0,
         "locked": true
@@ -109,9 +109,9 @@
         "held": 0,
         "touch": false,
         "yaw": -6.142709999999994,
-        "shots": 34,
-        "x": -23.362876069891588,
-        "z": -5.156263830944939,
+        "shots": 30,
+        "x": -23.095518526009197,
+        "z": -2.843427298273446,
         "focus": "BUTTON",
         "ctp": false,
         "menuBtn": true,
@@ -160,9 +160,9 @@
         "held": 0,
         "touch": false,
         "yaw": -6.774109999999995,
-        "shots": 36,
-        "x": -22.975395042084525,
-        "z": -4.53456966285943,
+        "shots": 32,
+        "x": -23.095518526009197,
+        "z": -2.843427298273446,
         "focus": "BUTTON",
         "ctp": false,
         "menuBtn": true,
@@ -183,7 +183,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 2,
+        "threw": 3,
         "turned": -0.361,
         "held": 0,
         "locked": true
@@ -244,7 +244,7 @@
     },
     {
       "name": "diagnostics: pointer lock, focused element kind, input mode, menu state and recent input transitions",
-      "ok": false
+      "ok": true
     },
     {
       "name": "no page errors",

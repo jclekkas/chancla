@@ -248,9 +248,30 @@ async function main(): Promise<void> {
     const cs = await st(p);
     check('campaign: after a stage change the keyboard still drives Rosa', cw.mz === 1 && cs.locked, { mz: cw.mz, locked: cs.locked });
 
-    // 11. The diagnostics report has the input state and the transitions.
+    // 11. Recovery screens block gameplay input (the stopped-picture screen over a running mission).
+    await p.evaluate(() => { const e = (window as any).__fps.engine(); e.frame = () => { throw new Error('test: frames failing'); }; });
+    await p.waitForFunction(() => !document.getElementById('scr-crash')!.hidden, undefined, { timeout: 5000 });
+    const blocked = await sampleWith(p, 'KeyW');
+    const sb = await st(p);
+    check('a recovery screen ("The game stopped") blocks gameplay input: W does nothing, input is off', blocked.mz === 0 && !sb.enabled, { mz: blocked.mz, enabled: sb.enabled });
+    await p.evaluate(() => { const e = (window as any).__fps.engine(); delete e.frame; });
+    await p.click('#btn-crash-home');
+    await p.waitForFunction(() => (window as any).__fps.screen === 'title', undefined, { timeout: 5000 });
+
+    // 12. Text fields in menus still take typing, including the movement letters, and nothing moves.
+    await p.click('#btn-online');
+    await p.fill('#in-name', '');
+    await p.click('#in-name');
+    await p.keyboard.type('wasd Rosa');
+    await p.click('#in-code');
+    await p.keyboard.type('abcd2345');
+    const typed = await p.evaluate(() => ({ name: (document.getElementById('in-name') as HTMLInputElement).value, code: (document.getElementById('in-code') as HTMLInputElement).value, held: (window as any).__fps.input().heldCount }));
+    check('menus open: text fields take typing normally (including W, A, S, D), and no game input is held', typed.name === 'wasd Rosa' && /abcd2345/i.test(typed.code) && typed.held === 0, typed);
+    await p.keyboard.press('Escape');
+
+    // 13. The diagnostics report has the input state and the transitions.
     const diag = await p.evaluate(() => (window as any).__fps.diagText());
-    check('diagnostics: pointer lock, focused element kind, input mode, menu state and recent input transitions', /"input": \{/.test(diag) && /"locked"/.test(diag) && /"focus": "/.test(diag) && /"mode": "mouse/.test(diag) && /"menu"/.test(diag) && /input\s+mouse captured/.test(diag) && /input\s+Esc: menu/.test(diag) && /Cmd\/Ctrl pressed/.test(diag) && !diag.includes('Mac Rosa'));
+    check('diagnostics: pointer lock, focused element kind, input mode, menu state and recent input transitions', /"input": \{/.test(diag) && /"locked"/.test(diag) && /"focus": "/.test(diag) && /"mode": "mouse/.test(diag) && /"menu"/.test(diag) && /input\s+mouse captured/.test(diag) && /input\s+Esc: menu/.test(diag) && /Cmd\/Ctrl pressed/.test(diag) && !diag.includes('Mac Rosa') && !diag.includes('wasd Rosa'));
     fs.writeFileSync(path.join(OUT, 'diagnostics-sample.txt'), diag);
     check('no page errors', errors.length === 0, errors.slice(0, 3));
   } finally {

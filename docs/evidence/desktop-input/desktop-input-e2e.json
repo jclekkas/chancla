@@ -1,0 +1,255 @@
+{
+  "at": "2026-10-23T00:37:39.782Z",
+  "environment": "Chromium 141 headless (SwiftShader), Linux container, pointer lock available. Safari focus and Cmd-keyup behaviour simulated, not run.",
+  "passed": 17,
+  "total": 21,
+  "checks": [
+    {
+      "name": "a desktop browser starts in keyboard-and-mouse mode (touch detection does not take over)",
+      "ok": true
+    },
+    {
+      "name": "after typing a name and starting: move, throw and turn all work",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 1,
+        "turned": -0.176,
+        "held": 0,
+        "locked": true
+      }
+    },
+    {
+      "name": "a key sent from a hidden field that kept focus still moves Rosa, and is not typed into the field",
+      "ok": false,
+      "detail": {
+        "during": 0,
+        "after": 0,
+        "value": "Mac Rosa"
+      }
+    },
+    {
+      "name": "while the mouse is captured: no unreachable hamburger, a \"Menu · Esc\" label instead",
+      "ok": false,
+      "detail": {
+        "locked": true,
+        "menuBtn": true,
+        "hint": ""
+      }
+    },
+    {
+      "name": "Esc → Resume ten times: each time the menu opens with nothing held, Resume is clickable, then move, throw and turn work",
+      "ok": true
+    },
+    {
+      "name": "Settings slider used, closed and resumed without moving focus: controls work, the slider does not hold focus",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 3,
+        "turned": -0.361,
+        "held": 0,
+        "locked": true,
+        "focus": "BODY"
+      }
+    },
+    {
+      "name": "W released under Cmd (macOS sends no keyup): Rosa does not keep walking",
+      "ok": false,
+      "detail": {
+        "mz": 1
+      }
+    },
+    {
+      "name": "…and controls work normally afterwards",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 2,
+        "turned": -0.361,
+        "held": 0,
+        "locked": true
+      }
+    },
+    {
+      "name": "the browser releasing the mouse on its own opens the menu and clears held input",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "enabled": false,
+        "fallback": false,
+        "held": 0,
+        "touch": false,
+        "yaw": -6.142709999999994,
+        "shots": 34,
+        "x": -23.362876069891588,
+        "z": -5.156263830944939,
+        "focus": "BUTTON",
+        "ctp": false,
+        "menuBtn": true,
+        "escHint": ""
+      }
+    },
+    {
+      "name": "a late Escape from the same press does not toggle the menu closed again",
+      "ok": true
+    },
+    {
+      "name": "…Resume, then controls work",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 2,
+        "turned": -0.361,
+        "held": 0,
+        "locked": true
+      }
+    },
+    {
+      "name": "window loses focus while A and the mouse button are held: nothing stays held",
+      "ok": true,
+      "detail": {
+        "held": 0
+      }
+    },
+    {
+      "name": "switching to another app or tab opens the menu (practice pauses)",
+      "ok": true,
+      "detail": {
+        "screen": "pause",
+        "locked": false,
+        "enabled": false,
+        "fallback": false,
+        "held": 0,
+        "touch": false,
+        "yaw": -6.774109999999995,
+        "shots": 36,
+        "x": -22.975395042084525,
+        "z": -4.53456966285943,
+        "focus": "BUTTON",
+        "ctp": false,
+        "menuBtn": true,
+        "escHint": ""
+      }
+    },
+    {
+      "name": "back from another app, Resume: controls work",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 2,
+        "turned": -0.361,
+        "held": 0,
+        "locked": true
+      }
+    },
+    {
+      "name": "capture refused on Resume: a visible prompt (click to aim), and the Menu button is clickable (cursor is free)",
+      "ok": true,
+      "detail": {
+        "ctp": true,
+        "menuBtn": true
+      }
+    },
+    {
+      "name": "capture keeps failing: drag-to-look takes over, and moving, turning and throwing all work",
+      "ok": true,
+      "detail": {
+        "fallback": true,
+        "turned": -0.271,
+        "w": 1,
+        "threw": 2
+      }
+    },
+    {
+      "name": "uncaptured: the \"☰ Menu · Esc\" button is on top and opens the menu",
+      "ok": true,
+      "detail": {
+        "hitMenu": "btn-menu"
+      }
+    },
+    {
+      "name": "after restarting the match: controls work",
+      "ok": true,
+      "detail": {
+        "enginePaused": false,
+        "hostPaused": false,
+        "inputActive": true,
+        "phase": "playing",
+        "alive": true,
+        "cooldown": 0,
+        "switchMs": 0,
+        "w": 1,
+        "s": -1,
+        "fire": true,
+        "threw": 2,
+        "turned": -0.361,
+        "held": 0,
+        "locked": true
+      }
+    },
+    {
+      "name": "campaign: after a stage change the keyboard still drives Rosa",
+      "ok": true,
+      "detail": {
+        "mz": 1,
+        "locked": true
+      }
+    },
+    {
+      "name": "diagnostics: pointer lock, focused element kind, input mode, menu state and recent input transitions",
+      "ok": false
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": []
+    }
+  ]
+}

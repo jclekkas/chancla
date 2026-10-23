@@ -56,6 +56,8 @@ What this does **not** prove: anything about WebKit (iPhone, iPad and Mac Safari
 
 WebKit could not even be run in emulation here: the Playwright WebKit download hosts (`cdn.playwright.dev`, `playwright.download.prss.microsoft.com`) are blocked by this environment's network policy. Allowing them would let `e2e:crossdevice` run a WebKit client, which is closer to Safari but still not an iPhone.
 
+Desktop controls (menu, mouse capture, keyboard focus, macOS Cmd key): see [DESKTOP.md](DESKTOP.md), including a 5-minute Mac check. macOS Safari and Chrome are **unverified**; the desktop-input tests ran in Chromium on Linux only.
+
 ### Short Mac + iPhone check (about 15 minutes)
 
 Use the preview link on both. Note the build shown at the bottom of Settings, and if anything goes wrong, use **Copy diagnostics** (menu or Settings) before reloading.

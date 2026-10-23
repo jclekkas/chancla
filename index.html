@@ -70,8 +70,8 @@
         <div class="hud-tr">
           <div class="net" id="net"><span class="dot" id="net-dot"></span><span id="net-ping"></span></div>
           <div class="fps" id="fps" hidden></div>
-          <button type="button" class="hud-btn menu-btn" id="btn-menu" data-t-aria="hud.pause"><span aria-hidden="true">☰</span> <span data-t="hud.pause"></span></button>
-          <div class="esc-hint" aria-hidden="true" data-t="hud.escHint"></div>
+          <button type="button" class="hud-btn menu-btn" id="btn-menu" data-t-aria="hud.menuAria"><span aria-hidden="true">☰</span> <span data-t="hud.pause"></span><span class="menu-key" aria-hidden="true"> · Esc</span></button>
+          <div class="esc-hint" id="esc-hint" role="note" data-t="hud.escHint"></div>
         </div>
         <div class="crosshair" id="crosshair" aria-hidden="true">
           <svg viewBox="0 0 64 64" width="64" height="64">
@@ -363,6 +363,7 @@
         <div class="panel">
           <h2 id="pause-title" data-t="pause.title"></h2>
           <p class="note" id="pause-note"></p>
+          <p class="note build-note" id="pause-build"></p>
           <button type="button" class="btn primary" id="btn-resume" data-t="pause.resume"></button>
           <button type="button" class="btn" id="btn-pause-settings" data-t="pause.settings"></button>
           <button type="button" class="btn" id="btn-pause-controls" data-t="pause.controls"></button>
@@ -380,6 +381,7 @@
       <section id="scr-settings" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="panel settings">
           <h2 id="settings-title" data-t="settings.title"></h2>
+          <p class="note build-row"><span id="build-id"></span> <button type="button" class="btn ghost small" id="btn-settings-diag" data-t="diag.copy"></button></p>
           <p class="note sound-status" id="sound-status" role="status"></p>
           <div class="field"><span id="lbl-lang" data-t="settings.language"></span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-lang">
@@ -417,7 +419,6 @@
           <p class="note" data-t="settings.voiceNote"></p>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
-          <p class="note build-row"><span id="build-id"></span> <button type="button" class="btn ghost small" id="btn-settings-diag" data-t="diag.copy"></button></p>
         </div>
       </section>
 

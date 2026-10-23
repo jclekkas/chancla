@@ -17,7 +17,7 @@ import { GameSession, wsTransport, type ConnState, type TransportFactory } from 
 import { LocalHost } from '../net/local';
 import { applyDom, detectLang, getLang, hasKey, setLang, t, type Key } from './strings';
 import { FpsSettingsStore, defaults, type Quality, type QualityMode } from './settings';
-import { FpsInput } from './input';
+import { FpsInput, describeEl } from './input';
 import { FpsTouch } from './touch';
 import { Hud } from './hud';
 import { rosaSVG, svgUrl } from '../ui/art';
@@ -171,7 +171,10 @@ function render(): void {
   $('scr-title').hidden = !(base === 'title' || ((base === 'online' || base === 'practice') && !inMatch));
   const hudOn = inMatch && base !== 'lobby';
   $('hud').hidden = !hudOn;
-  const playing = inMatch && base === 'none' && overlayStack.length === 0;
+  // System overlays (graphics paused, the game stopped, the diagnostics box)
+  // sit outside the screen stack but still block play.
+  const sysOverlay = !$('scr-gfx').hidden || !$('scr-crash').hidden || !$('scr-diagbox').hidden;
+  const playing = inMatch && base === 'none' && overlayStack.length === 0 && !sysOverlay;
   const rotate = rotateBlocked();
   const ctp = !(playing && !touchMode && !input?.locked && !input?.fallback);
   $('click-to-play').hidden = ctp;
@@ -181,8 +184,17 @@ function render(): void {
   if (input) {
     const was = input.enabled;
     input.enabled = playing && !rotate;
-    if (was && !input.enabled) input.release(); // nothing stays held behind a menu or the rotate screen
+    if (was && !input.enabled) { input.release('menu or overlay'); diagLog('input', `play input off (${top()})`); } // nothing stays held behind a menu or the rotate screen
+    if (!was && input.enabled) {
+      // Back in play: nothing on screen takes typing, so a field or button
+      // still holding focus from a menu (macOS Safari keeps it on a clicked
+      // button's panel) must not swallow the game's keys.
+      const a = document.activeElement as HTMLElement | null;
+      if (a && a !== document.body && !$('hud').contains(a) && !$('fps-touch').contains(a)) { diagLog('input', `play input on; dropped focus from ${describeEl(a)}`); a.blur(); }
+      else diagLog('input', 'play input on');
+    }
   }
+  document.body.classList.toggle('mouse-captured', !!input?.locked && !touchMode);
   const touchPlay = playing && touchMode && !rotate;
   // Zoomed in already (a menu pinch, iOS zooming into a text field): the play
   // surface would block the pinch that undoes it, so play waits behind a
@@ -309,6 +321,7 @@ async function boot(): Promise<void> {
     held: input?.heldCount ?? null,
     lang: getLang(),
   }));
+  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden }));
   diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
   diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({
@@ -464,6 +477,7 @@ async function copyDiagnostics(): Promise<void> {
   const ta = $('diagbox-text') as HTMLTextAreaElement;
   ta.value = diagText();
   $('scr-diagbox').hidden = false;
+  render();
   ta.focus();
   ta.select();
 }
@@ -494,12 +508,14 @@ function showCrash(): void {
   input?.release();
   input?.exitLock();
   $('scr-crash').hidden = false;
+  render();
   ($('btn-crash-diag') as HTMLButtonElement).focus();
 }
 
 function crashToMenu(): void {
   crashShown = false;
   $('scr-crash').hidden = true;
+  render();
   if (campaign.active) campaign.toSelect();
   endSession('title');
   engine?.clearFatal();
@@ -962,6 +978,7 @@ function openOnline(): void {
 
 function openPause(): void {
   if (!inMatch || base !== 'none') return;
+  $('pause-build').textContent = t('diag.build', { id: diagBuild() });
   if (campaign.runtime?.inVictory) return;
   ($('btn-fullscreen') as HTMLButtonElement).hidden = !(document.documentElement.requestFullscreen || (document.documentElement as HTMLElement & { webkitRequestFullscreen?: unknown }).webkitRequestFullscreen);
   input?.release();
@@ -1176,7 +1193,7 @@ function bindUi(): void {
 
   on('btn-resume', () => resume(true));
   for (const id of ['btn-pause-diag', 'btn-settings-diag', 'btn-lost-diag', 'btn-crash-diag', 'btn-gfx-diag']) on(id, () => void copyDiagnostics());
-  on('btn-diagbox-close', () => ($('scr-diagbox').hidden = true));
+  on('btn-diagbox-close', () => { $('scr-diagbox').hidden = true; render(); });
   on('btn-crash-home', crashToMenu);
   on('btn-crash-reload', () => location.reload());
   on('btn-gfx-reload', () => location.reload());

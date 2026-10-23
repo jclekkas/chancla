@@ -1,0 +1,110 @@
+Chancla Warfare diagnostics
+{
+ "build": "f27063b (local)",
+ "page": "shooter",
+ "uptimeS": 83,
+ "visibility": "visible",
+ "online": true,
+ "viewport": "1280x720@1 (visible 1280x720, zoom 1.00)",
+ "touch": false,
+ "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+ "jsHeap": "15 MB of 4096 MB",
+ "errors": 0,
+ "game": {
+  "mode": "campaign ruleros",
+  "screen": "none",
+  "map": "patio",
+  "conn": "none",
+  "msSinceServerMsg": null,
+  "rttMs": null,
+  "input": "mouse (locked)",
+  "inputEnabled": true,
+  "held": 0,
+  "lang": "en"
+ },
+ "render": {
+  "mode": "controller",
+  "map": "patio",
+  "msSinceFrame": 23,
+  "frameErrors": 0,
+  "fps": 12,
+  "contextLost": false,
+  "quality": "low",
+  "drawCalls": 25,
+  "geometries": 163,
+  "textures": 16,
+  "paused": false
+ },
+ "audio": {
+  "context": "running",
+  "music": "ok"
+ }
+}
+
+Recent events (ms since page load):
+     417 life   pageshow
+    2367 screen menu / title
+    2381 stall  main thread busy 1915 ms
+    2381 stall  no frame for 1917 ms (mode menu)
+    3839 screen menu / online
+    3921 screen menu / title
+    5047 screen menu / practice
+    5111 net    connection connecting
+    5111 net    connection online
+    5118 match  room lobby, map patio, 4 players (practice)
+    5313 match  room countdown, map patio, 4 players (practice)
+    5314 screen practice / none
+    6555 stall  no frame for 1233 ms (mode match)
+    9062 match  room playing, map patio, 4 players (practice)
+   13245 screen practice / pause
+   14205 screen practice / none
+   16994 screen practice / pause
+   17821 screen practice / none
+   20711 screen practice / pause
+   21527 screen practice / none
+   24699 screen practice / pause
+   25553 screen practice / none
+   28034 screen practice / pause
+   28844 screen practice / none
+   31531 screen practice / pause
+   32181 screen practice / none
+   35124 screen practice / pause
+   36004 screen practice / none
+   38361 screen practice / pause
+   39256 screen practice / none
+   41896 screen practice / pause
+   42634 screen practice / none
+   45491 screen practice / pause
+   46373 screen practice / none
+   48683 screen practice / pause
+   49441 screen practice / pause>settings
+   50080 screen practice / pause
+   50082 screen practice / none
+   55101 screen practice / pause
+   55752 screen practice / none
+   58358 life   visibility hidden
+   58358 screen practice / pause
+   58563 life   visibility visible
+   58915 screen practice / none
+   61316 screen practice / pause
+   63761 screen practice / none
+   67938 screen practice / pause
+   68917 screen practice / pause>confirm
+   69485 net    connection closed
+   69488 net    connection connecting
+   69488 net    connection online
+   69496 match  room lobby, map patio, 4 players (practice)
+   69512 match  room countdown, map patio, 4 players (practice)
+   69513 screen practice / none
+   72519 match  room playing, map patio, 4 players (practice)
+   75594 screen practice / pause
+   76459 screen practice / pause>confirm
+   77181 net    connection closed
+   77182 screen menu / title
+   78712 stall  no frame for 1100 ms (mode menu)
+   78714 stall  main thread busy 1109 ms
+   78726 screen menu / campaign
+   79171 screen menu / mintro
+   80136 match  mission ruleros started
+   80192 screen campaign ruleros / mintro
+   80194 screen campaign ruleros / none

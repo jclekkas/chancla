@@ -553,3 +553,12 @@ body.touch-input .scoreboard, body.touch-input .toast { pointer-events: none; }
   .mintro h2 { font-size: 22px; margin: 0; }
   .mintro .mi-how ol { gap: 2px; margin: 2px 0 4px; }
 }
+
+/* Desktop menu affordance. While the mouse is captured the cursor is hidden,
+   so a clickable button would be unreachable: show what to press instead.
+   Uncaptured (click to aim, drag-to-look) the button is clickable again. */
+.esc-hint { display: none; }
+body.mouse-captured #btn-menu { display: none; }
+body.mouse-captured .esc-hint { display: block; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; padding: 8px 14px; border-radius: 12px; background: rgba(46, 24, 70, 0.82); border: 2px solid rgba(244, 230, 200, 0.6); }
+body.touch-input .menu-key { display: none; }
+.build-note { margin: 0; font-size: 12px; opacity: 0.75; }

@@ -97,57 +97,81 @@ Section size, both blocks:
 | Medium | 7,532 | 2,652 |
 | Low | 6,356 | none (no shadow pass on Low) |
 
-### The benchmark (offline practice, normal game renderer)
+### The benchmark (version 2, corrected)
 
-Open the preview with `?bench`, or with `?bench&section=off` for the identical run without the section, which is production's drawing.
-- **One variant per page load.** The other variant is not built, and there is no screenshot-buffer overhead.
-- **The run:**
-  - El Patio practice with 1 ally and 2 enemy bots on normal difficulty.
-  - Rosa is held at four spots around the café and the Panadería, a quarter of the run each, panning slowly and throwing every 1.5 s.
-  - Bots throw back, so projectiles are in flight.
-  - Rosa is topped up to full health every frame, so the view stays on the section.
-- **Timing:** 10 s warm-up, not counted, then 60 s measured.
-- **Recorded:**
-  - average FPS, median, p95 and p99 frame time, frames over 50 ms
-  - canvas and drawing-buffer size, pixel ratio, device pixel ratio, quality
-  - average and maximum draw calls and triangles per whole frame, including the shadow pass and the held item
-  - the workload: bots, throws, projectiles in flight, and how often Rosa was eliminated
-  - the GPU name the browser reports, and the user agent
-- **Invalidated** when the tab is hidden, the window or zoom changes, quality changes, a menu opens, or the match ends.
-- **Results stay on the device:** Copy results, or Save JSON, which downloads a local file. Nothing is sent anywhere.
-- **Your settings are untouched:** the run's settings apply to that page load only and are put back when you leave.
-- **Options:** `&quality=high|medium|low`, `&secs=`, `&warmup=`. Runs under 60 s are labelled indicative.
-- **Where it exists:** only offline graphics previews include it. It is not in a normal build (checked by searching the built files).
+Version 1 (commit d2456db) had problems:
+- **Throws missed:** it fired only during a 150 ms window every 1.5 s, sampled through frame callbacks, so slow frames missed throws.
+- **Unequal view time:** it gave views unequal time, because the view was chosen from the run's fraction including the warm-up.
+- **Deaths in valid runs:** it let Rosa be eliminated in runs it still called valid.
+- **Not a controlled comparison:** it compared variants on live bots, whose positions and throws differ every run, so the draw-call gap mixed the section with whatever happened to be on screen.
 
-(The milestone 2 evidence files say `build: 621dad5 (local)` because they were built from the uncommitted working tree that was then committed unchanged as 4dbfc68.)
+Its numbers are superseded below.
 
-Local runs (`scripts/graphics-bench-e2e.ts`): headless Chromium 141 on SwiftShader, a **software renderer on a shared cloud CPU, not a GPU**, run in A/B/B/A order. The phone rows are Chromium emulating an iPhone screen, not a phone. Raw data: `bench/bench-60s.json`.
+**Two separate modes, one variant per page load:**
 
-| Run (60 s each, 3 bots) | Experiment | Production drawing |
-| --- | --- | --- |
-| Desktop 1280 × 720, High (A B B A) | 2.7 / 2.8 FPS, p95 417 / 400 ms | 3.1 / 3.0 FPS, p95 383 / 383 ms |
-| Desktop 1280 × 720, Low | 4.9 FPS, p95 250 ms | 5.1 FPS, p95 267 ms |
-| Emulated phone 844 × 390, Low | 9.1 FPS, p95 133 ms | 9.4 FPS, p95 133 ms |
-| Draw calls per frame, High (average) | 357 / 374 | 322 / 334 |
+| Link | What it is |
+| --- | --- |
+| `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/` | Normal offline practice (Practice, then El Patio) |
+| `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench` | **Controlled comparison**, section on |
+| `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&section=off` | **Controlled comparison**, section off (production's drawing) |
+| `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench=live` and `?bench=live&section=off` | **Live gameplay stress test**: real bots. Not a section cost comparison |
 
-**How to read this:**
-- **Frame rates:** on this software renderer the section costs about 3-10% of frame rate. That says nothing about a GPU, where a few hundred extra draw calls and a few thousand triangles are normally small.
-- **Draw calls:** the benchmark's averages are dominated by the bots (about 30 meshes each, drawn twice when shadows are on), so they vary by 12-17 calls between runs of the same variant.
-- **An open question:** at High both experiment runs averaged about 35 calls and 10k triangles more than production, more than the exact static difference of 13 calls and 7.1k triangles. Bot positions may explain it, but two runs each cannot tell. It is worth checking with a few more runs on real hardware.
-- **Eliminations:** on a renderer this slow, Rosa can still be eliminated once in a run, because the host simulates between the benchmark's health top-ups. The count is in the results.
-- **The 60 FPS (M4 Mac) and 30 FPS (phone) targets are not measured.**
+Options: `&quality=high|medium|low` (default High), `&secs=` (default 60), `&warmup=` (default 10).
 
-### Mac and phone checklist (about 10 minutes)
-1. **M4 Mac, Chrome or Safari, window not resized during runs.** Open `<preview>/?bench`. Don't touch anything for 70 s, then press Save JSON.
-2. Open `<preview>/?bench&section=off`, wait for the result, then Save JSON.
-3. Repeat steps 1 and 2 once more, in the order B then A.
-4. Optionally, repeat with `&quality=medium`.
-5. **Phone, landscape, screen on, nothing else open.** Open `<preview>/?bench&quality=low`, then `?bench&quality=low&section=off`, saving each with Save JSON or Copy results.
-6. Send the files. If a panel says "Not valid", run that one again.
-7. **Look-check on both devices:**
-   - Practice → El Patio. Walk along the café and the Panadería at player height.
-   - Watch for flicker on the planter rim and stairs, stripes or shimmer on walls and trim, floating pieces, and anything that looks passable but isn't.
-   - Check that an enemy in front of the café is easy to see.
+**Controlled comparison (workload `cafe-scripted-v2`, hash `e4bfadc0`):**
+- Practice starts as usual, so the bots' avatars, teams and name tags are real. Then the match is held still: the practice host and prediction are paused, without opening a menu.
+- Every frame, the session gets a scripted scene that depends only on time since the start:
+  - Rosa's position and view
+  - three characters walking loops in front of the café (mirrored for the Panadería view)
+  - six projectiles always in flight between them
+- The scene is written at the moment the engine reads it, so both variants draw the same scene at the same timestamp, whatever their frame rate.
+- Nobody can be eliminated, because nothing is simulated. A run where Rosa is not alive, or the hold drops, is invalid.
+- Two things still integrate frame time: avatar animation phase and the shape of projectile trails. They can look slightly different at different frame rates, but never change what is drawn (meshes, draw calls, triangles).
+- **Timing:** warm-up 10 s, then 60 s measured, 15 s per view exactly. Draw-call and triangle averages are weighted by frame time, so a variant drawing fewer frames still averages over the same moments.
+- **Checks built into each run:** once per scene second, the run compares the camera, each character and each projectile the engine actually drew against the script. A mismatch, or a missing character or projectile, invalidates the run.
+
+**Live stress test:**
+- Real bots on normal difficulty, with throwing held down, so Rosa throws at the weapon's own rate whatever the frame rate.
+- Rosa's spawn protection is held on for her alone, so she cannot be eliminated; an elimination would invalidate the run.
+- The same equal-time views as the controlled comparison.
+- It records what was on screen: characters in view and projectiles in flight.
+
+**Both modes:**
+- **Invalidated by:** hiding the tab, resizing or zooming, changing quality, or opening a menu.
+- **Exported:** build, benchmark version, mode, workload id and hash, variant, quality, canvas and buffer size, pixel ratio, frame-time median, p95, p99 and max, frames over 50 ms, average FPS, draw calls and triangles (average, min, max), the same per view, and the renderer and user agent.
+- Copy results and Save JSON keep everything on the device.
+
+**Results** (`bench/bench-60s.json`): headless Chromium 141 on SwiftShader, a **software renderer on a shared cloud CPU, not a GPU**. The phone rows are Chromium emulating an iPhone screen, not a phone.
+
+| Run (60 s, 15 s per view) | Experiment | Production drawing | Difference |
+| --- | --- | --- | --- |
+| Controlled, desktop 1280 × 720, High (A B B A) | 538 / 538 calls, 104.3k tris, 2.5 / 2.7 FPS, p95 517 / 450 ms | 525 / 525 calls, 97.2k tris, 2.6 / 2.8 FPS, p95 445 / 431 ms | **+13 calls, +7.1k triangles** |
+| Controlled, desktop, Low | 307 calls, 68.2k tris, 4.9 FPS, p95 252 ms | 297 calls, 65.1k tris, 5.4 FPS, p95 225 ms | +10 calls, +3.1k |
+| Controlled, emulated phone 844 × 390, Low | 312 calls, 68.9k tris, 8.6 FPS, p95 141 ms | 302 calls, 65.8k tris, 8.7 FPS, p95 139 ms | +10 calls, +3.1k |
+| Live stress, desktop, High | 419 calls, 88.8k tris, 2.7 FPS; 1.10 characters in view, 8.3 projectiles in flight | 374 calls, 77.9k tris, 2.9 FPS; 0.82 characters, 7.2 projectiles | +45 calls (includes a different workload) |
+
+**The +35 versus +13 question, answered by measurement.**
+- **With the scene identical,** the section adds exactly **+13 draw calls and +7.1k triangles** at High. That is the same as the static count, in both A B B A pairs, and the minimum and maximum per frame shift by the same amount. At Low it adds +10.
+- **The live runs differ by more** (+45 here, +35 in version 1) because the workload differs between runs: in this pair the experiment run had 34% more characters in view and 15% more projectiles in flight. That extra is the bots, not the section.
+- **Not exactly attributed:** the characters-in-view figure counts a character only when its feet are on screen, so a per-character draw-call cost is not derived from it.
+
+**Software-renderer frame rates:** the section costs roughly 0-10% here, but this renderer says nothing reliable about a GPU. **No real Mac, Safari or phone has been measured.**
+
+### Mac and phone instructions (about 10 minutes)
+
+**M4 Mac, High** (Chrome or Safari; leave the window alone during each run):
+1. Open `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench`. After about 75 s, press **Save JSON**.
+2. Open `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&section=off` and save again.
+3. Repeat both, in the order section off, then on.
+4. Optionally, run `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench=live` once for the gameplay stress number.
+
+**Phone, Low** (landscape, nothing else open, screen kept on):
+1. Open `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&quality=low`, then `https://chancla-git-codex-graphics-polish-jclekkas.vercel.app/?bench&quality=low&section=off`.
+2. Save or copy each result.
+
+Send the files. "Not valid" means run that one again.
+
+**Look-check on both devices:** in normal practice on El Patio, walk along the café and the Panadería. Look for flicker on the planter rim and stairs, shimmer on walls and trim, floating pieces, and anything that looks passable but isn't. Check that an enemy in front of the café is easy to see.
 
 ## The preview is offline-only
 
@@ -238,6 +262,15 @@ The lab runs slower than the game here because `preserveDrawingBuffer` is on and
 
 ## Checks
 
+Benchmark correction (version 2), locally, every request to another host blocked:
+
+| Check | Build | Result |
+| --- | --- | --- |
+| `npm run typecheck`; offline and normal builds (benchmark absent from the normal build) | | pass |
+| `vitest` (30 files), including `tests/bench-scene.test.ts`: the scene is identical at shared timestamps from a 60 fps and a 7 fps sampling; equal time per view in warm-up and measurement; always 3 characters and 6 projectiles with continuous flights; address parsing | | 275/275 |
+| `scripts/graphics-bench-e2e.ts`: the drawn scene matched the script at every checkpoint, both at normal speed and with a 900 ms busy wait per frame (50 vs 21 frames, same workload hash); equal view time in both; the throttled run is marked a test; invalidation on hidden tab, resize and menu; Save, Copy and links; settings restored; ten 60 s runs valid; the live run had no eliminations and real throws; no external requests; no page errors | offline | 25/25 |
+| `scripts/graphics-practice-e2e.ts`, `e2e:menu` (the only gameplay file touched is the practice pause, through a flag set only by the benchmark) | offline | 20/20, 28/28 |
+
 Milestone 2, all on this branch, locally, with every request to another host blocked:
 
 | Check | Build | Result |
@@ -274,7 +307,7 @@ Every browser test ran locally. No test used the production server.
 - **Safari and WebKit:** not run. WebKit could not be downloaded here.
 - **Phone controls:** touch was tested in emulation (Chromium with touch events at iPhone size), not on a phone.
 - **Online play:** not tested with the section, because the preview has no online play by design. The section is rendering only; the server and shared simulation are untouched.
-- **The benchmark's draw-call gap at High** (about +35 per frame against a static +13) is not yet explained (see above).
+- **The benchmark's draw-call gap** is resolved: with an identical scene the section adds +13 at High; the larger live gap came from a different workload (see the benchmark section).
 
 ## Next step
 

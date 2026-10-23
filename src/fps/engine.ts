@@ -527,6 +527,10 @@ export class Engine {
     this.syncPickups(s, dt);
 
     const speed = Math.hypot(s.body.vx, s.body.vz);
+    // On touch screens the hand sits nearer the bottom-right corner, behind
+    // the Throw and Jump buttons instead of between them (same size: the
+    // viewmodel camera looks from its origin, so this is a plain shift).
+    if (this.input.touchMode) this.vm.root.position.set(0.07, -0.06, 0); else this.vm.root.position.set(0, 0, 0);
     this.vm.update({
       weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs, speed, onGround: s.body.onGround,
       crouched: s.body.crouched, alive: s.alive && s.phase !== 'results', msSinceThrow: performance.now() - this.lastLocalThrow,

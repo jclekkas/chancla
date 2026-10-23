@@ -242,10 +242,32 @@ function leafRamp(): THREE.DataTexture {
   return leafRampTex;
 }
 
+/**
+ * Shadow acne fix for toon materials. Toon shading still lights a face turned
+ * away from the sun (the ramp's darkest band is about 47 %, not black), and
+ * those same faces are what three.js draws into the shadow map (back faces by
+ * default), so each one was shadow-tested against itself and flickered
+ * between lit and shadowed in fine diagonal stripes. Such faces get no direct
+ * sun, so skip the shadow test for them; faces lit by the sun keep their
+ * shadows exactly as before. No change to the shadow map or its resolution.
+ */
+export function noBackfaceShadow<T extends THREE.Material>(m: T): T {
+  m.onBeforeCompile = (sh) => {
+    // Includes are still unexpanded here: patch the chunk's own text.
+    const from = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]';
+    const chunk = THREE.ShaderChunk.lights_fragment_begin;
+    if (!chunk.includes(from)) return; // three.js changed the chunk: leave the material as it was
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', chunk.replace(from,
+      'directLight.color *= ( directLight.visible && receiveShadow && dot( geometryNormal, directLight.direction ) > 0.05 ) ? getShadow( directionalShadowMap[ i ]'));
+  };
+  m.customProgramCacheKey = () => 'no-backface-shadow';
+  return m;
+}
+
 /** One material per kind for the kit's merged meshes. */
 export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
   const ramp = toonRamp();
-  const toonOf = (opts: THREE.MeshToonMaterialParameters) => new THREE.MeshToonMaterial({ gradientMap: ramp, ...opts });
+  const toonOf = (opts: THREE.MeshToonMaterialParameters) => noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: ramp, ...opts }));
   return {
     plaster: toonOf({ vertexColors: true, map: plasterTexture(quality) }),
     cantera: toonOf({ vertexColors: true, map: canteraTexture(quality) }),
@@ -254,7 +276,8 @@ export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
     louver: toonOf({ vertexColors: true, map: louverTexture(quality) }),
     talavera: toonOf({ map: talaveraTexture(quality) }),
     glass: toonOf({ map: glassTexture(quality) }),
-    wood: toonOf({ color: 0x9a6440, map: woodTexture(quality) }),
+    // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
+    wood: toonOf({ color: 0xb8875a, map: woodTexture(quality) }),
     lamp: toonOf({ color: 0xffe3a0, emissive: 0xc88a2a }),
     pavers: toonOf({ vertexColors: true, map: paverTexture(quality), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     leaf: toonOf({ vertexColors: true, side: THREE.DoubleSide, gradientMap: leafRamp() }),

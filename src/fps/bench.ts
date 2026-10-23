@@ -3,7 +3,9 @@
 // previews include it (see main.ts); it sends nothing anywhere.
 //
 //   ?bench                    controlled comparison, section on (Experiment)
-//   ?bench&section=off        the same, without the section: production's drawing
+//   ?bench&section=off        the same with the El Patio kit off (production's environment
+//                             drawing; the first-person view is this build's in both:
+//                             an environment-only comparison)
 //   ?bench=live[&section=off] live gameplay stress test (real bots; not a cost comparison)
 //   &quality=high|medium|low  (default high)   &secs=60   &warmup=10
 //
@@ -26,7 +28,7 @@ import type { Quality } from './settings';
 
 declare const __BUILD_ID__: string;
 
-export const BENCH_VERSION = 2;
+export const BENCH_VERSION = 3;
 export type BenchMode = 'controlled' | 'live';
 
 export interface BenchParams { mode: BenchMode; section: boolean; quality: Quality; secs: number; warmup: number; throttleMs: number }
@@ -80,6 +82,55 @@ function stationAt(tl: Timeline, t: number): { i: number; u: number; measured: b
   return { i, u: Math.min(1, (k - i * d) / d), measured: true };
 }
 
+/**
+ * One complete engine frame, from the start of one main render to the start
+ * of the next (scene seconds), with what it drew. fpCalls/fpTris are the
+ * first-person view's share (it is rendered separately, after the world).
+ */
+export interface FrameSample { start: number; end: number; calls: number; tris: number; fpCalls: number; fpTris: number }
+export interface Agg {
+  frames: number; sampledS: number; windowS: number; avgFps: number;
+  medianFrameMs: number; p95FrameMs: number; p99FrameMs: number; maxFrameMs: number; framesOver50ms: number;
+  drawCalls: Stat; triangles: Stat; firstPerson: { drawCalls: number; triangles: number };
+}
+
+/**
+ * How frames become measurements (one rule for every number):
+ * - A sample is a complete frame interval. The interval still in progress
+ *   when the run ends has no end, so it is never a sample.
+ * - A sample counts when its START lies inside the measurement window
+ *   [warmup, warmup + secs). Frames that start in the warm-up are left out,
+ *   even if they end inside the window.
+ * - A counted sample belongs to the view whose window contains its start and
+ *   contributes its whole duration (never a clipped part) to that view's
+ *   frame times and to its time denominator (sampledS). FPS = frames / sampledS.
+ * - windowS is the scheduled time per view (secs / views, exact). sampledS
+ *   can differ from it by up to about one frame at each boundary.
+ * - Draw-call and triangle averages are weighted by frame duration over the
+ *   same counted samples.
+ */
+export const SAMPLING_RULE = 'Complete frame intervals only; a frame counts if it starts inside the measurement window and belongs, whole, to the view its start falls in; the final unfinished interval and frames starting in the warm-up are excluded; FPS = frames / sum of their durations; count averages are weighted by duration.';
+
+export function aggregate(samples: readonly FrameSample[], tl: Timeline): { all: Agg; perView: Agg[] } {
+  const end = tl.warmup + tl.secs, n = STATIONS.length;
+  const counted = samples.filter((f) => f.end > f.start && f.start >= tl.warmup && f.start < end);
+  const one = (fs: readonly FrameSample[], windowS: number): Agg => {
+    const dts = fs.map((f) => (f.end - f.start) * 1000), sorted = [...dts].sort((a, b) => a - b), k = sorted.length;
+    const sum = dts.reduce((a, b) => a + b, 0);
+    const pct = (q: number) => (k ? sorted[Math.min(k - 1, Math.floor(q * k))]! : 0);
+    const wavg = (key: 'calls' | 'tris' | 'fpCalls' | 'fpTris') => (sum ? fs.reduce((a, f, i) => a + f[key] * dts[i]!, 0) / sum : 0);
+    const st = (key: 'calls' | 'tris'): Stat => (k ? { avg: Math.round(wavg(key)), min: Math.min(...fs.map((f) => f[key])), max: Math.max(...fs.map((f) => f[key])) } : { avg: 0, min: 0, max: 0 });
+    return {
+      frames: k, sampledS: +(sum / 1000).toFixed(3), windowS: +windowS.toFixed(3), avgFps: sum ? +(k / (sum / 1000)).toFixed(2) : 0,
+      medianFrameMs: +pct(0.5).toFixed(1), p95FrameMs: +pct(0.95).toFixed(1), p99FrameMs: +pct(0.99).toFixed(1), maxFrameMs: +(k ? sorted[k - 1]! : 0).toFixed(1),
+      framesOver50ms: dts.filter((d) => d > 50).length, drawCalls: st('calls'), triangles: st('tris'),
+      firstPerson: { drawCalls: Math.round(wavg('fpCalls')), triangles: Math.round(wavg('fpTris')) },
+    };
+  };
+  const perView = STATIONS.map((_, i) => one(counted.filter((f) => stationAt(tl, f.start).i === i), tl.secs / n));
+  return { all: one(counted, tl.secs), perView };
+}
+
 interface Pose { x: number; z: number; vx: number; vz: number; yaw: number }
 function walker(k: number, t: number, side: number): Pose {
   const w = WALKERS[k]!, a = w.w * t + w.ph;
@@ -127,19 +178,28 @@ interface Hooks {
 }
 
 interface Stat { avg: number; min: number; max: number }
-interface StationResult { name: string; frames: number; measuredS: number; avgFps: number; p95FrameMs: number; drawCalls: Stat; triangles: Stat }
 
 export interface BenchResult {
   kind: 'chancla-section-benchmark'; version: typeof BENCH_VERSION;
   mode: BenchMode; label: string;
-  build: string; variant: 'experiment' | 'production-equivalent'; quality: Quality;
+  /**
+   * experiment: this build. environment-off: the El Patio kit switched off,
+   * so the arena is drawn as in production; the first-person view,
+   * characters and projectiles are this build's in both. An environment-only
+   * comparison, not a production baseline (the first-person cost is reported
+   * separately in firstPerson).
+   */
+  build: string; variant: 'experiment' | 'environment-off'; comparison: 'environment-only'; quality: Quality;
   valid: boolean; invalidReason: string | null; testRun: boolean;
   workload: { id: string; hash: string; warmupS: number; measuredSPerView: number; views: string[] };
   measuredS: number; frames: number;
   avgFps: number; medianFrameMs: number; p95FrameMs: number; p99FrameMs: number; maxFrameMs: number; framesOver50ms: number;
   render: { cssSize: [number, number]; bufferSize: [number, number]; pixelRatio: number; devicePixelRatio: number };
   drawCalls: Stat; triangles: Stat;
-  perView: StationResult[];
+  /** The first-person view's own share of drawCalls/triangles (time-weighted average per frame). */
+  firstPerson: { drawCalls: number; triangles: number };
+  perView: Array<{ name: string } & Omit<Agg, 'firstPerson'>>;
+  sampling: string;
   /** Controlled: checks that what was drawn matched the script at sampled timestamps. Live: what was on screen. */
   scene: Record<string, number | boolean | string>;
   throttleMs: number;
@@ -173,9 +233,8 @@ export function runBench(p: BenchParams, h: Hooks): void {
   const room = () => [...(h.api.host()?.hub.rooms.values() ?? [])][0];
   let t0 = -1, done = false, session: any = null, ids: number[] = [], origUpdate: (() => void) | null = null;
   let lastMain = -1, applied: SceneState | null = null;
-  const frames: Array<{ t: number; dt: number; station: number; calls: number; tris: number }> = [];
-  /** Every frame interval [start, end] in scene seconds, for time per view (a frame can straddle a view change). */
-  const spans: Array<[number, number]> = [];
+  const samples: FrameSample[] = [];
+  let fpCalls = 0, fpTris = 0; // the first-person render's share of the frame in progress
   const checks = { n: 0, camErr: 0, walkerErr: 0, projErr: 0, minAvatars: Infinity, minProjectiles: Infinity };
   let nextCheck = 0;
   const live = { avatarsInView: 0, projectiles: 0, deaths: 0, throws0: 0, samples: 0 };
@@ -233,12 +292,9 @@ export function runBench(p: BenchParams, h: Hooks): void {
   r.render = (scene: THREE.Object3D, camera: THREE.Camera) => {
     if (scene === engine.scene && t0 >= 0 && !done) {
       const now = performance.now();
-      if (lastMain >= 0) {
-        const t = (lastMain - t0) / 1000, st = stationAt(tl, t);
-        if (st.measured && !invalid) frames.push({ t, dt: now - lastMain, station: st.i, calls: r.info.render.calls, tris: r.info.render.triangles });
-        if (!invalid) spans.push([t, (now - t0) / 1000]);
-      }
+      if (lastMain >= 0 && !invalid) samples.push({ start: (lastMain - t0) / 1000, end: (now - t0) / 1000, calls: r.info.render.calls, tris: r.info.render.triangles, fpCalls, fpTris });
       r.info.reset();
+      fpCalls = 0; fpTris = 0;
       lastMain = now;
       if (p.mode === 'controlled' && applied) checkDrawn();
       if (p.mode === 'live' && stationAt(tl, (now - t0) / 1000).measured) {
@@ -248,6 +304,12 @@ export function runBench(p: BenchParams, h: Hooks): void {
         live.avatarsInView += inView; live.projectiles += session.projectiles.size; live.samples++;
       }
       if (p.throttleMs > 0) { const end = now + p.throttleMs; while (performance.now() < end) { /* test only: a slower frame */ } }
+    }
+    if (scene === engine.vmScene && t0 >= 0 && !done) {
+      const c0 = r.info.render.calls, k0 = r.info.render.triangles;
+      render(scene, camera);
+      fpCalls += r.info.render.calls - c0; fpTris += r.info.render.triangles - k0;
+      return;
     }
     render(scene, camera);
   };
@@ -306,31 +368,8 @@ export function runBench(p: BenchParams, h: Hooks): void {
     // Free the mouse so the results panel can be used (the game may have captured it).
     if (document.pointerLockElement) document.exitPointerLock();
     const s = h.api.session();
-    // Averages are weighted by frame duration (a time average), so a variant
-    // that draws fewer frames still averages over the same scene moments.
-    const stat = (fs: typeof frames, key: 'calls' | 'tris'): Stat => {
-      if (!fs.length) return { avg: 0, min: 0, max: 0 };
-      const w = fs.reduce((a, f) => a + f.dt, 0), xs = fs.map((f) => f[key]);
-      return { avg: Math.round(fs.reduce((a, f) => a + f[key] * f.dt, 0) / (w || 1)), min: Math.min(...xs), max: Math.max(...xs) };
-    };
-    const timing = (dts: number[]) => {
-      const sorted = [...dts].sort((a, b) => a - b), n = sorted.length, sum = dts.reduce((a, b) => a + b, 0);
-      const pct = (q: number) => (n ? sorted[Math.min(n - 1, Math.floor(q * n))]! : 0);
-      return { n, s: sum / 1000, fps: sum ? n / (sum / 1000) : 0, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: n ? sorted[n - 1]! : 0 };
-    };
-    const all = timing(frames.map((f) => f.dt));
-    // Time per view: each frame interval split by where it overlaps the view's
-    // window (the last, unfinished interval included), so a slow frame at a
-    // view change or at the end is not all credited to one view.
-    if (!invalid && lastMain >= 0) spans.push([(lastMain - t0) / 1000, Math.min((performance.now() - t0) / 1000, p.warmup + p.secs)]);
-    const viewS = (i: number) => {
-      const d = p.secs / STATIONS.length, a = p.warmup + i * d, b = a + d;
-      return spans.reduce((acc, [x, y]) => acc + Math.max(0, Math.min(y, b) - Math.max(x, a)), 0);
-    };
-    const perView = STATIONS.map((S, i) => {
-      const fs = frames.filter((f) => f.station === i), tm = timing(fs.map((f) => f.dt));
-      return { name: S.name, frames: tm.n, measuredS: +viewS(i).toFixed(2), avgFps: +tm.fps.toFixed(1), p95FrameMs: +tm.p95.toFixed(1), drawCalls: stat(fs, 'calls'), triangles: stat(fs, 'tris') };
-    });
+    const agg = aggregate(samples, tl), all = agg.all;
+    const perView = STATIONS.map((S, i) => { const { firstPerson: _fp, ...v } = agg.perView[i]!; void _fp; return { name: S.name, ...v }; });
     if (!invalid && perView.some((v) => v.frames === 0)) invalidate('a view had no measured frames');
     const tol = 1e-3;
     if (p.mode === 'controlled' && !invalid && (checks.n < Math.floor(p.secs / 2) || checks.camErr > tol || checks.walkerErr > tol || checks.projErr > tol || checks.minAvatars < ids.length || checks.minProjectiles < PROJ.count)) {
@@ -341,21 +380,21 @@ export function runBench(p: BenchParams, h: Hooks): void {
       kind: 'chancla-section-benchmark', version: BENCH_VERSION, mode: p.mode,
       label: p.mode === 'controlled' ? 'Controlled comparison: scripted scene, identical in both variants' : 'Live gameplay stress test: real bots, varies run to run; not a section cost comparison',
       build: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev',
-      variant: p.section ? 'experiment' : 'production-equivalent', quality: p.quality,
-      valid: !invalid && all.n > 0, invalidReason: invalid ?? (all.n ? null : 'no frames measured'), testRun: p.throttleMs > 0 || p.secs < 60,
+      variant: p.section ? 'experiment' : 'environment-off', comparison: 'environment-only', quality: p.quality,
+      valid: !invalid && all.frames > 0, invalidReason: invalid ?? (all.frames ? null : 'no frames measured'), testRun: p.throttleMs > 0 || p.secs < 60,
       workload: { id: p.mode === 'controlled' ? `${SCENE.id}-v${BENCH_VERSION}` : `live-practice-1v2-normal-v${BENCH_VERSION}`, hash: p.mode === 'controlled' ? SCENE_HASH : 'random (live bots)', warmupS: p.warmup, measuredSPerView: p.secs / STATIONS.length, views: STATIONS.map((x) => x.name) },
-      measuredS: +all.s.toFixed(2), frames: all.n,
-      avgFps: +all.fps.toFixed(1), medianFrameMs: +all.p50.toFixed(1), p95FrameMs: +all.p95.toFixed(1), p99FrameMs: +all.p99.toFixed(1), maxFrameMs: +all.max.toFixed(1),
-      framesOver50ms: frames.filter((f) => f.dt > 50).length,
+      measuredS: +all.sampledS.toFixed(2), frames: all.frames,
+      avgFps: +all.avgFps.toFixed(1), medianFrameMs: all.medianFrameMs, p95FrameMs: all.p95FrameMs, p99FrameMs: all.p99FrameMs, maxFrameMs: all.maxFrameMs,
+      framesOver50ms: all.framesOver50ms,
       render: { cssSize: [c.clientWidth, c.clientHeight], bufferSize: [c.width, c.height], pixelRatio: r.getPixelRatio(), devicePixelRatio },
-      drawCalls: stat(frames, 'calls'), triangles: stat(frames, 'tris'),
-      perView,
+      drawCalls: all.drawCalls, triangles: all.triangles, firstPerson: all.firstPerson,
+      perView, sampling: SAMPLING_RULE,
       scene: p.mode === 'controlled'
         ? { characters: ids.length, projectiles: PROJ.count, checkpoints: checks.n, maxCameraError: +checks.camErr.toExponential(2), maxCharacterError: +checks.walkerErr.toExponential(2), maxProjectileError: +checks.projErr.toExponential(2), minCharactersDrawn: checks.minAvatars, minProjectilesDrawn: checks.minProjectiles }
         : { bots: ids.length, throwsByRosa: (s?.localShot ?? live.throws0) - live.throws0, avgCharactersInView: live.samples ? +(live.avatarsInView / live.samples).toFixed(2) : 0, avgProjectilesInFlight: live.samples ? +(live.projectiles / live.samples).toFixed(2) : 0, rosaEliminated: live.deaths },
       throttleMs: p.throttleMs,
       renderer: rendererName(r), userAgent: navigator.userAgent, startedAt: new Date(performance.timeOrigin).toISOString(),
-      note: `${p.mode === 'controlled' ? 'Scripted scene through the normal game renderer; one variant loaded.' : 'Live bots; what is on screen differs between runs, so differences between variants include that.'} Draw calls and triangles are per engine frame including the shadow pass and the held item; averages are weighted by frame time.${p.secs < 60 ? ' Shorter than 60 s: indicative only.' : ''}${p.throttleMs > 0 ? ` Test run with a ${p.throttleMs} ms busy wait per frame: not a measurement.` : ''}`,
+      note: `${p.mode === 'controlled' ? 'Scripted scene through the normal game renderer; one variant loaded.' : 'Live bots; what is on screen differs between runs, so differences between variants include that.'} Draw calls and triangles are per engine frame including the shadow pass and the first-person view (its share is in firstPerson). Environment-only comparison: the first-person view is this build's in both variants.${p.secs < 60 ? ' Shorter than 60 s: indicative only.' : ''}${p.throttleMs > 0 ? ` Test run with a ${p.throttleMs} ms busy wait per frame: not a measurement.` : ''}`,
     };
     ui.done(res);
   }
@@ -376,7 +415,7 @@ function panel(p: BenchParams) {
   el.setAttribute('role', 'status');
   el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;max-width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;background:rgba(20,12,28,.88);color:#fff;font:13px/1.45 system-ui,sans-serif;padding:10px 12px;border-radius:10px;pointer-events:auto';
   const head = document.createElement('div');
-  head.innerHTML = `<b>${p.mode === 'controlled' ? 'Controlled comparison' : 'Live stress test'}</b> · ${p.section ? 'Experiment (upgraded café)' : 'Production drawing (section off)'} · ${p.quality}`;
+  head.innerHTML = `<b>${p.mode === 'controlled' ? 'Controlled comparison' : 'Live stress test'}</b> · ${p.section ? 'Experiment (upgraded café)' : 'Environment off (production environment, this build\'s first-person view)'} · ${p.quality}`;
   const status = document.createElement('div');
   el.append(head, status);
   document.body.append(el);
@@ -394,7 +433,8 @@ function panel(p: BenchParams) {
       status.innerHTML = '';
       const lines = res.valid
         ? [`<b>${res.avgFps} FPS</b> average · p95 ${res.p95FrameMs} ms · p99 ${res.p99FrameMs} ms`,
-          `${res.frames} frames in ${res.measuredS} s after ${res.workload.warmupS} s warm-up (${res.workload.measuredSPerView} s per view)`,
+          `${res.frames} frames, ${res.measuredS} s of complete frames, after ${res.workload.warmupS} s warm-up (${res.workload.measuredSPerView} s scheduled per view)`,
+          `First-person view: ${res.firstPerson.drawCalls} calls, ${res.firstPerson.triangles.toLocaleString()} triangles of each frame`,
           `${res.render.bufferSize[0]} × ${res.render.bufferSize[1]} px (pixel ratio ${res.render.pixelRatio})`,
           `${res.drawCalls.avg} draw calls (${res.drawCalls.min}-${res.drawCalls.max}) · ${res.triangles.avg.toLocaleString()} triangles per frame`,
           res.mode === 'controlled' ? `Scene ${res.workload.id} #${res.workload.hash}: matched the script at ${res.scene.checkpoints} checkpoints` : `Live bots: ${res.scene.avgCharactersInView} characters in view on average (varies by run)`,
@@ -415,7 +455,7 @@ function panel(p: BenchParams) {
       const links = document.createElement('div'); links.style.marginTop = '6px';
       links.append(
         link('Run again', () => undefined),
-        link(p.section ? 'Run production drawing' : 'Run experiment', (q) => { if (p.section) q.set('section', 'off'); else q.delete('section'); }),
+        link(p.section ? 'Run with environment off' : 'Run experiment', (q) => { if (p.section) q.set('section', 'off'); else q.delete('section'); }),
         link(p.quality === 'high' ? 'Medium' : 'High', (q) => q.set('quality', p.quality === 'high' ? 'medium' : 'high')),
         link('Low', (q) => q.set('quality', 'low')),
         link(p.mode === 'controlled' ? 'Live stress test' : 'Controlled comparison', (q) => q.set('bench', p.mode === 'controlled' ? 'live' : '')),

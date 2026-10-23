@@ -1,8 +1,9 @@
-// The chancla Rosa holds in first person: a flip-flop with a two-layer sole
-// that tapers from heel to toe, a toe post, a V strap with a cream stripe
-// and her marigold flower on the post. Same colours as the thrown chancla,
-// shaped for close-up viewing. Shooter only: the Arcade game, the statue and
-// the projectiles keep src/models/sandal.ts.
+// The shooter's chancla: a flip-flop with a two-layer sole that tapers from
+// heel to toe, a toe post, a V strap with a cream stripe and Rosa's marigold
+// flower on the post. The first-person view uses the full-detail geometry;
+// thrown chanclas and the ones characters hold use a lighter version of the
+// same design (chanclaModel), so all three match. Shooter only: the Arcade
+// game and the statue keep src/models/sandal.ts.
 //
 // Local frame (metres, already at view-model scale): toe at -Z, heel at +Z,
 // footbed facing +Y, the sole's underside at y = 0.
@@ -70,16 +71,24 @@ function toeSpring(z: number): number {
   return t * t * 0.55;
 }
 
-let cache: { body: THREE.BufferGeometry; flower: THREE.BufferGeometry } | null = null;
+type Detail = 'full' | 'lite';
+const cache: Partial<Record<Detail, { body: THREE.BufferGeometry; flower: THREE.BufferGeometry }>> = {};
+// Lite: fewer outline segments, a coarser strap sweep and petals (for objects seen at a distance or in motion).
+const DETAIL: Record<Detail, { curve: number; strap: number; petal: [number, number]; post: number }> = {
+  full: { curve: 3, strap: 10, petal: [6, 4], post: 7 },
+  lite: { curve: 2, strap: 5, petal: [4, 3], post: 5 },
+};
 
-export function fpChanclaGeometry(): { body: THREE.BufferGeometry; flower: THREE.BufferGeometry } {
-  if (cache) return cache;
+export function fpChanclaGeometry(detail: Detail = 'full'): { body: THREE.BufferGeometry; flower: THREE.BufferGeometry } {
+  const hit = cache[detail];
+  if (hit) return hit;
+  const D = DETAIL[detail];
   const L = CHANCLA.length;
   // Sole: two stacked extrusions (violet sole, turquoise footbed layer),
   // reshaped so the thickness follows soleTop(z) and the toe curls up.
   const bevel = 0.004;
   const layer = (scale: number, from: number, to: number, side: number, top: number, under: number) => {
-    const ex = new THREE.ExtrudeGeometry(outlineShape(L * scale), { depth: 1, bevelEnabled: true, bevelThickness: bevel * 0.6, bevelSize: bevel, bevelSegments: 1, curveSegments: 3 });
+    const ex = new THREE.ExtrudeGeometry(outlineShape(L * scale), { depth: 1, bevelEnabled: true, bevelThickness: bevel * 0.6, bevelSize: bevel, bevelSegments: 1, curveSegments: D.curve });
     ex.rotateX(-Math.PI / 2); // shape v -> -z, depth -> +y
     const p = ex.attributes.position!;
     for (let i = 0; i < p.count; i++) {
@@ -110,7 +119,7 @@ export function fpChanclaGeometry(): { body: THREE.BufferGeometry; flower: THREE
   const postZ = -0.085, postX = 0.018;
   const baseY = soleTop(postZ) + bevel * 2;
   const postTop = new THREE.Vector3(postX, baseY + 0.026, postZ);
-  const post = painted(new THREE.CylinderGeometry(0.0055, 0.007, 0.03, 7), STRAP, trs(postX, baseY + 0.012, postZ));
+  const post = painted(new THREE.CylinderGeometry(0.0055, 0.007, 0.03, D.post), STRAP, trs(postX, baseY + 0.012, postZ));
   const strapZ = 0.0;
   const [xl, xr] = soleEdges(strapZ);
   const band: Array<[number, number]> = [[-0.0105, 0], [-0.0035, 0.0035], [0.0035, 0.0035], [0.0105, 0], [0.0105, -0.003], [-0.0105, -0.003]];
@@ -125,7 +134,7 @@ export function fpChanclaGeometry(): { body: THREE.BufferGeometry; flower: THREE
     // Up for the band: roughly away from the foot's centre line, so the band
     // lies flat over the instep.
     const up = new THREE.Vector3(Math.sign(x - postX) * 0.2, 1, 0).normalize();
-    straps.push(sweep(curve, up, band, bandCol, 10));
+    straps.push(sweep(curve, up, band, bandCol, D.strap));
   }
   const body = merge([sole, post, ...straps]);
 
@@ -133,17 +142,47 @@ export function fpChanclaGeometry(): { body: THREE.BufferGeometry; flower: THREE
   const petals: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + 0.3;
-    const g = new THREE.SphereGeometry(0.011, 6, 4);
+    const g = new THREE.SphereGeometry(0.011, D.petal[0], D.petal[1]);
     petals.push(painted(g, PALETTE.marigold, new THREE.Matrix4().makeRotationY(-a).premultiply(trs(Math.sin(a) * 0.011, 0, Math.cos(a) * 0.011)).multiply(new THREE.Matrix4().makeScale(1, 0.42, 1.55))));
     g.dispose();
   }
-  const centre = new THREE.SphereGeometry(0.0065, 6, 4);
+  const centre = new THREE.SphereGeometry(0.0065, D.petal[0], D.petal[1]);
   petals.push(painted(centre, PALETTE.marigoldDeep, trs(0, 0.004, 0)));
   centre.dispose();
   const flower = merge(petals);
   flower.applyMatrix4(trs(postTop.x, postTop.y + 0.004, postTop.z, -0.25, 0, 0.15));
-  cache = { body, flower };
-  return cache;
+  cache[detail] = { body, flower };
+  return cache[detail]!;
+}
+
+/** The old slide model's length (src/models/sandal.ts), so thrown and held chanclas keep their size on screen. */
+const MODEL_LENGTH = 0.331;
+let modelGeo: THREE.BufferGeometry | null = null;
+let modelMat: THREE.MeshLambertMaterial | null = null;
+
+/**
+ * The same chancla for projectiles and the chancla characters hold: the lite
+ * geometry as one vertex-coloured mesh (one draw call; the old slide was
+ * seven), scaled to the old model's length, in the old model's frame (toe at
+ * -Z, footbed up, sole on y = 0). Geometry and material are shared: owners
+ * must not dispose them (userData.shared marks the geometry, as sandal.ts does).
+ */
+export function chanclaModel(): THREE.Mesh {
+  if (!modelGeo) {
+    const { body, flower } = fpChanclaGeometry('lite');
+    modelGeo = merge([body.clone(), flower.clone()]);
+    modelGeo.computeBoundingBox();
+    const b = modelGeo.boundingBox!, len = b.max.z - b.min.z;
+    const k = MODEL_LENGTH / len;
+    modelGeo.translate(0, 0, -(b.max.z + b.min.z) / 2); // centred along its length, like the old model
+    modelGeo.scale(k, k, k);
+    modelGeo.computeBoundingSphere();
+    modelGeo.userData.shared = true;
+    modelMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  }
+  const m = new THREE.Mesh(modelGeo, modelMat!);
+  m.castShadow = true;
+  return m;
 }
 
 /** Sole edges and thickness where the hand grips the chancla. */

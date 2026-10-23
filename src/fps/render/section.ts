@@ -163,7 +163,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     // smaller than a shadow-map texel and drew a sawtooth on the lintel under it.
     trimSmall: { k: 'detail', c: 0xfbf1dc }, cantera: { k: 'cantera', c: 0xe6cfa6 }, pot: { k: 'cantera', c: COLORS.terracottaDark },
     talavera: { k: 'talavera', c: null }, glass: { k: 'glass', c: null }, wood: { k: 'wood', c: null }, lamp: { k: 'lamp', c: null },
-    iron: { k: 'detail', c: 0x2a1d2c }, woodDark: { k: 'detail', c: 0x4c2d1c }, brass: { k: 'detail', c: COLORS.gold },
+    iron: { k: 'detail', c: 0x2a1d2c }, woodDark: { k: 'detail', c: 0x6a4428 }, brass: { k: 'detail', c: COLORS.gold },
     tileA: { k: 'detail', c: COLORS.terracotta }, tileB: { k: 'detail', c: 0xb24a33 }, tileC: { k: 'detail', c: 0xd66a4b },
     eave: { k: 'flat', c: 0x7a3a2a }, soil: { k: 'flat', c: 0x5b3a22 }, spout: { k: 'flat', c: 0xb24a33 },
     leaf: { k: 'leaf', c: null }, crate: { k: 'flat', c: 0x7a5236 }, bin: { k: 'flat', c: 0x3d7d5a }, binLid: { k: 'detail', c: 0x2f5f45 },

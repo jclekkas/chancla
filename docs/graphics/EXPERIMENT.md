@@ -2,6 +2,116 @@
 
 Production is out of scope. Do not merge this branch to main, promote a deployment, change production domains or environment variables, or modify the Render service without new, explicit approval from the owner.
 
+## Milestone 3, polish and measurement pass
+
+A bounded pass on top of milestone 3. The map, layout and characters are unchanged.
+
+### Visual consistency: one chancla design
+- **Shared design:** the held first-person chancla, the thrown one and the one in a third-person Rosa's hand are now the same flip-flop.
+  - The thrown and third-person versions use a lighter build of the first-person geometry (fewer curve and strap segments), merged into one mesh with vertex colours: 1 draw call instead of 7.
+  - It is scaled to the old slide's length, so on screen it reads at the same size.
+- **Unchanged:**
+  - projectile size (collision radius), speed, arc, release timing and cooldowns, all in `shared/config.ts`;
+  - the Classic Arcade's shared `sandal.ts` and `hand.ts` models (also used by the Rosas' feet and the statue).
+
+### Visible defects: causes and fixes
+| Defect | Cause | Fix |
+| --- | --- | --- |
+| Rough black specks around the fingers | The inverted-hull ink outline bulges out of the creases where the hand's merged primitives meet. | The outline hull is pushed 4 mm back in view space. The silhouette outline stays and the crease specks go. |
+| Diagonal, jagged stripes on walls and door surrounds | Self-shadow acne on faces turned away from the sun. Toon shading still gives those faces about 47% light, and three.js renders back faces into the shadow map, so they shadow themselves in stripes. | The kit's toon materials ignore the directional shadow on faces turned away from the sun (they get no direct sun anyway). Shadow map size, bias and filtering are unchanged everywhere. |
+| Stepped edge on the sunlit door casing | Ordinary shadow-map resolution (about 3 cm per texel). | Left as is: fixing it would mean a larger shadow map for the whole arena. |
+
+- **Trade-off:** walls facing away from the sun no longer show other buildings' shadows. Physically, those faces get no direct sun, so nothing is lost.
+- **Comparisons (before left, after right):** `evidence/m4-acne-cmp2.jpg` (walls) and `evidence/m4-door-cmp.jpg` (door surrounds).
+
+**Enemy contrast at the café door:**
+- the door wood is lighter, 0x9a6440 → 0xb8875a;
+- its dark trim is lighter too, 0x4c2d1c → 0x6a4428;
+- team colours are unchanged.
+
+See `evidence/m4-game-readability-m4.jpg` against `m3-game-readability-m3.jpg`.
+
+### Benchmark reporting, corrected (benchmark version 3)
+- **What "environment off" means:** it draws production's environment with *this build's* first-person view.
+  - It is labelled **environment-only** (`comparison: "environment-only"`).
+  - It is not a production baseline.
+- **The first-person view's cost** is now reported separately in every run (`firstPerson`): 8 draw calls and 5.6k triangles in both variants.
+- **Sampling rule (`sampling` in the JSON):**
+  - **What counts:** only complete frame intervals whose start lies in [warm-up, warm-up + duration).
+  - **Assignment:** each counted interval is given, whole, to the view it started in.
+  - **Excluded:** a frame that starts in the warm-up, and the frame still in progress when the run stops.
+  - **Calculations:**
+    - FPS = frames / sum of their durations;
+    - percentiles come from the same frames;
+    - draw-call and triangle averages are weighted by those durations.
+  - **Reported times:** `windowS` is the scheduled time and `sampledS` the time actually covered by counted frames.
+  - **Coverage:** at an even frame rate, `sampledS` is within one frame of `windowS` at each end.
+- **Clipped spans removed:** the earlier per-view clipped spans (milestone 3's last fix) mixed two denominators and are gone.
+- **Boundary checks:** six cases in `tests/bench-scene.test.ts`:
+  - warm-up straddle;
+  - view-change straddle;
+  - end of window;
+  - zero-length interval;
+  - same samples for every statistic;
+  - coverage.
+- **Provenance:** results are in `bench/bench-m3b-60s.json`; `bench/bench-m3-60s.json` (milestone 3) is kept as it was.
+
+| Run (60 s, SwiftShader software renderer) | This build | Environment off (production environment, this build's first person) | Milestone 3, same run |
+| --- | --- | --- | --- |
+| Controlled, desktop High (A B B A) | 402 / 402 calls, 136.0k tris, 2.2 / 2.3 FPS, p95 519 / 524 ms | 429 / 429 calls, 95.2k tris, 2.8 / 2.9 FPS, p95 423 / 413 ms | 484 calls, 141.8k tris, 2.0 FPS |
+| Controlled, desktop Low | 229 calls, 80.3k tris, 6.1 FPS, p95 199 ms | 243 calls, 66.2k tris, 5.5 FPS, p95 239 ms | 269 calls, 83.1k tris, 5.6 FPS |
+| Controlled, emulated phone Low | 233 calls, 80.9k tris, 10.5 FPS, p95 117 ms | 247 calls, 66.8k tris, 8.5 FPS, p95 139 ms | 274 calls, 83.8k tris, 9.9 FPS |
+| Live stress, desktop High (real bots, varies by run) | 313 calls, 125.1k tris, 2.2 FPS | 310 calls, 78.6k tris, 2.8 FPS | 393 calls, 131.3k tris, 2.2 FPS |
+
+- **Draw calls:** each thrown and held chancla is now one draw instead of seven, so the controlled scene's calls fall by about 80.
+- **Speed on this renderer:** High is about 21% slower than the environment-only comparison; Low is faster.
+- **Not device performance:** a software renderer, so none of this is Mac or phone performance.
+
+**Cumulative rendering cost against production (comparison lab, exact counts, 5 views, this build):**
+
+| Quality | Draw calls | Triangles |
+| --- | --- | --- |
+| High | 86-101 → 57-74 (**27-29 fewer**) | 38.4-39.6k → 78.9-80.4k (**+40.8k**) |
+| Medium | **27-29 fewer** | **+35.9k** |
+| Low | 51-66 → 35-52 (**14-16 fewer**) | 33.2-34.4k → 47.0-48.5k (**+14.1k**) |
+
+These match milestone 3: this pass's changes cost nothing measurable in the static views. Its savings are where characters and chanclas are on screen.
+
+### Mobile controls (touch only; desktop unchanged)
+Feedback was that the controls were too crowded and covered too much of the screen. Changes:
+- **Movement:** one resting stick on the left; the arrow pad is gone.
+- **Buttons:** icon-only buttons in an arc on the right, with Throw largest.
+- **Other controls:**
+  - Scores sits under Menu;
+  - one compact chip for the weapon in hand;
+  - the hint text fades after 6 s.
+- **Hand position:** the first-person hand sits a little lower and further right, behind the buttons.
+- **Evidence:** `evidence/m4-game-phone-m4.jpg`.
+
+### In-game shots (offline practice, 1280 × 720, High, same spots as milestone 3)
+`m4-game-<view>-m4.jpg` sit next to milestone 3's `m3-game-<view>-prod.jpg` and `m3-game-<view>-m3.jpg`.
+
+**Clip:** `evidence/m4-throw-clip.mp4` (2.7 s), contact sheet `evidence/m4-clip-sheet.jpg`. It shows La Chancla thrown and the fresh one rising into the hand, then the switch to La Pesada, its throw and recovery.
+
+### Checks (this pass)
+| Check | Result |
+| --- | --- |
+| typecheck, offline build without the production server address | pass |
+| vitest (includes 6 new sampling boundary cases) | 281/281 |
+| `graphics-practice-e2e.ts` (collision, move, jump, aim, throw, Esc/Resume, phone controls, no external requests) | 20/20 in 3 of 4 runs. One run had a single failure that was not captured and did not recur. |
+| `e2e:mobile-mp` on a normal build (phone and desktop in one room, local server) | 43/43 |
+| `graphics-bench-e2e.ts` on the final code (invalidation, export, labels, equivalence, ten 60 s runs) | 25/25 |
+
+### Real-device checklist (about 15 minutes)
+1. **Mac, High:**
+   - **Look:** the hand and its outline (no specks), the walls facing away from the sun (no stripes), and an enemy at the café door.
+   - **Throw:** both chanclas, and watch the fresh one come back.
+   - **Sustained performance:** `?bench`, then `?bench&section=off`, then the two again in reverse order; save the JSON from each.
+2. **Phone, Low, landscape:**
+   - **Controls:** move, aim, throw and jump at the same time; switch weapon; Scores; Menu and Resume. Do they leave enough of the screen clear?
+   - **Throw:** both chanclas.
+   - **Sustained performance:** play 5 minutes and note heat and stutter; then `?bench&quality=low` and `?bench&quality=low&section=off`, saving the JSON from each.
+
 ## Milestone 3: El Patio, integrated
 
 The café kit now draws the whole El Patio arena. Materials, paving and light are reworked for El Patio, and the first-person hand and chancla are new. Three parallel workstreams did the work, each owning separate files, and the lead integrated and verified it:

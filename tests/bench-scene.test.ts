@@ -2,7 +2,7 @@
 // so two runs drawing at different frame rates see the same scene at the
 // same timestamps. These checks pin that down without a browser.
 import { describe, expect, it } from 'vitest';
-import { benchParams, sceneAt } from '../src/fps/bench';
+import { aggregate, benchParams, sceneAt, type FrameSample } from '../src/fps/bench';
 
 const tl = { warmup: 10, secs: 60 };
 
@@ -52,5 +52,53 @@ describe('graphics benchmark scene', () => {
     expect(benchParams('?bench&section=off&quality=low')).toMatchObject({ mode: 'controlled', section: false, quality: 'low' });
     expect(benchParams('?bench=live')).toMatchObject({ mode: 'live', section: true });
     expect(benchParams('?foo')).toBeNull();
+  });
+
+  describe('frame sampling at the edges of the measurement window', () => {
+    const tl2 = { warmup: 2, secs: 8 }; // views of 2 s: [2,4) [4,6) [6,8) [8,10)
+    const f = (start: number, end: number, calls = 10, fpCalls = 2): FrameSample => ({ start, end, calls, tris: calls * 100, fpCalls, fpTris: fpCalls * 100 });
+
+    it('leaves out a frame that starts in the warm-up, even though it ends inside the window', () => {
+      const r = aggregate([f(1.5, 2.5), f(2.5, 3.0)], tl2);
+      expect(r.all.frames).toBe(1);
+      expect(r.all.sampledS).toBeCloseTo(0.5, 6);
+    });
+
+    it('gives a frame that straddles a view change, whole, to the view it started in', () => {
+      const r = aggregate([f(3.9, 4.3)], tl2);
+      expect(r.perView[0]!.frames).toBe(1);
+      expect(r.perView[0]!.sampledS).toBeCloseTo(0.4, 6); // its full duration, not the 0.1 s inside the first view
+      expect(r.perView[1]!.frames).toBe(0);
+      expect(r.perView[0]!.p95FrameMs).toBeCloseTo(400, 1);
+    });
+
+    it('counts a frame that starts before the end and runs past it, and nothing that starts at or after the end', () => {
+      const r = aggregate([f(9.8, 10.4), f(10.0, 10.2)], tl2);
+      expect(r.all.frames).toBe(1);
+      expect(r.perView[3]!.sampledS).toBeCloseTo(0.6, 6);
+    });
+
+    it('never uses an interval without an end (the frame still in progress when the run stops is not recorded)', () => {
+      const r = aggregate([f(5, 5)], tl2);
+      expect(r.all.frames).toBe(0);
+      expect(r.all.avgFps).toBe(0);
+    });
+
+    it('uses the same frames and the same durations for FPS, percentiles and count averages', () => {
+      const r = aggregate([f(2.0, 2.1, 100, 4), f(2.1, 2.4, 200, 8)], tl2);
+      expect(r.all.frames).toBe(2);
+      expect(r.all.avgFps).toBeCloseTo(2 / 0.4, 6); // frames / sum of their durations
+      expect(r.all.drawCalls.avg).toBe(Math.round((100 * 0.1 + 200 * 0.3) / 0.4)); // weighted by duration
+      expect(r.all.firstPerson.drawCalls).toBe(Math.round((4 * 0.1 + 8 * 0.3) / 0.4));
+      expect(r.all.windowS).toBe(8);
+      expect(r.perView.map((v) => v.windowS)).toEqual([2, 2, 2, 2]);
+    });
+
+    it('covers each scheduled window to within a frame at each end at an even frame rate', () => {
+      const frames: FrameSample[] = [];
+      for (let t = 0.03; t < 10.2; t += 0.37) frames.push(f(t, t + 0.37));
+      const r = aggregate(frames, tl2);
+      for (const v of r.perView) expect(Math.abs(v.sampledS - v.windowS)).toBeLessThanOrEqual(0.37 + 1e-9);
+    });
   });
 });

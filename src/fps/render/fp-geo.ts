@@ -115,6 +115,15 @@ export function inkHull(g: THREE.BufferGeometry, width: number): THREE.BufferGeo
 }
 
 export const INK = new THREE.MeshBasicMaterial({ color: 0x241626, side: THREE.BackSide });
+// The hand is built from overlapping parts (fingers, thumb, palm) merged into
+// one mesh, so the hull also bulges out of the creases where parts meet and
+// showed as black specks and slivers across knuckles, thumb and nails. Pushing
+// the hull 4 mm away from the camera (view space; the hull is 2-3 mm wide)
+// hides it wherever the hand's own surface is just in front of it and keeps it
+// where only the background is behind: the silhouette.
+INK.onBeforeCompile = (sh) => {
+  sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= 0.004;\n\tgl_Position = projectionMatrix * mvPosition;');
+};
 
 /** Toon material that takes its colour from the vertices. */
 export function vertexToon(opts: { emissive?: number; color?: number } = {}): THREE.MeshToonMaterial {

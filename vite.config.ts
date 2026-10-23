@@ -53,6 +53,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         classic: resolve(__dirname, 'classic.html'),
+        courtyard: resolve(__dirname, 'courtyard.html'),
       },
     },
   },

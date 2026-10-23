@@ -168,11 +168,12 @@ function install(): void {
     s.remotes.set(M.ids[1], { ...base, x: 40, z: 40, yaw: 0, ...(sc.partner ?? {}), id: M.ids[1] });
     for (const [at, key, fn] of sc.ev ?? []) if (t >= at && !M.fired[key]) { M.fired[key] = true; fn(); }
     // Camera at eye height, 4 m away: 'side' on her right (+z), '3q' ahead
-    // of her on her left (strafes: ahead of her on her right).
+    // of her on her left (standing) or on her right (moving).
     let cx: number, cz: number;
     const cd = (w.__camDist ?? 4) / 4;
     if (M.view === 'side') { cx = me.x; cz = me.z + 4.0 * cd; }
     else if (M.scene.startsWith('strafe')) { cx = me.x + 2.5 * cd; cz = me.z + 3.1 * cd; }
+    else if (me.vx) { cx = me.x + 2.0 * cd; cz = me.z + 3.3 * cd; } // walks: ahead of her on her right (clear of the planters)
     else { cx = me.x + 2.9 * cd; cz = me.z - 2.75 * cd; }
     for (const bd of [s.body]) { bd.x = cx; bd.z = cz; bd.y = 0; bd.vx = bd.vz = bd.vy = 0; }
     const lx = me.x - cx, lz = me.z - cz, ly = 0.95 - 1.58;

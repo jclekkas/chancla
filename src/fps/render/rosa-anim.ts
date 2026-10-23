@@ -358,8 +358,8 @@ export class RosaAnimator {
     // Gait from speed: the stride (two steps) grows with speed, and each
     // foot's share on the ground shrinks into a run.
     // (Never more than about 3.3 strides a second: a frantic patter reads as a glitch.)
-    const D = Math.max((0.6 + 0.3 * speed) * (1 - 0.15 * cr) * (1 - 0.3 * side) * (this.backMode ? 0.8 : 1), speed / 3.3);
-    const beta = clamp((0.6 + 0.15 * cr) / D, 0.3, 0.64);
+    const D = Math.max((0.55 + 0.27 * speed) * (1 - 0.15 * cr) * (1 - 0.3 * side) * (this.backMode ? 0.8 : 1), speed / 3.3);
+    const beta = clamp((0.56 + 0.15 * cr) / D, 0.3, 0.64);
     const E = beta * D;
     const freq = Math.max(speed / D, 1.1);
     const W = STANCE_W + 0.04 * cr + 0.07 * side;
@@ -529,8 +529,9 @@ export class RosaAnimator {
     raw[FLX] = Math.min(raw[FLX]!, 2.3); // elbows: a tight fold at most
     raw[FLY] = 0; raw[FLZ] = 0; raw[WLX] = 0; raw[WLY] = 0; raw[WLZ] = 0;
     // Right arm: the weapon arm. The action keys over the locomotion swing.
-    const locoAx = CARRY.ax + swing + airArms * 0.5 - sq * 1.5 - flail * 0.06 + 0.95 * flR;
-    const locoFx = CARRY.fx + 0.75 * run * gw + airW * 0.3 + 1.25 * flR;
+    // It carries the sandal: a smaller swing and pump, so it never jabs forward.
+    const locoAx = CARRY.ax + swing * 0.6 + airArms * 0.5 - sq * 1.5 - flail * 0.06 + 0.95 * flR;
+    const locoFx = CARRY.fx + 0.4 * run * gw + airW * 0.3 + 1.25 * flR;
     let ax = locoAx, ay = 0, ez = 0, fx = locoFx, wy = 0;
     if (swinging || throwing) {
       ax = (REST.ax + (arm.ax - REST.ax) * mAmp) * act + locoAx * (1 - act);

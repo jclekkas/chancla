@@ -1,8 +1,8 @@
 {
-  "at": "2026-10-23T00:41:28.168Z",
+  "at": "2026-10-23T01:33:56.816Z",
   "environment": "Chromium 141 headless (SwiftShader), Linux container, pointer lock available. Safari focus and Cmd-keyup behaviour simulated, not run.",
-  "passed": 21,
-  "total": 21,
+  "passed": 23,
+  "total": 23,
   "checks": [
     {
       "name": "a desktop browser starts in keyboard-and-mouse mode (touch detection does not take over)",
@@ -22,7 +22,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 1,
+        "threw": 2,
         "turned": -0.176,
         "held": 0,
         "locked": true
@@ -64,7 +64,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 1,
+        "threw": 3,
         "turned": -0.361,
         "held": 0,
         "locked": true,
@@ -109,9 +109,9 @@
         "held": 0,
         "touch": false,
         "yaw": -6.142709999999994,
-        "shots": 30,
-        "x": -23.095518526009197,
-        "z": -2.843427298273446,
+        "shots": 31,
+        "x": -23.109520891721683,
+        "z": -4.856214233759485,
         "focus": "BUTTON",
         "ctp": false,
         "menuBtn": true,
@@ -160,9 +160,9 @@
         "held": 0,
         "touch": false,
         "yaw": -6.774109999999995,
-        "shots": 32,
-        "x": -23.095518526009197,
-        "z": -2.843427298273446,
+        "shots": 33,
+        "x": -23.203453428376275,
+        "z": -5.520438623306228,
         "focus": "BUTTON",
         "ctp": false,
         "menuBtn": true,
@@ -228,7 +228,7 @@
         "w": 1,
         "s": -1,
         "fire": true,
-        "threw": 2,
+        "threw": 3,
         "turned": -0.361,
         "held": 0,
         "locked": true
@@ -240,6 +240,23 @@
       "detail": {
         "mz": 1,
         "locked": true
+      }
+    },
+    {
+      "name": "a recovery screen (\"The game stopped\") blocks gameplay input: W does nothing, input is off",
+      "ok": true,
+      "detail": {
+        "mz": 0,
+        "enabled": false
+      }
+    },
+    {
+      "name": "menus open: text fields take typing normally (including W, A, S, D), and no game input is held",
+      "ok": true,
+      "detail": {
+        "name": "wasd Rosa",
+        "code": "abcd2345",
+        "held": 0
       }
     },
     {

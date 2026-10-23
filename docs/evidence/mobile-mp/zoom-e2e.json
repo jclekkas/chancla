@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-22T22:12:07.997Z",
+  "at": "2026-10-23T00:56:36.194Z",
   "environment": "Chromium 141 headless, mobile emulation (touch, DPR 2), multi-touch over CDP. Emulation pinch-zooms like Android Chrome; iOS Safari focus zoom and gestures are not reproduced. NOT a real phone.",
   "passed": 39,
   "total": 39,
@@ -120,7 +120,7 @@
           "h": 48
         },
         "held": 0,
-        "shots": 17,
+        "shots": 18,
         "controls": true,
         "zoomNote": false,
         "enabled": true

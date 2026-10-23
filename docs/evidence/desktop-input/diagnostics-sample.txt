@@ -2,48 +2,48 @@ Chancla Warfare diagnostics
 {
  "build": "f27063b (local)",
  "page": "shooter",
- "uptimeS": 83,
+ "uptimeS": 85,
  "visibility": "visible",
  "online": true,
  "viewport": "1280x720@1 (visible 1280x720, zoom 1.00)",
  "touch": false,
  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
- "jsHeap": "15 MB of 4096 MB",
- "errors": 0,
+ "jsHeap": "16 MB of 4096 MB",
+ "errors": 3,
  "game": {
-  "mode": "campaign ruleros",
-  "screen": "none",
+  "mode": "menu",
+  "screen": "title",
   "map": "patio",
   "conn": "none",
   "msSinceServerMsg": null,
   "rttMs": null,
-  "input": "mouse (locked)",
-  "inputEnabled": true,
+  "input": "mouse",
+  "inputEnabled": false,
   "held": 0,
   "lang": "en"
  },
  "input": {
-  "mode": "mouse (captured)",
-  "enabled": true,
-  "locked": true,
-  "pointerLockElement": true,
+  "mode": "mouse (not captured)",
+  "enabled": false,
+  "locked": false,
+  "pointerLockElement": false,
   "fallback": false,
   "held": 0,
-  "focus": "body",
-  "menu": "none",
+  "focus": "input[text]",
+  "menu": "title",
   "clickToAim": false
  },
  "render": {
-  "mode": "controller",
+  "mode": "menu",
   "map": "patio",
-  "msSinceFrame": 27,
+  "msSinceFrame": 41,
   "frameErrors": 0,
-  "fps": 13,
+  "fps": 10,
   "contextLost": false,
   "quality": "low",
-  "drawCalls": 25,
-  "geometries": 138,
-  "textures": 14,
+  "drawCalls": 192,
+  "geometries": 108,
+  "textures": 13,
   "paused": false
  },
  "audio": {
@@ -53,83 +53,83 @@ Chancla Warfare diagnostics
 }
 
 Recent events (ms since page load):
-   39839 input  mouse captured
-   42389 input  Esc: menu
-   42389 screen practice / pause
-   42389 input  play input off (pause)
-   42483 input  mouse released
-   43245 screen practice / none
-   43245 input  play input on; dropped focus from button
-   43295 input  mouse captured
-   46204 input  Esc: menu
-   46204 screen practice / pause
-   46204 input  play input off (pause)
-   46259 input  mouse released
-   47111 screen practice / none
-   47111 input  play input on; dropped focus from button
-   47162 input  mouse captured
-   49573 input  Esc: menu
-   49573 screen practice / pause
-   49573 input  play input off (pause)
-   49624 input  mouse released
-   50220 screen practice / pause>settings
-   50775 screen practice / pause
-   50777 screen practice / none
-   50777 input  play input on; dropped focus from button
-   50839 input  mouse captured
-   53397 input  released held input (Cmd/Ctrl pressed)
-   55680 input  mouse released
-   55680 input  released held input (mouse released)
-   55680 screen practice / pause
-   55680 input  play input off (pause)
-   56643 screen practice / none
-   56643 input  play input on; dropped focus from button
-   56694 input  mouse captured
-   59123 input  released held input (window lost focus)
-   59230 life   visibility hidden
-   59231 screen practice / pause
-   59231 input  play input off (pause)
-   59279 input  mouse released
-   59436 life   visibility visible
-   59929 screen practice / none
-   59930 input  play input on; dropped focus from button
-   59982 input  mouse captured
-   62303 input  Esc: menu
-   62303 screen practice / pause
-   62303 input  play input off (pause)
-   62354 input  mouse released
-   64875 screen practice / none
-   64875 input  play input on; dropped focus from button
-   64926 input  mouse capture refused
-   65340 input  mouse capture refused
-   65736 input  mouse capture refused
-   66170 input  mouse capture refused
-   67424 input  mouse capture refused
-   69213 screen practice / pause
-   69213 input  play input off (pause)
-   69556 screen practice / pause>confirm
-   70209 net    connection closed
-   70212 net    connection connecting
-   70212 net    connection online
-   70223 match  room lobby, map patio, 4 players (practice)
-   70230 match  room countdown, map patio, 4 players (practice)
-   70231 screen practice / none
-   70231 input  play input on; dropped focus from button
-   70235 input  mouse captured
-   73243 match  room playing, map patio, 4 players (practice)
-   76298 input  Esc: menu
-   76298 screen practice / pause
-   76298 input  play input off (pause)
-   76406 input  mouse released
-   77153 screen practice / pause>confirm
-   77835 net    connection closed
-   77836 screen menu / title
-   79313 stall  no frame for 1067 ms (mode menu)
-   79315 stall  main thread busy 1066 ms
-   79352 screen menu / campaign
-   79563 screen menu / mintro
-   79795 match  mission ruleros started
-   79846 screen campaign ruleros / mintro
-   79848 screen campaign ruleros / none
-   79848 input  play input on; dropped focus from button
-   79928 input  mouse captured
+   46491 screen practice / none
+   46491 input  play input on; dropped focus from button
+   46543 input  mouse captured
+   48887 input  Esc: menu
+   48887 screen practice / pause
+   48887 input  play input off (pause)
+   48937 input  mouse released
+   49770 screen practice / pause>settings
+   50404 screen practice / pause
+   50406 screen practice / none
+   50406 input  play input on; dropped focus from button
+   50468 input  mouse captured
+   53197 input  released held input (Cmd/Ctrl pressed)
+   55482 input  mouse released
+   55482 input  released held input (mouse released)
+   55482 screen practice / pause
+   55482 input  play input off (pause)
+   56358 screen practice / none
+   56358 input  play input on; dropped focus from button
+   56408 input  mouse captured
+   58800 input  released held input (window lost focus)
+   58908 life   visibility hidden
+   58908 screen practice / pause
+   58908 input  play input off (pause)
+   58957 input  mouse released
+   59113 life   visibility visible
+   59536 screen practice / none
+   59536 input  play input on; dropped focus from button
+   59588 input  mouse captured
+   62017 input  Esc: menu
+   62017 screen practice / pause
+   62017 input  play input off (pause)
+   62069 input  mouse released
+   64666 screen practice / none
+   64666 input  play input on; dropped focus from button
+   64718 input  mouse capture refused
+   65137 input  mouse capture refused
+   65556 input  mouse capture refused
+   65968 input  mouse capture refused
+   66809 input  mouse capture refused
+   68381 screen practice / pause
+   68381 input  play input off (pause)
+   69080 screen practice / pause>confirm
+   69673 net    connection closed
+   69676 net    connection connecting
+   69676 net    connection online
+   69684 match  room lobby, map patio, 4 players (practice)
+   69692 match  room countdown, map patio, 4 players (practice)
+   69693 screen practice / none
+   69693 input  play input on; dropped focus from button
+   69697 input  mouse captured
+   72707 match  room playing, map patio, 4 players (practice)
+   75721 input  Esc: menu
+   75722 screen practice / pause
+   75722 input  play input off (pause)
+   75763 input  mouse released
+   76512 screen practice / pause>confirm
+   77219 net    connection closed
+   77220 screen menu / title
+   78755 stall  no frame for 1083 ms (mode menu)
+   78757 stall  main thread busy 1092 ms
+   78766 screen menu / campaign
+   78985 screen menu / mintro
+   79201 match  mission ruleros started
+   79249 screen campaign ruleros / mintro
+   79251 screen campaign ruleros / none
+   79251 input  play input on; dropped focus from button
+   79320 input  mouse captured
+   82601 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   82688 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   82693 error  frame: test: frames failing @ at e.frame (eval at evaluate (:290:30), <anonymous>:1:55) | at n (engine-DjOwnmmm.js:1:7585)
+   83244 screen game stopped (frames keep failing)
+   83244 input  play input off (none)
+   83245 input  mouse released
+   83245 screen campaign ruleros / pause
+   83496 screen menu / pause
+   83497 screen menu / campaign
+   83499 screen menu / title
+   84083 screen menu / online
+   85249 screen menu / title

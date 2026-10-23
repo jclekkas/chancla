@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-22T21:54:15.845Z",
+  "at": "2026-10-23T01:31:31.207Z",
   "environment": "Four Chromium 141 (Blink) instances, headless, SwiftShader, Linux container. Device = viewport + DPR + touch + user-agent string only. No Safari/WebKit, no iOS/Android/Windows/macOS, no real touch hardware. Local game server.",
   "devices": {
     "iphone": {
@@ -119,16 +119,16 @@
       "ok": true,
       "detail": {
         "moved": [
-          3.53,
-          3.59,
-          2.09,
-          1.32
+          3.51,
+          3.5,
+          3.52,
+          1.35
         ],
         "threw": [
-          19,
-          19,
-          22,
-          5
+          15,
+          18,
+          23,
+          6
         ]
       }
     },
@@ -147,10 +147,10 @@
       "ok": true,
       "detail": {
         "scores": [
-          18,
+          12,
           0
         ],
-        "seconds": 140
+        "seconds": 106
       }
     },
     {
@@ -158,7 +158,7 @@
       "ok": true,
       "detail": {
         "desktop": 1,
-        "android": 17
+        "android": 11
       }
     },
     {
@@ -167,27 +167,27 @@
       "detail": {
         "scores": [
           [
-            18,
+            12,
             0
           ],
           [
-            18,
+            12,
             0
           ],
           [
-            18,
+            12,
             0
           ],
           [
-            18,
+            12,
             0
           ]
         ],
         "stats": [
-          "1:1/0 2:0/9 3:17/0 4:0/9",
-          "1:1/0 2:0/9 3:17/0 4:0/9",
-          "1:1/0 2:0/9 3:17/0 4:0/9",
-          "1:1/0 2:0/9 3:17/0 4:0/9"
+          "1:1/0 2:0/6 3:11/0 4:0/6",
+          "1:1/0 2:0/6 3:11/0 4:0/6",
+          "1:1/0 2:0/6 3:11/0 4:0/6",
+          "1:1/0 2:0/6 3:11/0 4:0/6"
         ]
       }
     },
@@ -206,7 +206,7 @@
       "detail": {
         "mode": "pointer lock",
         "furthest": 0.76,
-        "threw": 10,
+        "threw": 9,
         "dYaw": -0.132
       }
     },
@@ -254,17 +254,17 @@
       "name": "patio: identical result, scores and per-player stats on all four devices; each shows its own team",
       "ok": true,
       "detail": [
-        "18-0 YOUR TEAM: LUNA",
-        "18-0 YOUR TEAM: SOL",
-        "18-0 YOUR TEAM: LUNA",
-        "18-0 YOUR TEAM: SOL"
+        "12-0 YOUR TEAM: LUNA",
+        "12-0 YOUR TEAM: SOL",
+        "12-0 YOUR TEAM: LUNA",
+        "12-0 YOUR TEAM: SOL"
       ]
     },
     {
       "name": "patio: non-zero final score, and the winner shown matches it on every device",
       "ok": true,
       "detail": {
-        "sol": 18,
+        "sol": 12,
         "luna": 0,
         "titles": [
           "Team Sol wins",
@@ -347,14 +347,14 @@
       "ok": true,
       "detail": {
         "moved": [
-          2.51,
-          6.73,
+          2.6,
+          5.33,
           0,
-          4.86
+          4.76
         ],
         "threw": [
+          17,
           14,
-          16,
           0,
           6
         ]
@@ -421,16 +421,16 @@
       "ok": true,
       "detail": {
         "moved": [
-          4.62,
-          5.34,
+          4.6,
+          4.39,
           0,
-          5.16
+          5.45
         ],
         "threw": [
-          15,
-          14,
+          16,
+          13,
           0,
-          6
+          4
         ]
       }
     },
@@ -472,7 +472,7 @@
         "rooms": 0,
         "players": 0,
         "maxTickMs": 0,
-        "uptimeS": 1237
+        "uptimeS": 1223
       }
     },
     {

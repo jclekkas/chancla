@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-22T22:09:15.291Z",
+  "at": "2026-10-23T00:53:53.429Z",
   "environment": "Chromium 141 headless. Phone: mobile emulation 844x390 (390x844 for the rotation check), touch, DPR 2, multi-touch over CDP. Desktop: 1280x720 keyboard and mouse. Local game server (not production). NOT a real phone.",
   "passed": 43,
   "total": 43,
@@ -7,7 +7,7 @@
     {
       "name": "desktop: room created, invite link ready",
       "ok": true,
-      "detail": "http://localhost:4173/#room=33K9GDKU"
+      "detail": "http://localhost:4173/#room=CVCA6B3A"
     },
     {
       "name": "phone: an invalid or expired invite says so, and Back is there",
@@ -18,7 +18,7 @@
       "name": "phone: the invite opens Play online with the code filled in, in touch mode",
       "ok": true,
       "detail": {
-        "code": "33K9GDKU",
+        "code": "CVCA6B3A",
         "touch": true,
         "focus": "btn-join"
       }
@@ -66,7 +66,7 @@
     {
       "name": "phone: Copy invite copies the link",
       "ok": true,
-      "detail": "http://localhost:4173/#room=33K9GDKU"
+      "detail": "http://localhost:4173/#room=CVCA6B3A"
     },
     {
       "name": "patio: both in the match on patio; phone shows touch controls, no \"click to aim\", no pointer lock",
@@ -90,9 +90,9 @@
       "name": "patio: phone moves, aims and throws at the same time",
       "ok": true,
       "detail": {
-        "moved": 3.78,
+        "moved": 4.74,
         "dYaw": -0.39,
-        "shots": 23
+        "shots": 21
       }
     },
     {
@@ -106,7 +106,7 @@
       "name": "patio: desktop moved and threw with keyboard and mouse in the same match",
       "ok": true,
       "detail": {
-        "shots": 22,
+        "shots": 20,
         "locked": true
       }
     },
@@ -241,9 +241,9 @@
       "name": "plaza: phone moves, aims and throws at the same time",
       "ok": true,
       "detail": {
-        "moved": 13.67,
+        "moved": 14.36,
         "dYaw": -0.39,
-        "shots": 21
+        "shots": 23
       }
     },
     {
@@ -257,7 +257,7 @@
       "name": "plaza: desktop moved and threw with keyboard and mouse in the same match",
       "ok": true,
       "detail": {
-        "shots": 44,
+        "shots": 43,
         "locked": true
       }
     },
@@ -297,9 +297,9 @@
       "name": "fiesta: phone moves, aims and throws at the same time",
       "ok": true,
       "detail": {
-        "moved": 13.71,
+        "moved": 11.67,
         "dYaw": -0.38,
-        "shots": 18
+        "shots": 22
       }
     },
     {
@@ -313,7 +313,7 @@
       "name": "fiesta: desktop moved and threw with keyboard and mouse in the same match",
       "ok": true,
       "detail": {
-        "shots": 60,
+        "shots": 66,
         "locked": true
       }
     },

@@ -67,14 +67,13 @@ async function main(): Promise<void> {
       await sleep(600);
       s = await fps(page);
       check('a click captures the mouse; play runs', s.locked && !s.paused && !s.ctp, s);
-      check('while aiming, the HUD shows "Esc or P: Menu"', /Esc or P: Menu/.test(s.hint), s.hint);
+      check('while aiming (mouse captured), the HUD shows "Menu · Esc" instead of an unreachable button', /Menu · Esc/.test(s.hint), s.hint);
       await page.screenshot({ path: path.join(OUT, 'aiming-hint.png') });
-      // The menu icon can't be reached while aiming: the cursor is captured. (The reported problem.)
-      const b = (await page.locator('#btn-menu').boundingBox())!;
-      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
-      await sleep(400);
-      s = await fps(page);
-      check('reproduced: clicking where the menu icon is, while aiming, does not reach it (the click goes to the game)', s.locked && s.screen === 'none', { locked: s.locked, screen: s.screen });
+      // The cursor is captured, so a clickable icon would be unreachable (the reported problem):
+      // it is not shown; the "Menu · Esc" label says what to press instead.
+      const iconBox = await page.locator('#btn-menu').boundingBox();
+      const label = await page.locator('#esc-hint').boundingBox();
+      check('while aiming, the unreachable menu icon is not shown; the "Menu · Esc" label is', iconBox === null && !!label && label.width > 0, { icon: iconBox, label });
 
       // Escape: one press frees the mouse and opens the menu, focused, with held input dropped.
       await page.keyboard.down('KeyW');

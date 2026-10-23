@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-22T22:17:32.388Z",
+  "at": "2026-10-23T00:59:59.824Z",
   "environment": "Chromium 141 headless (SwiftShader), Linux container, local game server behind a stall/cut relay",
   "passed": 30,
   "total": 30,
@@ -8,7 +8,7 @@
       "name": "server that never answers: the player is told it is unreachable (not stuck on \"Connecting…\")",
       "ok": true,
       "detail": {
-        "afterS": 8.569,
+        "afterS": 8.288,
         "msg": "Could not reach the game server."
       }
     },
@@ -22,8 +22,8 @@
       "detail": {
         "paused": false,
         "held": 0,
-        "tl0": 118217,
-        "tl1": 115867
+        "tl0": 117617,
+        "tl1": 115567
       }
     },
     {
@@ -55,7 +55,7 @@
       "name": "network never returns: the \"connection lost\" screen with a way home, within the grace period",
       "ok": true,
       "detail": {
-        "afterS": 26.035,
+        "afterS": 26.073,
         "held": 0
       }
     },
@@ -130,7 +130,7 @@
       "name": "context restored: the notice goes away, Resume returns to a drawing match, nothing blocks the screen",
       "ok": true,
       "detail": {
-        "fps": 21.284829721362332
+        "fps": 29.036004645760823
       }
     },
     {
@@ -154,17 +154,17 @@
       "ok": true,
       "detail": {
         "before": {
-          "msPerS": 450,
-          "fps": 10
+          "msPerS": 467,
+          "fps": 13
         },
         "after": {
-          "msPerS": 500,
+          "msPerS": 550,
           "fps": 10
         },
         "stalls": [
-          "    2069 stall  main thread busy 1925 ms",
-          "    2069 stall  no frame for 1933 ms (mode menu)",
-          "   13147 stall  no frame for 1100 ms (mode controller)"
+          "    2072 stall  main thread busy 1926 ms",
+          "    2073 stall  no frame for 1933 ms (mode menu)",
+          "   14713 stall  no frame for 1050 ms (mode controller)"
         ]
       }
     },
@@ -194,7 +194,7 @@
       "name": "Copy diagnostics: no room code in the report",
       "ok": true,
       "detail": {
-        "code": "9PEP6SNE"
+        "code": "J4WJ3FKK"
       }
     },
     {

@@ -55,7 +55,7 @@ describe('CombatFx', () => {
     expect(st.active).toBe(COMBAT_FX_POOL);
     expect(st.pooled).toBe(COMBAT_FX_POOL);
     expect(st.drawCalls).toBeGreaterThan(0);
-    expect(st.drawCalls).toBeLessThanOrEqual(5); // one per shape, however many effects
+    expect(st.drawCalls).toBeLessThanOrEqual(6); // one per shape, however many effects (7 with the words in a browser)
     expect(fx.spawned).toBe(200);
   });
 
@@ -149,7 +149,7 @@ describe('CombatFx', () => {
       fx.meleeHit(w, { x: 0, y: 1.4, z: 0 }, { x: -1, z: 0 }, false);
       run(fx, camera(0, 1.58, 3), 0.08);
       const sp = (fx as unknown as { sprites: { layers: Map<string, { n: number; mesh: THREE.InstancedMesh }> } }).sprites;
-      return sp.layers.get('arc')!;
+      return sp.layers.get('swing')!;
     };
     expect(arcs('high', 0).n).toBe(3);
     expect(arcs('medium', 1).n).toBe(2);

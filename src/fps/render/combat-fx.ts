@@ -26,7 +26,7 @@ export const FX_SETTINGS: FxSettings = { quality: 'high', reduced: false, camera
 
 // ---------------------------------------------------------------- shapes
 
-export type SpriteKind = 'star' | 'ring' | 'streak' | 'puff' | 'arc' | 'word';
+export type SpriteKind = 'star' | 'ring' | 'streak' | 'puff' | 'arc' | 'swing' | 'word';
 
 // Every shape carries `aT`: x = tone (0 cream core, 1 the instance tint,
 // 2 ink rim) and y = alpha. Bands of ink use duplicated vertices so the rim
@@ -89,8 +89,9 @@ function streakGeo(): THREE.BufferGeometry {
   for (let i = 0; i < n; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   return build(pos, t, idx);
 }
-export const ARC_SPAN = 1.05; // radians either side of straight ahead
-function arcGeo(): THREE.BufferGeometry {
+export const ARC_SPAN = 1.05; // radians either side of straight ahead (the miss swish)
+export const SWING_SPAN = 0.5; // the shorter swing streaks on a hit
+function arcGeo(span: number): THREE.BufferGeometry {
   // A curved band of air around her at unit radius (forward -z, right +x):
   // a faint tail on her right (u = 0) and a full head on her left (u = 1),
   // so a forehand moving right to left leads with the head. A pale core
@@ -98,7 +99,7 @@ function arcGeo(): THREE.BufferGeometry {
   const n = 22, pos: number[] = [], t: number[] = [], idx: number[] = [];
   const rows: Array<[number, number, number]> = [[-1, 1, 0], [-0.78, 1, 0.95], [-0.45, 0.25, 0.9], [0.45, 0.25, 0.9], [0.78, 1, 0.95], [1, 1, 0]];
   for (let i = 0; i <= n; i++) {
-    const u = i / n, th = ARC_SPAN * (1 - 2 * u);
+    const u = i / n, th = span * (1 - 2 * u);
     const h = 0.5 * (0.25 + 0.75 * Math.pow(u, 0.7)) * Math.min(1, (1 - u) / 0.1 + 0.12);
     const x = Math.sin(th), z = -Math.cos(th), al = Math.pow(u, 0.9);
     for (const [y, tone, a] of rows) { pos.push(x, y * h, z); t.push(tone, a * al); }
@@ -114,7 +115,7 @@ const templates = new Map<SpriteKind, THREE.BufferGeometry>();
 function template(k: SpriteKind): THREE.BufferGeometry {
   let g = templates.get(k);
   if (!g) {
-    g = k === 'star' ? starGeo() : k === 'ring' ? ringGeo() : k === 'streak' ? streakGeo() : k === 'puff' ? puffGeo() : k === 'word' ? new THREE.PlaneGeometry(2, 1) : arcGeo();
+    g = k === 'star' ? starGeo() : k === 'ring' ? ringGeo() : k === 'streak' ? streakGeo() : k === 'puff' ? puffGeo() : k === 'word' ? new THREE.PlaneGeometry(2, 1) : k === 'swing' ? arcGeo(SWING_SPAN) : arcGeo(ARC_SPAN);
     templates.set(k, g); // CPU-side templates only: each layer draws its own clone
   }
   return g;
@@ -443,7 +444,7 @@ const C = {
 
 export class CombatFx {
   readonly group = new THREE.Group();
-  private sprites = new FxSprites({ star: 64, ring: 32, streak: 80, puff: 16, arc: 72, word: 16 });
+  private sprites = new FxSprites({ star: 64, ring: 32, streak: 80, puff: 16, arc: 32, swing: 48, word: 16 });
   private pool: Fx[] = [];
   private seq = 0;
   private view = new ViewBasis();
@@ -560,7 +561,7 @@ export class CombatFx {
     // for El Chanclazo (High), up and to the side the blow travels, so it
     // never sits on the target.
     if (heavy || q === 'high') {
-      const side = Math.cos(ang) >= 0 ? 1 : -1;
+      const side = Math.cos(ang) >= 0 ? -1 : 1; // on the side the blow came from, as in a comic panel
       const off = (heavy ? 0.36 : 0.3) * Math.min(1.6, Math.max(1, Math.sqrt(d / 3)));
       const wx = x + v.right.x * side * off, wy = y + (heavy ? 0.26 : 0.24) + (reduced ? 0 : 0.06 * t), wz = z + v.right.z * side * off;
       const [wa, wh] = nearSafe(v.dist(wx, wy, wz), (heavy ? 0.15 : 0.1) * k * pop(t, reduced), this.safe);
@@ -594,9 +595,9 @@ export class CombatFx {
     // Pick the mirror whose head points along the blow.
     let mirror = 1, yaw = 0;
     for (const m of [1, -1]) {
-      const hx = -m * Math.sin(ARC_SPAN), hz = -Math.cos(ARC_SPAN);
+      const hx = -m * Math.sin(SWING_SPAN), hz = -Math.cos(SWING_SPAN);
       const a = Math.atan2(wx, wz) - Math.atan2(hx, hz);
-      const tx0 = -m * Math.cos(ARC_SPAN), tz0 = Math.sin(ARC_SPAN);
+      const tx0 = -m * Math.cos(SWING_SPAN), tz0 = Math.sin(SWING_SPAN);
       const tx = tx0 * Math.cos(a) + tz0 * Math.sin(a), tz = -tx0 * Math.sin(a) + tz0 * Math.cos(a);
       if (tx * f.dx + tz * f.dz > 0) { mirror = m; yaw = a; break; }
     }
@@ -611,7 +612,7 @@ export class CombatFx {
       const r = R * (1 + (i - 1) * 0.05);
       _s.set(r * mirror, (heavy ? 0.11 : 0.08) * (reduced ? 0.8 : 1), r);
       this.m.compose(_p.set(cx, f.y + (i - 1) * 0.04, cz), this.q, _s);
-      this.sprites.addMatrix('arc', this.m, C.swing, (heavy ? 1 : 0.9) * fade * na * (1 - i * 0.2));
+      this.sprites.addMatrix('swing', this.m, C.swing, (heavy ? 1 : 0.9) * fade * na * (1 - i * 0.2));
     }
   }
 

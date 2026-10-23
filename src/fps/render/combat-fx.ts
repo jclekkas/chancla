@@ -352,12 +352,13 @@ export function pop(t: number, reduced: boolean): number {
 /**
  * View safety for a piece at world distance `d` from the camera: fades and
  * shrinks it inside about 1.2 m, and caps its size so it never spans more
- * than about a tenth of the view. Returns [alpha factor, size].
+ * than about a tenth of the view (hollow rings may pass a larger `cap`).
+ * Returns [alpha factor, size].
  */
-export function nearSafe(d: number, size: number, out: [number, number]): [number, number] {
+export function nearSafe(d: number, size: number, out: [number, number], cap = 0.14): [number, number] {
   const k = smooth(0.45, 1.25, d);
   out[0] = k;
-  out[1] = Math.min(size * (0.55 + 0.45 * k), 0.14 * d);
+  out[1] = Math.min(size * (0.55 + 0.45 * k), cap * d);
   return out;
 }
 
@@ -539,7 +540,7 @@ export class CombatFx {
     if (q === 'low') return;
     if (heavy) {
       const r = (0.16 + 0.5 * smooth(0, 0.8, t) * (reduced ? 0.7 : 1)) * (f.head ? 1.1 : 1);
-      const [ra, rs] = nearSafe(d, r, this.safe);
+      const [ra, rs] = nearSafe(d, r, this.safe, 0.22);
       s.add('ring', x, y, z, v.billboard(0, this.q), rs, rs * 0.85, rs, C.shock, (1 - t) * 0.85 * ra);
     }
     const lines = heavy ? (q === 'high' ? 5 : 3) : (q === 'high' ? 3 : 2);
@@ -662,11 +663,11 @@ export class CombatFx {
     for (let i = 0; i < rings; i++) {
       const ti = clamp01((t - i * 0.22) / 0.78);
       if (ti <= 0) continue;
-      const [a, r] = nearSafe(d, 0.3 + 0.4 * smooth(0, 1, ti) * grow, this.safe);
+      const [a, r] = nearSafe(d, 0.3 + 0.4 * smooth(0, 1, ti) * grow, this.safe, 0.24);
       s.add('ring', x, y, z, v.billboard(0, this.q), r, r * 1.35, r, i ? C.shieldFill : C.shield, (1 - smooth(0.4, 1, ti)) * a);
     }
     if (q !== 'low') {
-      const [a, r] = nearSafe(d, 0.5 + 0.1 * t, this.safe);
+      const [a, r] = nearSafe(d, 0.5 + 0.1 * t, this.safe, 0.24);
       s.add('puff', x, y, z, v.billboard(0, this.q), r, r * 1.35, r, C.shieldFill, 0.32 * (1 - smooth(0.3, 0.9, t)) * a);
     }
   }

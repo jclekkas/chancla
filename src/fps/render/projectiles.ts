@@ -1,14 +1,14 @@
 // Pooled projectile visuals with restrained trails, plus impact effects.
 import * as THREE from 'three';
 import type { WeaponId } from '../../../shared/config';
-import { buildSandal } from '../../models/sandal';
+import { chanclaModel } from './fp-chancla';
 import { buildPesada } from './rosa';
 import { Trail, trailMaterial } from '../../fx/trail';
 import { Particles } from '../../fx/particles';
 import type { ClientProjectile } from '../../net/session';
 
 interface Slot {
-  mesh: THREE.Group;
+  mesh: THREE.Object3D;
   trail: Trail;
   key: string | null;
   spin: number;
@@ -24,7 +24,7 @@ export class ProjectileView {
     const mat = [trailMaterial(false), trailMaterial(false)];
     for (const w of [0, 1] as const) {
       for (let i = 0; i < (w === 0 ? 16 : 8); i++) {
-        const mesh = w === 0 ? buildSandal() : buildPesada();
+        const mesh: THREE.Object3D = w === 0 ? chanclaModel() : buildPesada(); // the same chancla design the hand and characters hold
         mesh.scale.setScalar(w === 0 ? 1.7 : 1.6);
         mesh.visible = false;
         const trail = new Trail(mat[w]!, w === 0 ? 0.06 : 0.09);

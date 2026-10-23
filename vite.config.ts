@@ -26,6 +26,22 @@ function buildId(): string {
   return `${sha} (${env})`;
 }
 
+// Graphics experiment builds are offline-only: no online play and no network
+// connections except to the site itself, so they can never reach the
+// production game server, even if the deployment inherits its address.
+const offlineOnly =
+  process.env.GRAPHICS_EXPERIMENT === '1' || (process.env.VERCEL_GIT_COMMIT_REF || '').startsWith('codex/graphics');
+
+function offlineCsp(): Plugin {
+  return {
+    name: 'chancla-offline-csp',
+    transformIndexHtml(html) {
+      if (!offlineOnly || html.includes('Content-Security-Policy')) return html;
+      return html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="connect-src 'self'">`);
+    },
+  };
+}
+
 function socialMeta(): Plugin {
   return {
     name: 'chancla-social-meta',
@@ -40,8 +56,8 @@ export default defineConfig({
   base,
   // True only for Vercel preview deployments: enables tester conveniences
   // (?unlock=all) that never exist in production builds.
-  define: { __BUILD_ID__: JSON.stringify(buildId()), __PREVIEW_BUILD__: JSON.stringify(process.env.VERCEL_ENV === 'preview' || process.env.PREVIEW_BUILD === '1') },
-  plugins: [socialMeta()],
+  define: { __BUILD_ID__: JSON.stringify(buildId()), __PREVIEW_BUILD__: JSON.stringify(process.env.VERCEL_ENV === 'preview' || process.env.PREVIEW_BUILD === '1'), __OFFLINE_ONLY__: JSON.stringify(offlineOnly) },
+  plugins: [socialMeta(), offlineCsp()],
   build: {
     target: 'es2020',
     outDir: 'dist',
@@ -53,6 +69,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         classic: resolve(__dirname, 'classic.html'),
+        courtyard: resolve(__dirname, 'courtyard.html'),
       },
     },
   },

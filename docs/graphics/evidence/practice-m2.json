@@ -1,0 +1,72 @@
+{
+ "label": "m2",
+ "dist": "dist",
+ "perf": {
+  "player": {
+   "fps": [
+    10,
+    12,
+    12,
+    12,
+    10,
+    10
+   ],
+   "drawCalls": 175,
+   "triangles": 54476,
+   "geometries": 122,
+   "textures": 20,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "facade": {
+   "fps": [
+    12,
+    12,
+    12,
+    12,
+    12,
+    12
+   ],
+   "drawCalls": 170,
+   "triangles": 54052,
+   "geometries": 122,
+   "textures": 20,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "wide": {
+   "fps": [
+    12,
+    10,
+    10,
+    10,
+    10,
+    11
+   ],
+   "drawCalls": 188,
+   "triangles": 55730,
+   "geometries": 123,
+   "textures": 20,
+   "pixelRatio": 1,
+   "quality": "high"
+  },
+  "panaderia": {
+   "fps": [
+    10,
+    10,
+    10,
+    10,
+    10,
+    10
+   ],
+   "drawCalls": 223,
+   "triangles": 62934,
+   "geometries": 123,
+   "textures": 20,
+   "pixelRatio": 1,
+   "quality": "high"
+  }
+ },
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36"
+}

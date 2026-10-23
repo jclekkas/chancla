@@ -1,0 +1,169 @@
+[
+ {
+  "name": "title screen says online play is off on this preview",
+  "ok": true,
+  "detail": "Graphics preview: online play is switched off here. Practice works offline."
+ },
+ {
+  "name": "practice starts on El Patio",
+  "ok": true,
+  "detail": {
+   "map": "patio"
+  }
+ },
+ {
+  "name": "W walks toward the café and stops at its wall (collision unchanged)",
+  "ok": true,
+  "detail": {
+   "from": -4.5,
+   "to": -7.68
+  }
+ },
+ {
+  "name": "strafing along the facade works and she stays on the ground (no snag on paving or kerb)",
+  "ok": true,
+  "detail": {
+   "dx": 1.19,
+   "y": 0
+  }
+ },
+ {
+  "name": "walking into the door stops at the wall (the door is shut and solid)",
+  "ok": true,
+  "detail": {
+   "z": -7.68
+  }
+ },
+ {
+  "name": "Space jumps and she lands back on the paving",
+  "ok": true,
+  "detail": {
+   "peak": 0.95,
+   "landedY": 0
+  }
+ },
+ {
+  "name": "mouse turns the view",
+  "ok": true,
+  "detail": {
+   "turned": -0.176
+  }
+ },
+ {
+  "name": "F throws",
+  "ok": true,
+  "detail": {
+   "throws": 1
+  }
+ },
+ {
+  "name": "Esc opens the menu with nothing held",
+  "ok": true,
+  "detail": {
+   "screen": "pause",
+   "held": 0
+  }
+ },
+ {
+  "name": "Resume returns to play and controls respond",
+  "ok": true,
+  "detail": {
+   "screen": "none",
+   "moved": 0.39
+  }
+ },
+ {
+  "name": "music controller still reports a state (not touched by this change)",
+  "ok": true,
+  "detail": {
+   "cue": "combat",
+   "want": "combat",
+   "layer": "recorded",
+   "mode": "auto",
+   "program": "pool:action",
+   "recording": "d5ece162",
+   "title": "Bounce y Joke",
+   "file": "music/playlist/05-bounce-y-joke-d5ece162.mp3",
+   "position": 24.709251700680273,
+   "duration": 67.99997732426304,
+   "loop": null,
+   "upNext": null,
+   "bagLeft": [
+    "d4b3fb6f",
+    "91dee4c5",
+    "036c0292",
+    "b5a37a72",
+    "6265def8",
+    "72898684",
+    "36b2c7ad",
+    "a5773b78",
+    "66be822e",
+    "4c389fba"
+   ],
+   "loaded": [
+    "music/playlist/05-bounce-y-joke-d5ece162.mp3"
+   ],
+   "failed": [],
+   "retrying": [],
+   "context": "running",
+   "sounding": 1,
+   "sources": [
+    {
+     "id": "d5ece162",
+     "gain": 0.5508
+    }
+   ]
+  }
+ },
+ {
+  "name": "phone: touch controls shown in practice",
+  "ok": true,
+  "detail": {
+   "touch": true,
+   "controls": true
+  }
+ },
+ {
+  "name": "phone: stick moves Rosa",
+  "ok": true,
+  "detail": {
+   "moved": 2.67
+  }
+ },
+ {
+  "name": "phone: dragging turns the view",
+  "ok": true,
+  "detail": {
+   "turned": -0.33
+  }
+ },
+ {
+  "name": "phone: Throw button throws",
+  "ok": true
+ },
+ {
+  "name": "phone: Jump button jumps",
+  "ok": true,
+  "detail": {
+   "peak": 1.09
+  }
+ },
+ {
+  "name": "phone: Menu opens",
+  "ok": true
+ },
+ {
+  "name": "phone: Resume returns to play with controls shown",
+  "ok": true
+ },
+ {
+  "name": "no request or socket left this machine (production game server never contacted)",
+  "ok": true,
+  "detail": []
+ },
+ {
+  "name": "no page errors",
+  "ok": true,
+  "detail": []
+ }
+]

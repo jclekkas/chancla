@@ -8,6 +8,7 @@ import { WEAPONS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { COLORS, OUTLINE, toon } from './materials';
 import { buildSandal, markShared } from '../../models/sandal';
+import { chanclaModel } from './fp-chancla';
 
 const TEAM = {
   0: { dress: 0xf29a2e, trim: 0xb8441f, shawl: 0xf4e6c8, stripe: 0xe8871e, emblem: 0xf5c542, accent: 0xf2a33a },
@@ -108,7 +109,7 @@ export class Avatar {
   private legR = new THREE.Group();
   private shinL = new THREE.Group();
   private shinR = new THREE.Group();
-  private weapons: THREE.Group[] = [];
+  private weapons: THREE.Object3D[] = [];
   private bubble: THREE.Mesh;
   private stars = new THREE.Group();
   private flashMats: THREE.MeshToonMaterial[] = [];
@@ -262,7 +263,8 @@ export class Avatar {
       hand.position.y = -0.31;
       fore.add(hand);
     }
-    const std = buildSandal();
+    // The same flip-flop as the first-person view and thrown chanclas (shooter only).
+    const std = chanclaModel();
     std.scale.setScalar(1.25);
     std.rotation.set(Math.PI / 2, 0, 0);
     std.position.set(0, -0.36, -0.06);

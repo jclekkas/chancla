@@ -63,7 +63,11 @@ const BASE = import.meta.env.BASE_URL || '/';
 const PRODUCTION_SERVER = 'wss://chanclawarfare-game-server.onrender.com/ws';
 const PRODUCTION_HOSTS = /^(www\.)?chanclawarfare\.fun$|^chancla(warfare)?\.vercel\.app$|^chancla-git-multiplayer-jclekkas\.vercel\.app$/;
 
+declare const __OFFLINE_ONLY__: boolean;
+const OFFLINE_ONLY = typeof __OFFLINE_ONLY__ !== 'undefined' && __OFFLINE_ONLY__;
+
 function serverUrl(): string | null {
+  if (OFFLINE_ONLY) return null;
   const env = import.meta.env.VITE_GAME_SERVER_URL as string | undefined;
   if (env) return env;
   const h = location.hostname;
@@ -262,10 +266,13 @@ function setTouchMode(on: boolean): void {
   render();
 }
 
+/** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
+let benchHold = false;
+
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
-  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim());
+  const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
   if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
@@ -383,6 +390,17 @@ async function boot(): Promise<void> {
   setInterval(() => { if (top() === 'settings') renderSoundStatus(); }, 1000);
   readInvite();
 
+  // Offline graphics previews only: ?bench runs the section benchmark (src/fps/bench.ts).
+  // The settings it needs apply to this page load only and are put back when it leaves.
+  const bench = OFFLINE_ONLY && /[?&]bench(=|&|$)/.test(location.search) ? await import('./bench') : null;
+  const benchRun = bench?.benchParams(location.search) ?? null;
+  if (bench && benchRun) {
+    const saved = { qualityMode: store.value.qualityMode, quality: store.value.quality, practiceMap: store.value.practiceMap, practiceAllies: store.value.practiceAllies, practiceEnemies: store.value.practiceEnemies, practiceDifficulty: store.value.practiceDifficulty };
+    store.update({ qualityMode: benchRun.quality, quality: benchRun.quality, practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 2, practiceDifficulty: 'normal' });
+    window.addEventListener('pagehide', () => store.update(saved));
+    bench.prepareBench(benchRun);
+  }
+
   if (webglAvailable()) {
     try {
       bootProgress(35, 'loading.engine');
@@ -423,6 +441,7 @@ async function boot(): Promise<void> {
     if (pendingInviteCode && !inMatch && !lastRoom) openOnline();
   });
   (window as unknown as { __fps: unknown }).__fps = debugApi();
+  if (bench && benchRun) bench.runBench(benchRun, { api: debugApi(), startPractice: () => startPractice(), screen: () => top(), hold: (on) => { benchHold = on; updatePracticePause(); } });
 }
 
 let touchOnly = false;
@@ -532,7 +551,7 @@ function showNoWebgl(): void {
 async function checkServer(): Promise<void> {
   const el = $('server-status');
   const url = serverUrl();
-  if (!url) { serverOk = false; el.textContent = t('status.serverMissing'); el.className = 'server-status warn'; return; }
+  if (!url) { serverOk = false; el.textContent = t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing'); el.className = 'server-status warn'; return; }
   el.textContent = t('status.serverChecking');
   el.className = 'server-status';
   try {
@@ -632,7 +651,7 @@ function playerName(): string {
 function startOnline(join: string | null): void {
   const url = serverUrl();
   const errEl = $('online-err');
-  if (!url) { errEl.textContent = t('status.serverMissing'); return; }
+  if (!url) { errEl.textContent = t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing'); return; }
   errEl.textContent = t('online.connecting');
   endSession(null);
   practice = false;
@@ -969,7 +988,7 @@ function changeLang(lang: 'en' | 'es'): void {
 function openOnline(): void {
   ($('in-name') as HTMLInputElement).value = store.value.name;
   ($('in-code') as HTMLInputElement).value = pendingInviteCode;
-  $('online-err').textContent = serverUrl() ? '' : t('status.serverMissing');
+  $('online-err').textContent = serverUrl() ? '' : t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing');
   show('online');
   // From an invite: the code is filled in; ask for a name first if there isn't one.
   if (pendingInviteCode) $(store.value.name ? 'btn-join' : 'in-name').focus();

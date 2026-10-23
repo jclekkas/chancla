@@ -173,7 +173,9 @@ export function runBench(p: BenchParams, h: Hooks): void {
   const room = () => [...(h.api.host()?.hub.rooms.values() ?? [])][0];
   let t0 = -1, done = false, session: any = null, ids: number[] = [], origUpdate: (() => void) | null = null;
   let lastMain = -1, applied: SceneState | null = null;
-  const frames: Array<{ dt: number; station: number; calls: number; tris: number }> = [];
+  const frames: Array<{ t: number; dt: number; station: number; calls: number; tris: number }> = [];
+  /** Every frame interval [start, end] in scene seconds, for time per view (a frame can straddle a view change). */
+  const spans: Array<[number, number]> = [];
   const checks = { n: 0, camErr: 0, walkerErr: 0, projErr: 0, minAvatars: Infinity, minProjectiles: Infinity };
   let nextCheck = 0;
   const live = { avatarsInView: 0, projectiles: 0, deaths: 0, throws0: 0, samples: 0 };
@@ -233,7 +235,8 @@ export function runBench(p: BenchParams, h: Hooks): void {
       const now = performance.now();
       if (lastMain >= 0) {
         const t = (lastMain - t0) / 1000, st = stationAt(tl, t);
-        if (st.measured && !invalid) frames.push({ dt: now - lastMain, station: st.i, calls: r.info.render.calls, tris: r.info.render.triangles });
+        if (st.measured && !invalid) frames.push({ t, dt: now - lastMain, station: st.i, calls: r.info.render.calls, tris: r.info.render.triangles });
+        if (!invalid) spans.push([t, (now - t0) / 1000]);
       }
       r.info.reset();
       lastMain = now;
@@ -316,9 +319,17 @@ export function runBench(p: BenchParams, h: Hooks): void {
       return { n, s: sum / 1000, fps: sum ? n / (sum / 1000) : 0, p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: n ? sorted[n - 1]! : 0 };
     };
     const all = timing(frames.map((f) => f.dt));
+    // Time per view: each frame interval split by where it overlaps the view's
+    // window (the last, unfinished interval included), so a slow frame at a
+    // view change or at the end is not all credited to one view.
+    if (!invalid && lastMain >= 0) spans.push([(lastMain - t0) / 1000, Math.min((performance.now() - t0) / 1000, p.warmup + p.secs)]);
+    const viewS = (i: number) => {
+      const d = p.secs / STATIONS.length, a = p.warmup + i * d, b = a + d;
+      return spans.reduce((acc, [x, y]) => acc + Math.max(0, Math.min(y, b) - Math.max(x, a)), 0);
+    };
     const perView = STATIONS.map((S, i) => {
       const fs = frames.filter((f) => f.station === i), tm = timing(fs.map((f) => f.dt));
-      return { name: S.name, frames: tm.n, measuredS: +tm.s.toFixed(2), avgFps: +tm.fps.toFixed(1), p95FrameMs: +tm.p95.toFixed(1), drawCalls: stat(fs, 'calls'), triangles: stat(fs, 'tris') };
+      return { name: S.name, frames: tm.n, measuredS: +viewS(i).toFixed(2), avgFps: +tm.fps.toFixed(1), p95FrameMs: +tm.p95.toFixed(1), drawCalls: stat(fs, 'calls'), triangles: stat(fs, 'tris') };
     });
     if (!invalid && perView.some((v) => v.frames === 0)) invalidate('a view had no measured frames');
     const tol = 1e-3;

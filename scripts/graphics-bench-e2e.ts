@@ -59,6 +59,8 @@ async function main(): Promise<void> {
   const blocked: string[] = [], errors: string[] = [];
   const runs: any[] = [];
   try {
+    // EQ_ONLY=1 runs only the frame-rate equivalence check (section 2).
+    if (process.env.EQ_ONLY !== '1') {
     // 1. Invalidation and the panel's controls, on short runs.
     {
       const { page, close } = await open(browser, DESKTOP, 'bench&secs=5&warmup=2', blocked, errors);
@@ -109,6 +111,7 @@ async function main(): Promise<void> {
       await close();
     }
 
+    }
     // 2. The controlled scene is the same at the same moment whatever the frame rate:
     //    one run as fast as it goes, one slowed by a 900 ms busy wait per frame.
     {
@@ -119,7 +122,8 @@ async function main(): Promise<void> {
       check('controlled scene: what was drawn matched the script at every checkpoint, at normal speed', ok(fast), fast.scene);
       check('controlled scene: and with frames slowed by a 900 ms busy wait (the other variant)', ok(slow), slow.scene);
       check('the two runs drew clearly different numbers of frames, yet ran the same workload', slow.frames < fast.frames * 0.7 && fast.workload.id === slow.workload.id && fast.workload.hash === slow.workload.hash, { fast: fast.frames, slow: slow.frames, workload: `${fast.workload.id}#${fast.workload.hash}` });
-      const even = (r: any) => r.perView.every((v: any) => Math.abs(v.measuredS - 5) < 1);
+      // A frame's time counts toward the view it started in, so each view's share can be off by up to one frame.
+      const even = (r: any) => r.perView.every((v: any) => Math.abs(v.measuredS - 5) <= Math.max(1, r.maxFrameMs / 1000 + 0.05));
       check('each view got an equal share of measured time in both runs', even(fast) && even(slow), { fast: fast.perView.map((v: any) => v.measuredS), slow: slow.perView.map((v: any) => v.measuredS) });
       check('a throttled run is marked as a test run, not a measurement', slow.testRun === true && /not a measurement/.test(slow.note));
     }
@@ -133,7 +137,7 @@ async function main(): Promise<void> {
       ['phone (emulated)', PHONE, 'quality=low'], ['phone (emulated)', PHONE, 'quality=low&section=off'],
       ['desktop', DESKTOP, 'quality=high&live'], ['desktop', DESKTOP, 'quality=high&section=off&live'],
     ];
-    for (const [device, opts, q] of plan) {
+    for (const [device, opts, q] of process.env.EQ_ONLY === '1' ? [] : plan) {
       const query = q.endsWith('&live') ? `bench=live&secs=${SECS}&${q.replace('&live', '')}` : `bench&secs=${SECS}&${q}`;
       const { page, close } = await open(browser, opts, query, blocked, errors);
       const r = await result(page, (SECS + 10 + 240) * 1000);

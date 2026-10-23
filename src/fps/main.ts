@@ -268,24 +268,31 @@ function setTouchMode(on: boolean): void {
 
 /** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
 let benchHold = false;
-/** The last practice pause: when, and how many ticks it took to use up what was already sent (diagnostics). */
-let lastSettle: { at: number; ticks: number } | null = null;
+/** The last practice pause: when, inputs discarded, and whether momentum (a jump, a knockback) was kept (diagnostics). */
+let lastPause: { at: number; discarded: number; keptVelocity: boolean | null } | null = null;
 
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
   const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
   if (shouldPause && !host.paused) {
-    // Settle before freezing: held keys go, a few neutral ticks are sent,
-    // and the host uses up everything already sent. Pausing mid-stride with
-    // inputs still queued made Rosa carry on walking (0.3-0.9 m) after
-    // Resume with no key held. The benchmark's hold keeps its scripted scene.
+    // Pausing mid-stride used to leave inputs queued on the host and her
+    // walking momentum in place, so she walked on after Resume with no key
+    // held. Now held keys are dropped, everything already sent is flushed,
+    // and the host discards what it had not simulated and re-syncs the
+    // client (Room.pauseSync) without simulating anything: the clock, bots,
+    // attacks and cooldowns freeze where they are. The benchmark's hold
+    // keeps its scripted scene.
     input?.release();
-    let settled = 0;
-    if (!benchHold && session) { session.settle(8); settled = host.settle(); }
+    let sync: ReturnType<LocalHost['pauseSync']>[number] | undefined;
+    if (!benchHold && session) {
+      session.flush();
+      sync = host.pauseSync().find((r) => r.id === session!.id);
+      if (sync) session.pauseSync(sync.ackBefore);
+    }
     host.pause(); engine.paused = true;
-    lastSettle = { at: Math.round(performance.now()), ticks: settled };
-    diagLog('input', `practice paused (settled ${settled} ticks)`);
+    lastPause = { at: Math.round(performance.now()), discarded: sync?.discarded ?? 0, keptVelocity: sync?.keptVelocity ?? null };
+    diagLog('input', `practice paused (discarded ${sync?.discarded ?? 0} queued inputs${sync?.keptVelocity ? ', momentum kept' : ''})`);
   }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
@@ -354,7 +361,7 @@ async function boot(): Promise<void> {
       pendingInputs: s.pendingInputs, hostQueue: sp ? sp.queue.length : null, hostSpeed: sp ? +Math.hypot(sp.body.vx, sp.body.vz).toFixed(2) : null,
       corrections: s.corrections, maxCorrection: +s.maxCorrection.toFixed(3), lastCorrection: +s.lastCorrection.toFixed(3),
       lastHitOnMe: s.lastHitOnMe ? { ...s.lastHitOnMe, msAgo: now - s.lastHitOnMe.at } : null,
-      lastPracticePause: lastSettle ? { ...lastSettle, msAgo: now - lastSettle.at } : null,
+      lastPracticePause: lastPause ? { ...lastPause, msAgo: now - lastPause.at } : null,
     };
   });
   diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });

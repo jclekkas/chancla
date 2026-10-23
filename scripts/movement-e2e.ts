@@ -214,6 +214,61 @@ async function main(): Promise<void> {
       if (!(await chain(p)).locked) await clickToAim(p);
     }
 
+    // 6b. Esc/Resume three times in quick succession while walking.
+    {
+      await reset(p);
+      await p.keyboard.down('ArrowUp'); await sleep(300);
+      for (let i = 0; i < 3; i++) {
+        await p.keyboard.press('Escape'); await sleep(120);
+        if (await p.isVisible('#btn-resume')) await p.click('#btn-resume');
+        await sleep(80);
+        if (!(await chain(p)).locked) await clickToAim(p);
+      }
+      await p.keyboard.up('ArrowUp');
+      await p.keyboard.press('Escape'); await sleep(150);
+      const atPause = await chain(p);
+      if (await p.isVisible('#btn-resume')) await p.click('#btn-resume');
+      await p.evaluate(() => { (window as any).__n = 60; });
+      await ticks(p, 60);
+      const after = await chain(p);
+      const d = Math.hypot(after.x - atPause.x, after.z - atPause.z);
+      check('repeated Esc/Resume while walking, then a final pause and Resume: no stale movement', d < 0.05 && after.keys.length === 0, { moved: +d.toFixed(3), keys: after.keys });
+      if (!after.locked) await clickToAim(p);
+      await moves(p, ['ArrowUp'], 'after repeated Esc/Resume: ArrowUp', { mz: 1 });
+      await up(p, ['ArrowUp']);
+    }
+
+    // 6c. Esc during an enemy's wind-up: the match does not advance and no damage lands while paused.
+    {
+      await reset(p);
+      await p.evaluate(() => {
+        const f = (window as any).__fps; const s = f.session(); const room = [...f.host().hub.rooms.values()][0];
+        const me = room.sim.players.get(s.id); me.protectedUntil = 0; me.hp = 100;
+        const q = [...room.sim.players.values()].find((x: any) => x.isBot);
+        q.body.x = me.body.x; q.body.z = me.body.z + 1.2; q.body.vx = q.body.vz = 0; q.protectedUntil = 0; q.weapon = 1; q.switchMs = 0; q.cooldownMs = 0; q.meleeMs = 0;
+        room.sim.queueInput(q.id, { seq: q.lastSeq + 1, mx: 0, mz: 0, yaw: 0, pitch: 0, buttons: 8, weapon: 1 });
+        (window as any).__swingQ = q.id;
+      });
+      // Pause partway through the 300 ms wind-up.
+      await p.waitForFunction(() => { const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0]; return !!room.sim.players.get((window as any).__swingQ).swing; }, undefined, { polling: 'raf' });
+      await p.keyboard.press('Escape');
+      const state = () => p.evaluate(() => {
+        const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0];
+        const q = room.sim.players.get((window as any).__swingQ);
+        return { timeMs: room.sim.timeMs, hp: room.sim.players.get(f.session().id).hp, swingAgeMs: q.swing ? Math.round((room.sim.tick - q.swing.tick0) * 1000 / 60) : null, meleeMs: q.meleeMs, paused: f.host().paused };
+      });
+      const s0 = await state(); await sleep(700); const s1 = await state();
+      check('Esc during an enemy El Revés wind-up: the match clock, the swing and her health do not move while paused',
+        s0.paused && s1.timeMs === s0.timeMs && s1.meleeMs === s0.meleeMs && s1.hp === 100 && s0.hp === 100 && s0.swingAgeMs !== null && s0.swingAgeMs < 300, { atPause: s0, after700ms: s1 });
+      if (await p.isVisible('#btn-resume')) await p.click('#btn-resume');
+      await p.evaluate(() => { (window as any).__n = 60; });
+      await ticks(p, 60);
+      const s2 = await state();
+      check('after Resume the swing finishes and lands once (45 damage, no duplicate)', s2.hp === 55, { afterResume: s2 });
+      await p.evaluate(() => { const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0]; room.sim.players.get(f.session().id).hp = 100; });
+      if (!(await chain(p)).locked) await clickToAim(p);
+    }
+
     // 6. Esc → Settings → a slider adjusted with the arrow keys → close → Resume.
     await reset(p);
     await p.keyboard.down('ArrowUp'); await sleep(200);

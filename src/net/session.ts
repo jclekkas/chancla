@@ -444,7 +444,9 @@ export class GameSession {
     this.pending = this.pending.filter((p) => p.seq > s.ack);
     const frozen = s.ph !== 'playing';
     for (const p of this.pending) this.simulate(p.inp, frozen, false, p.seq);
-    if (!this.alive || !wasAlive || phaseChanged) {
+    const resync = this.resyncNext;
+    this.resyncNext = false;
+    if (!this.alive || !wasAlive || phaseChanged || resync) {
       // Spawns and deaths are teleports, not errors.
       this.correction.x = this.correction.y = this.correction.z = 0;
       if (!wasAlive && this.alive) { this.yaw = s.p.find((t) => t[0] === this.id)?.[4] ?? this.yaw; this.pitch = 0; }
@@ -540,16 +542,18 @@ export class GameSession {
   }
 
   /**
-   * Neutral input for `ticks` ticks at once, sent straight away. Used when
-   * practice pauses: what was already sent, and the slow-down after it, get
-   * simulated before the match freezes, so she is standing still when it
-   * resumes (8 ticks stop a full-speed walk on the ground; knockback and a
-   * jump keep their normal physics).
+   * The practice pause: the next server state is taken as it is, with no
+   * smoothing (the host has just discarded inputs this client predicted,
+   * so the difference is a re-sync, not an error to blend out), and
+   * predicted throws and a predicted swing from the discarded inputs are
+   * removed.
    */
-  settle(ticks: number): void {
-    for (let i = 0; i < ticks; i++) this.tick({ mx: 0, mz: 0, yaw: this.yaw, pitch: this.pitch, fire: false, jump: false, crouch: false, melee: false, weapon: this.wantWeapon });
-    this.flush();
+  pauseSync(ackBefore: number): void {
+    this.resyncNext = true;
+    for (const [k, cp] of this.projectiles) if (cp.predicted && cp.pr.fireSeq > ackBefore) this.projectiles.delete(k);
+    if (this.swing && this.swing.seq > ackBefore) this.swing = null;
   }
+  private resyncNext = false;
 
   /** Inputs predicted but not yet acknowledged by the server (diagnostics). */
   get pendingInputs(): number { return this.pending.length; }

@@ -5,7 +5,7 @@
    "name": "ArrowUp: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.89,
+    "moved": 2.39,
     "cmd": [
      0,
      1
@@ -63,7 +63,7 @@
    "name": "ArrowLeft: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.29,
+    "moved": 2.79,
     "cmd": [
      -1,
      0
@@ -121,7 +121,7 @@
    "name": "KeyW: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.59,
+    "moved": 2.49,
     "cmd": [
      0,
      1
@@ -290,7 +290,7 @@
    "name": "Up+Right diagonal: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.12,
+    "moved": 2.3,
     "cmd": [
      1,
      1
@@ -399,7 +399,7 @@
    }
   },
   {
-   "name": "knocked back by El Revés (hp 100) while holding Right: released, nothing held, Rosa stops and stays stopped",
+   "name": "knocked back by El Revés (hp 55) while holding Right: released, nothing held, Rosa stops and stays stopped",
    "ok": true,
    "detail": {
     "keys": [],
@@ -434,6 +434,61 @@
    }
   },
   {
+   "name": "repeated Esc/Resume while walking, then a final pause and Resume: no stale movement",
+   "ok": true,
+   "detail": {
+    "moved": 0,
+    "keys": []
+   }
+  },
+  {
+   "name": "after repeated Esc/Resume: ArrowUp: moves while held",
+   "ok": true,
+   "detail": {
+    "moved": 2.79,
+    "cmd": [
+     0,
+     1
+    ],
+    "keys": [
+     "ArrowUp"
+    ]
+   }
+  },
+  {
+   "name": "Esc during an enemy El Revés wind-up: the match clock, the swing and her health do not move while paused",
+   "ok": true,
+   "detail": {
+    "atPause": {
+     "timeMs": 53133.33333333133,
+     "hp": 100,
+     "swingAgeMs": 117,
+     "meleeMs": 983.3333333333331,
+     "paused": true
+    },
+    "after700ms": {
+     "timeMs": 53133.33333333133,
+     "hp": 100,
+     "swingAgeMs": 117,
+     "meleeMs": 983.3333333333331,
+     "paused": true
+    }
+   }
+  },
+  {
+   "name": "after Resume the swing finishes and lands once (45 damage, no duplicate)",
+   "ok": true,
+   "detail": {
+    "afterResume": {
+     "timeMs": 54933.333333331066,
+     "hp": 55,
+     "swingAgeMs": null,
+     "meleeMs": 0,
+     "paused": false
+    }
+   }
+  },
+  {
    "name": "Esc with an arrow held: the menu opens and nothing stays held",
    "ok": true,
    "detail": {
@@ -449,7 +504,7 @@
    "name": "after Esc, Settings (slider), Resume: ArrowUp: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.29,
+    "moved": 2.79,
     "cmd": [
      0,
      1
@@ -584,7 +639,7 @@
    "name": "after respawn: ArrowDown: moves while held",
    "ok": true,
    "detail": {
-    "moved": 2.79,
+    "moved": 2.69,
     "cmd": [
      0,
      -1
@@ -613,8 +668,8 @@
    "name": "prediction and the practice host agree (no visible corrections from plain movement)",
    "ok": true,
    "detail": {
-    "corrections": 0,
-    "maxCorrection": 0
+    "corrections": 1,
+    "maxCorrection": 0.019
    }
   },
   {

@@ -32,6 +32,8 @@ export interface Member {
 
 const BOT_NAMES = ['Lupita', 'Chayo', 'Conchita', 'Doña Mago', 'Tía Chela', 'Nena', 'Doña Pili', 'Cuca'];
 const TICK_MS = 1000 / NET.tickRate;
+/** A knockback this recent is still under way when practice pauses: its momentum is kept. */
+const PAUSE_KNOCK_KEEP_MS = 250;
 const SNAP_EVERY = Math.round(NET.tickRate / NET.snapshotRate);
 
 export interface RoomOptions {
@@ -342,20 +344,34 @@ export class Room {
   }
 
   /**
-   * Runs ticks now until no connected player has inputs waiting (at most
-   * `max`). The practice host calls this as it pauses, so nothing already
-   * sent is left to be applied after the pause. Returns the ticks run.
+   * The practice pause transition. Nothing is simulated: the match clock,
+   * bots, projectiles, swings and cooldowns stay exactly where they are.
+   * For each connected player:
+   *   - inputs sent but not yet simulated are discarded and counted as
+   *     acknowledged, so the client drops them instead of replaying them;
+   *   - a buffered melee press is dropped (it was intent, not an action);
+   *   - walking momentum on the ground goes with the intent that produced
+   *     it; a jump arc or a knockback taken in the last PAUSE_KNOCK_KEEP_MS
+   *     is left as it is and carries on after Resume.
+   * A snapshot goes out at once so the client's prediction matches.
    */
-  drainInputs(max = 40): number {
-    if (!this.sim || (this.phase !== 'countdown' && this.phase !== 'playing')) return 0;
-    let n = 0;
-    const waiting = () => [...this.members.values()].some((m) => !!m.conn && (this.sim?.players.get(m.id)?.queue.length ?? 0) > 0);
-    while (n < max && waiting()) {
-      this.tick();
-      n++;
-      if ((this.phase as RoomPhase) === 'results') break;
+  pauseSync(): Array<{ id: number; ackBefore: number; discarded: number; keptVelocity: boolean }> {
+    const out: Array<{ id: number; ackBefore: number; discarded: number; keptVelocity: boolean }> = [];
+    const sim = this.sim;
+    if (!sim || (this.phase !== 'countdown' && this.phase !== 'playing')) return out;
+    for (const m of this.members.values()) {
+      if (m.bot || !m.conn) continue;
+      const p = sim.players.get(m.id);
+      if (!p) continue;
+      const ackBefore = p.lastSeq, discarded = p.queue.length;
+      if (discarded) { p.lastSeq = p.queue[discarded - 1]!.seq; p.queue.length = 0; }
+      p.meleeQueued = false;
+      const keptVelocity = !p.alive || !p.body.onGround || sim.timeMs - p.lastHitAt < PAUSE_KNOCK_KEEP_MS;
+      if (!keptVelocity) { p.body.vx = 0; p.body.vz = 0; }
+      out.push({ id: m.id, ackBefore, discarded, keptVelocity });
     }
-    return n;
+    this.sendSnapshots();
+    return out;
   }
 
   private tick(): void {

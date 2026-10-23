@@ -26,11 +26,11 @@ export class LocalHost {
 
   pause(): void { if (this.pausedAt < 0) this.pausedAt = performance.now(); }
 
-  /** Uses up every input already sent before a pause (see Room.drainInputs). Returns the ticks run. */
-  settle(): number {
-    let n = 0;
-    for (const room of this.hub.rooms.values()) n += room.drainInputs();
-    return n;
+  /** The pause transition for every room (see Room.pauseSync); simulates nothing. */
+  pauseSync(): ReturnType<import('../../shared/room').Room['pauseSync']> {
+    const out: ReturnType<import('../../shared/room').Room['pauseSync']> = [];
+    for (const room of this.hub.rooms.values()) out.push(...room.pauseSync());
+    return out;
   }
 
   resume(): void {

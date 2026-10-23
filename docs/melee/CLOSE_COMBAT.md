@@ -21,12 +21,15 @@ An isolated gameplay experiment on branch `codex/close-combat`. It is built on t
   - the keys were released correctly (no key stayed held);
   - the move command was neutral;
   - the host then applied the old commands and the remaining momentum after the pause.
-- **The fix:** practice now settles before it pauses.
-  - Held input is dropped, and the client sends 8 neutral ticks.
-  - The host uses up every input already sent (`Room.drainInputs`), then freezes.
-  - Ordinary physics runs throughout, so knockback and jumps are untouched, and nothing zeroes velocity per frame.
+- **The fix:** a pause transition that discards stale intent and simulates nothing (`Room.pauseSync`, `GameSession.pauseSync`).
+  - Held input is released.
+  - Inputs the host has received but not simulated are discarded and counted as acknowledged, so the client drops them from its replay buffer instead of reapplying them. A buffered melee press is dropped too, and a predicted throw or swing from a discarded input is removed on the client.
+  - Walking momentum on the ground is cleared, because it came from that discarded intent. A jump arc, and a knockback taken in the last 250 ms, are kept and carry on after Resume.
+  - The host sends a snapshot at once; the client takes it as a re-sync (no correction blending), so prediction matches the host before the freeze.
+  - The match clock, bots, projectiles, swings and cooldowns do not move: an attack in progress freezes and finishes normally after Resume, landing once.
   - It is synchronous, so it also works for a hidden tab, where frames and timers stop.
-  - Online play does not pause, and its menu already sends neutral input.
+  - Online play does not pause and does not use this; its menu already sends neutral input.
+- **Corrected in a follow-up:** the first version of this fix (560d1a0) settled by running the host for about 8 ticks before freezing. That fast-forwarded the whole match by about 83 ms on Esc: an enemy swing could land, with damage, as the menu opened. The transition above replaces it.
 
 **Ruled out, with checks** (`scripts/movement-e2e.ts`, Chromium), using arrows and WASD:
 - **Held keys:** no key stays logically held after release. Every arrow and WASD key passes, as do rapid alternation, opposite keys together, diagonals released one at a time, and an arrow mixed with its WASD twin (releasing one keeps the other).
@@ -41,12 +44,17 @@ An isolated gameplay experiment on branch `codex/close-combat`. It is built on t
 
 **Diagnostics** (Menu, then Copy diagnostics) now include:
 - **Input:** the held movement key codes (never field contents), the resolved move command, focus, pointer lock and window focus, the last release and why, and presses ignored because of Ctrl, Cmd or Option.
-- **Movement:** speed (client and host), queued and pending inputs, prediction corrections, the last hit taken (knockback) and what the last practice pause settled.
+- **Movement:** speed (client and host), queued and pending inputs, prediction corrections, the last hit taken (knockback) and what the last practice pause discarded (queued inputs, and whether momentum was kept).
 
 **Fails before, passes after:**
 - On the previous build (0bf1b15), the movement e2e fails the two new checks: she moved 0.279 m on screen and 0.379 m on the host after Esc and Resume, and 0.279 m after a hidden tab.
-- On the fixed build it passes 51/51, with 0.000 m.
-- `tests/practice-pause.test.ts` shows the same in Node: pausing without settling leaves more than 0.2 m of movement; a settled pause less than 1 mm.
+- On the fixed build it passes 55/55, with 0.000 m, including repeated Esc/Resume while walking, and Esc during an enemy Revés wind-up (117 ms in): the match clock, the swing and her health stay frozen for 700 ms of pause, and after Resume it lands once (100 to 55).
+- `tests/practice-pause.test.ts` (Node, the real host and client) covers:
+  - a bare pause (the old behaviour) leaves more than 0.2 m of movement; the pause transition less than 1 mm, with the discarded inputs acknowledged, nothing left to replay and the client equal to the host;
+  - repeated Esc/Resume while walking, with walking still working between pauses;
+  - a pause one tick before an enemy Chanclazo connects: no tick, no time, no swing progress, no cooldown change, no damage; after Resume exactly one hit (100 to 75);
+  - an airborne pause keeps height and velocity, and the arc carries on; a fresh knockback keeps its push;
+  - queued melee and throw presses, and a buffered melee press, are discarded: no swing or throw after Resume.
 
 ### 2. El Revés did not read as a backhand
 

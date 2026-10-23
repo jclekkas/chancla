@@ -19,6 +19,10 @@
 // button, so a name field or a Settings slider keeps it). Keys aimed at such
 // a stale target are game keys: the focus is dropped and the key counts.
 //
+// Melee (V, or the touch button) is a press, not a hold: one press makes one
+// swing, a held key never repeats it, and key repeat is ignored. The press is
+// kept until the next game tick reads it, and dropped by release().
+//
 // Touch (phones, tablets) is a second source, fed by the on-screen controls
 // (touch.ts) and merged in sample(): no pointer lock, no keyboard needed.
 // release() drops both sources, so a menu, a lost focus or a hidden page
@@ -33,6 +37,8 @@ export interface Controls {
   jump: boolean;
   crouch: boolean;
   fire: boolean;
+  /** Melee was pressed since the last sample. */
+  melee: boolean;
   weapon: WeaponId;
 }
 
@@ -74,6 +80,9 @@ export class FpsInput {
   /** Touch look speed, separate from the mouse's. */
   touchSensitivity = 1;
   private pendingTouchJump = false;
+  private pendingMelee = false;
+  /** Melee presses seen (tests and diagnostics). */
+  meleePresses = 0;
   private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
   /** Called by release(): the touch overlay forgets the fingers it was tracking. */
   onTouchRelease: (() => void) | null = null;
@@ -163,6 +172,7 @@ export class FpsInput {
     }
     if (e.code === 'KeyF' || e.code === 'KeyE') { this.keyFire = down; return; }
     if (!down || e.repeat) return;
+    if (e.code === 'KeyV') { this.pressMelee(); return; }
     if (e.code === 'Digit1') this.setWeapon(0);
     else if (e.code === 'Digit2') this.setWeapon(1);
     else if (e.code === 'KeyQ') this.toggleWeapon();
@@ -206,6 +216,13 @@ export class FpsInput {
     if (this.enabled) this.toggleWeapon();
   }
 
+  /** One melee swing (V or the touch button). Ignored while input is off (menus, typing). */
+  pressMelee(): void {
+    if (!this.enabled) return;
+    this.pendingMelee = true;
+    this.meleePresses++;
+  }
+
   toggleScoreboard(): void {
     this.scoreboard = !this.scoreboard;
     this.onScoreboard?.(this.scoreboard);
@@ -219,12 +236,15 @@ export class FpsInput {
     const t = this.touch;
     const jump = t.jump || this.pendingTouchJump;
     this.pendingTouchJump = false;
+    const melee = this.enabled && this.pendingMelee;
+    this.pendingMelee = false;
     mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
       jump: this.enabled && (this.keys.has('Space') || jump),
       crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
       fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
+      melee,
       weapon: this.weapon,
     };
   }
@@ -237,6 +257,7 @@ export class FpsInput {
     this.keyFire = false;
     this.touch.mx = 0; this.touch.mz = 0;
     this.pendingTouchJump = false;
+    this.pendingMelee = false;
     this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
     this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }

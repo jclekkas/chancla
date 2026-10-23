@@ -15,6 +15,7 @@ import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/
 import { Avatar, type AvatarState } from './render/rosa';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
+import { RuleroFx } from './render/ruleros';
 import { COLORS, toon, flat, OUTLINE } from './render/materials';
 import type { Hud } from './hud';
 import type { FpsInput } from './input';
@@ -57,6 +58,17 @@ export class Engine {
   private menuAvatars: Avatar[] = [];
   readonly proj = new ProjectileView();
   readonly vm = new ViewModel();
+  /** Flying ruleros (cosmetic, pooled, capped). */
+  readonly ruleros = new RuleroFx();
+  private lastLocalMelee = -1e9;
+  private localMeleeWeapon: WeaponId = 0;
+  /** Effects of other players' melee, played when the delayed render timeline reaches them. */
+  private fxQueue: Array<{ at: number; run: () => void }> = [];
+  /** Rollers due to fly off but not launched yet: still drawn on her head. */
+  private heldRuleros = new Map<number, number>();
+  private meleeHinted = false;
+  private tmpV = new THREE.Vector3();
+  private tmpD = new THREE.Vector3();
   private pickups: THREE.Group[] = [];
   /** The arena being played (El Patio for menus and the campaign). */
   private map: MapData = EL_PATIO;
@@ -102,7 +114,7 @@ export class Engine {
     this.scene.fog = new THREE.Fog(0xf3b07a, 45, 140);
 
     this.world = buildWorld(s.quality);
-    this.scene.add(this.world.group, this.proj.group);
+    this.scene.add(this.world.group, this.proj.group, this.ruleros.group);
     this.buildPickups();
     for (const team of [0, 1] as const) {
       const a = new Avatar(team);
@@ -294,6 +306,7 @@ export class Engine {
     this.spawnedOnce = false;
     this.lastPhase = '';
     this.lastCountdown = -1;
+    this.meleeHinted = false;
     const team = session.team;
     if (team !== null) this.vm.setTeam(team);
   }
@@ -305,6 +318,14 @@ export class Engine {
     this.stats.clear();
     this.hud.reset();
     this.shake = 0;
+    this.clearMelee();
+  }
+
+  private clearMelee(): void {
+    this.ruleros.clear();
+    this.fxQueue = [];
+    this.heldRuleros.clear();
+    this.lastLocalMelee = -1e9;
   }
 
   // Clears per-match bookkeeping for a rematch without leaving match mode.
@@ -312,6 +333,7 @@ export class Engine {
     this.stats.clear();
     this.proj.clear();
     this.hud.reset();
+    this.clearMelee();
   }
 
   // ------------------------------------------------------------------
@@ -346,7 +368,12 @@ export class Engine {
       case 'throw':
         if (e.o !== me) { const k = this.near(e.p); if (k > 0.05) audio.play(e.w === 1 ? 'throwHeavy' : 'throw', k); }
         break;
+      case 'swing':
+        // Someone else's swing: its swish, in step with her animation.
+        if (e.a !== me) this.later(e.tm, () => { const r = s.remotes.get(e.a); const k = r ? this.near(r) : 0; if (k > 0.05) audio.play(e.w === 1 ? 'swishHeavy' : 'swish', k); });
+        break;
       case 'hit': {
+        if (e.m !== undefined) { this.onMeleeHit(e); break; }
         if (e.a === me && e.v !== me) {
           this.hud.hitMarker(e.head ? 'head' : 'body');
           audio.play(e.head ? 'headshot' : 'hitConfirm');
@@ -367,7 +394,15 @@ export class Engine {
       case 'elim': {
         this.stat(e.a).k++;
         this.stat(e.v).d++;
-        this.hud.killfeed(this.nameOf(e.a), this.teamOf(e.a), this.nameOf(e.v), this.teamOf(e.v), e.w, e.a === me || e.v === me);
+        this.hud.killfeed(this.nameOf(e.a), this.teamOf(e.a), this.nameOf(e.v), this.teamOf(e.v), e.w, e.a === me || e.v === me, e.m !== undefined);
+        // An El Revés to the face that finishes her scatters what is left of her rollers.
+        if (e.ru?.length) {
+          const ru = e.ru;
+          this.holdRuleros(e.v, ru);
+          const dir = this.blowDirection(e.a, e.w);
+          const go = () => this.popRuleros(e.v, ru, dir, true);
+          if (e.a === me || e.v === me) go(); else this.later(this.lastMeleeAt.get(e.m ?? -1) ?? s.renderTime(), go);
+        }
         if (e.a === me) { this.hud.hitMarker('kill'); audio.play('elimConfirm'); this.hud.center(t('hud.youEliminated', { name: this.nameOf(e.v) }), 1.4); }
         if (e.v === me) { audio.play('died'); this.hud.center(t('hud.eliminatedBy', { name: this.nameOf(e.a) }), 2.2); }
         break;
@@ -390,6 +425,127 @@ export class Engine {
       default:
         break;
     }
+  }
+
+  /** Your own swing started (predicted): animation clock and swish. */
+  onLocalMelee(weapon: WeaponId): void {
+    this.lastLocalMelee = performance.now();
+    this.localMeleeWeapon = weapon;
+    audio.play(weapon === 1 ? 'swishHeavy' : 'swish');
+  }
+
+  /** Server time each confirmed melee contact happened, so the elimination's scatter follows it. */
+  private lastMeleeAt = new Map<number, number>();
+
+  // A confirmed melee hit. Your own hits and hits on you play at once (the
+  // server has decided); hits between others wait for the delayed timeline
+  // so they line up with the swing you see.
+  private onMeleeHit(e: Extract<SimEvent, { k: 'hit' }>): void {
+    const s = this.session!;
+    const me = s.id;
+    const heavy = e.w === 1;
+    const involved = e.a === me || e.v === me;
+    const at = e.tm ?? s.renderTime();
+    if (e.m !== undefined) { this.lastMeleeAt.set(e.m, at); if (this.lastMeleeAt.size > 64) this.lastMeleeAt.delete(this.lastMeleeAt.keys().next().value!); }
+    const dir = this.blowDirection(e.a, e.w);
+    if (e.ru?.length) this.holdRuleros(e.v, e.ru);
+    const ru = e.ru;
+    const go = () => {
+      const k = involved ? 1 : this.near(e.p);
+      if (k > 0.05) audio.play(heavy ? 'paf' : 'slap', k);
+      const av = this.avatars.get(e.v);
+      if (av) {
+        // The head turns the way the blow travels.
+        const r = s.remotes.get(e.v);
+        const yaw = r ? r.yaw : 0;
+        const left = { x: -Math.cos(yaw), z: Math.sin(yaw) };
+        av.react(e.head, dir.x * left.x + dir.z * left.z);
+      }
+      if (ru?.length) this.popRuleros(e.v, ru, dir, false);
+    };
+    if (involved) go(); else this.later(at, go);
+    if (e.a === me && e.v !== me) {
+      this.hud.hitMarker(e.head ? 'head' : 'body');
+      audio.play(e.head ? 'headshot' : 'hitConfirm', 0.8);
+      this.hud.floatText(String(e.d), new THREE.Vector3(e.p[0], e.p[1] + 0.3, e.p[2]), e.head ? 'head' : '');
+    }
+    if (e.v === me) {
+      const att = s.remotes.get(e.a);
+      const angle = att ? Math.atan2(-(att.x - s.body.x), -(att.z - s.body.z)) : null;
+      this.hud.hurt(angle);
+      audio.play('hurtFps', Math.min(1.4, 0.6 + e.d / 60));
+      if (!this.settings().reducedMotion) this.shake = Math.min(1, this.shake + e.d / 90);
+    }
+  }
+
+  // Which way a blow travels across the target's face: a forehand from the
+  // attacker's right to left, a backhand left to right, and a little away
+  // from her.
+  private blowDirection(attacker: number, weapon: WeaponId): { x: number; z: number } {
+    const s = this.session!;
+    const yaw = attacker === s.id ? this.input.yaw : s.remotes.get(attacker)?.yaw ?? 0;
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const side = weapon === 1 ? 1 : -1;
+    const x = rx * side + fx * 0.45, z = rz * side + fz * 0.45;
+    const l = Math.hypot(x, z) || 1;
+    return { x: x / l, z: z / l };
+  }
+
+  private holdRuleros(victim: number, ru: readonly number[]): void {
+    let m = this.heldRuleros.get(victim) ?? 0;
+    for (const i of ru) m |= 1 << i;
+    this.heldRuleros.set(victim, m);
+  }
+
+  // Launches rollers from where they sit on her head (or, for you, from just
+  // above your view). Low quality: the signature roller only, simpler flight.
+  private popRuleros(victim: number, ru: readonly number[], dir: { x: number; z: number }, scatter: boolean): void {
+    const s = this.session;
+    if (!s) return;
+    const low = this.quality === 'low';
+    // Reduced motion: the same simple flight as Low (no spin-and-bounce).
+    const simple = low || this.settings().reducedMotion;
+    const held = this.heldRuleros.get(victim) ?? 0;
+    let release = 0;
+    ru.forEach((i, n) => {
+      release |= 1 << i;
+      if (scatter && low && n >= 1) return; // Low: less debris
+      const from = this.tmpV;
+      let ground: number;
+      if (victim === s.id) {
+        // Your own: it pops up and out past the edge of the view, never across the crosshair.
+        const cam = this.camera;
+        const right = this.tmpD.set(1, 0, 0).applyQuaternion(cam.quaternion);
+        from.copy(cam.position).addScaledVector(right, i % 2 === 0 ? -0.22 : 0.22).add({ x: 0, y: 0.22, z: 0 } as THREE.Vector3);
+        ground = s.body.y;
+      } else {
+        const av = this.avatars.get(victim);
+        if (!av) return;
+        av.ruleroWorld(i, from);
+        ground = av.groundY;
+      }
+      const spread = scatter ? (n - (ru.length - 1) / 2) * 0.6 : 0;
+      const d = this.tmpD.set(dir.x * Math.cos(spread) - dir.z * Math.sin(spread), 0, dir.x * Math.sin(spread) + dir.z * Math.cos(spread));
+      this.ruleros.spawn(i, from, d, ground, { simple, strength: scatter ? 0.75 : 1 });
+      if (n === 0) { const k = victim === s.id ? 1 : this.near(from); if (k > 0.05) audio.play('ruleroPop', k); }
+    });
+    const left = held & ~release;
+    if (left) this.heldRuleros.set(victim, left); else this.heldRuleros.delete(victim);
+  }
+
+  private later(at: number, run: () => void): void {
+    this.fxQueue.push({ at, run });
+    if (this.fxQueue.length > 64) this.fxQueue.shift()!.run();
+  }
+
+  private runFx(s: GameSession): void {
+    if (!this.fxQueue.length) return;
+    const rt = s.renderTime();
+    const due = this.fxQueue.filter((f) => f.at <= rt || f.at < rt - 2000);
+    if (!due.length) return;
+    this.fxQueue = this.fxQueue.filter((f) => !due.includes(f));
+    for (const f of due) f.run();
   }
 
   onLocalThrow(weapon: WeaponId): void {
@@ -472,6 +628,8 @@ export class Engine {
       this.input.pitch = 0;
       this.input.weapon = s.weapon;
       if (s.team !== null) { this.hud.spawnBanner(s.team, !this.spawnedOnce); this.spawnedOnce = true; }
+      // Practice: say once how melee works.
+      if (this.practice && !this.meleeHinted) { this.meleeHinted = true; this.hud.sub(t(this.input.touchMode ? 'hud.meleeHintTouch' : 'hud.meleeHint'), 6); }
     }
     this.wasAlive = s.alive;
     // Fixed-rate prediction ticks.
@@ -480,14 +638,16 @@ export class Engine {
       let n = 0;
       while (this.acc >= DT && n++ < 6) {
         this.acc -= DT;
-        const c = this.inputActive ? this.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, weapon: this.input.weapon };
-        s.tick({ mx: c.mx, mz: c.mz, yaw: this.input.yaw, pitch: this.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, weapon: c.weapon });
+        const c = this.inputActive ? this.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, melee: false, weapon: this.input.weapon };
+        s.tick({ mx: c.mx, mz: c.mz, yaw: this.input.yaw, pitch: this.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, melee: c.melee, weapon: c.weapon });
       }
       if (this.acc > DT * 6) this.acc = 0;
       s.flush();
     }
     s.updateRemotes();
     if (!this.paused) s.updateProjectiles(dt);
+    this.runFx(s);
+    this.ruleros.update(this.paused ? 0 : dt);
 
     const team = s.team;
     if (team !== null) this.vm.setTeam(team);
@@ -534,6 +694,7 @@ export class Engine {
     this.vm.update({
       weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs, speed, onGround: s.body.onGround,
       crouched: s.body.crouched, alive: s.alive && s.phase !== 'results', msSinceThrow: performance.now() - this.lastLocalThrow,
+      msSinceMelee: performance.now() - this.lastLocalMelee, meleeWeapon: s.swingWeapon === null ? null : this.localMeleeWeapon,
     }, dt, reduced);
 
     this.movementSounds(s, dt, speed);
@@ -541,7 +702,7 @@ export class Engine {
 
     const snap = s.snap;
     this.hud.update({
-      hp: s.hp, alive: s.alive, weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs,
+      hp: s.hp, alive: s.alive, weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs, meleeMs: s.meleeMs,
       respawnInMs: s.respawnInMs, protectedMs: s.protectedMs, scores: snap?.sc ?? [0, 0],
       timeLeftMs: snap?.tl ?? MATCH.durationMs, phase: s.phase, countdownMs: snap?.cd ?? 0,
       region: regionAt(this.map, s.body.x, s.body.y, s.body.z), rtt: s.rtt, quality: s.connectionQuality,
@@ -573,6 +734,10 @@ export class Engine {
 
   private syncAvatars(s: GameSession, dt: number, reduced: boolean): void {
     const seen = new Set<number>();
+    // Rollers come from the newest snapshot (it arrives with the event that
+    // knocked one off), plus any still waiting to fly.
+    const masks = new Map<number, number>();
+    for (const tp of s.snap?.p ?? []) masks.set(tp[0], tp[14] ?? 15);
     for (const r of s.remotes.values()) {
       const team = this.teamOf(r.id);
       let av = this.avatars.get(r.id);
@@ -588,6 +753,7 @@ export class Engine {
       av.update({
         speed, strafe: side, back: -fwd, onGround: r.onGround, crouched: r.crouched, alive: r.alive, protected: r.protected,
         pitch: r.pitch, weapon: r.weapon, msSinceThrow: r.msSinceThrow, msSinceHit: r.msSinceHit, connected: r.connected,
+        msSinceMelee: r.msSinceMelee, ruleros: (masks.get(r.id) ?? r.ruleros) | (this.heldRuleros.get(r.id) ?? 0),
       }, dt, reduced);
     }
     for (const [id, av] of this.avatars) if (!seen.has(id)) { this.scene.remove(av.root); av.dispose(); this.avatars.delete(id); }

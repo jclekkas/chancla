@@ -2,7 +2,7 @@
 // goes through the same queue, cooldowns and validation, so it fights by the
 // same rules. Reaction time and aim error are deliberately imperfect.
 
-import { BOTS, WEAPONS, type BotDifficulty, type WeaponId } from './config';
+import { BOTS, MELEE, WEAPONS, type BotDifficulty, type WeaponId } from './config';
 import { lineOfSight } from './collision';
 import { eyeHeight, bodyHeight } from './physics';
 import { BTN, type MatchSim, type PlayerInput, type SimPlayer } from './sim';
@@ -41,6 +41,9 @@ export class BotBrain {
   private pitch = 0;
   private weapon: WeaponId = 0;
   private lastAlive = false;
+  /** Decided per opponent: close in and use melee rather than keep the range, and with which chancla. */
+  private brawl = false;
+  private brawlWeapon: WeaponId = 0;
 
   constructor(sim: MatchSim, id: number, difficulty: BotDifficulty = 'normal') {
     this.id = id;
@@ -82,7 +85,12 @@ export class BotBrain {
       if (d < bestD) { bestD = d; best = q; }
     }
     if (best) {
-      if (best.id !== this.target) { this.target = best.id; this.seenMs = 0; }
+      if (best.id !== this.target) {
+        this.target = best.id; this.seenMs = 0;
+        this.brawl = sim.rng.next() < this.skill.brawlChance;
+        // Alternate the chancla from one brawl to the next, so both attacks show up.
+        if (this.brawl) this.brawlWeapon = this.brawlWeapon === 0 ? 1 : 0;
+      }
       this.seenMs += dtMs;
       this.lastSeen = { x: best.body.x, y: best.body.y, z: best.body.z };
       this.lastSeenAt = now;
@@ -109,15 +117,29 @@ export class BotBrain {
       }
       wantYaw = Math.atan2(-(lx - eye.x), -(lz - eye.z)) + this.aimErrYaw;
       wantPitch = Math.atan2(ty - eye.y, Math.hypot(lx - eye.x, lz - eye.z)) + this.aimErrPitch;
-      // Weapon choice: the heavy one for close fights now and then.
-      if (me.cooldownMs <= 0 && me.switchMs <= 0) {
+      // Up close a swing goes for the face about half the time, the body otherwise.
+      const close = bestD < 2.6;
+      if (close) {
+        const faceY = best.body.y + bodyHeight(best.body) - (this.aimErrUntil % 2 < 1 ? 0.2 : 0.7);
+        wantPitch = Math.atan2(faceY - eye.y, Math.max(0.5, bestD)) + this.aimErrPitch;
+      }
+      // Weapon choice: the heavy one for close fights now and then. A brawler
+      // picks its chancla as it closes in (so both attacks get used).
+      if (this.brawl && bestD < 9) {
+        if (me.meleeMs <= 0 && me.cooldownMs <= 0 && me.switchMs <= 0) this.weapon = this.brawlWeapon;
+      } else if (me.cooldownMs <= 0 && me.switchMs <= 0 && me.meleeMs <= 0 && !(this.brawl && bestD < 9)) {
         const wantHeavy = bestD < 11 && sim.rng.next() < this.skill.heavyChance * 0.05;
         const wantStd = this.weapon === 1 && (bestD > 14 || sim.rng.next() < 0.01);
         if (wantHeavy && this.weapon === 0) this.weapon = 1;
         else if (wantStd) this.weapon = 0;
       }
       const err = Math.abs(wrap(wantYaw - this.yaw)) + Math.abs(wantPitch - this.pitch);
-      if (err < this.skill.fireConeRad && me.cooldownMs <= 0 && me.switchMs <= 0 && sim.phase === 'playing') buttons |= BTN.fire;
+      // In reach and roughly facing them: melee (a press, like a player's).
+      // Otherwise throw when lined up, as before.
+      const meleeReady = me.meleeMs <= 0 && me.cooldownMs <= 0 && me.switchMs <= 0;
+      const inReach = bestD < MELEE[this.weapon]!.reach + 0.3 && Math.abs(wrap(wantYaw - this.yaw)) < 0.45;
+      if (inReach && meleeReady && sim.phase === 'playing' && (this.brawl || sim.rng.next() < 0.08)) buttons |= BTN.melee;
+      else if (!(this.brawl && bestD < 4) && err < this.skill.fireConeRad && me.cooldownMs <= 0 && me.switchMs <= 0 && me.meleeMs <= 0 && sim.phase === 'playing') buttons |= BTN.fire;
       // Strafe and hold a comfortable range.
       if (now > this.strafeUntil) {
         this.strafeUntil = now + 600 + sim.rng.next() * 900;
@@ -126,6 +148,8 @@ export class BotBrain {
       }
       mx = this.strafe;
       mz = bestD > 15 ? 1 : bestD < 6 ? -1 : 0;
+      // A brawler walks straight in and stops at arm's length.
+      if (this.brawl && bestD < 12) { mz = bestD > 1.2 ? 1 : 0; mx = bestD < 3 ? 0 : this.strafe * 0.4; }
     } else {
       // --- Navigate: towards the last sighting, a cafecito, or the plaza ----
       if (now >= this.replanAt || this.path.length === 0) this.replan(sim, me, now);

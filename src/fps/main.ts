@@ -358,7 +358,11 @@ async function boot(): Promise<void> {
     if (touch?.visible && s) {
       const def = WEAPONS[s.weapon];
       touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+      // The melee button names the attack the chancla in hand makes.
+      touch.setMelee(t(s.weapon === 1 ? 'melee.reves' : 'melee.chanclazo'), s.weapon === 1, s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0);
     }
+    // Melee is a multiplayer and practice move: the campaign keeps its own rules.
+    touch?.setMeleeAvailable(!campaign.active);
   };
   requestAnimationFrame(uiTick);
   music.setPrefs(loadMusicPrefs());
@@ -591,6 +595,7 @@ function handlers() {
     error: (code: ErrorCode) => onError(code),
     event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); mpDialogue(e); },
     localThrow: (w: 0 | 1) => engine?.onLocalThrow(w),
+    localMelee: (w: 0 | 1) => engine?.onLocalMelee(w),
     impact: (...a: Parameters<Engine['onImpact']>) => engine?.onImpact(...a),
     left: () => endSession('title'),
   };
@@ -622,6 +627,8 @@ function mpDialogue(e: SimEvent): void {
       if (e.id === me && s.phase === 'playing') dialogue.react('respawn');
       break;
     case 'hit':
+      // Now and then, when El Revés knocks a roller off your own head.
+      if (e.v === me && e.ru?.length && Math.random() < 0.6) dialogue.react('rulero');
       if (e.v === me && e.hp > 0 && e.hp <= 30 && !mpLowHp) { mpLowHp = true; dialogue.react('low'); }
       if (e.v === me && e.hp > 30) mpLowHp = false;
       break;

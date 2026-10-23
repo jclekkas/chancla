@@ -6,6 +6,8 @@
 //                the mouse button does); dragging on it also aims
 //   Jump         hold
 //   Crouch       tap to toggle (a third thumb is not needed)
+//   Melee        tap: El Chanclazo or El Revés, whichever chancla is in hand
+//                (its label follows the weapon); one tap, one swing
 //   ⇄            switch weapon
 //   Scores       show or hide the scoreboard
 //
@@ -43,6 +45,9 @@ export class FpsTouch {
   private throwBtn: HTMLElement;
   private jumpBtn: HTMLElement;
   private crouchBtn: HTMLElement;
+  private meleeBtn: HTMLElement;
+  private meleeLbl: HTMLElement | null;
+  private meleeFlash = 0;
   /** Pointers currently tracked (tests and the debug API). */
   get active(): number { return [this.stickId, this.lookId, this.throwId, this.jumpId].filter((x) => x !== -1).length + this.arrows.size; }
 
@@ -56,6 +61,8 @@ export class FpsTouch {
     this.throwBtn = $('ft-throw');
     this.jumpBtn = $('ft-jump');
     this.crouchBtn = $('ft-crouch');
+    this.meleeBtn = $('ft-melee');
+    this.meleeLbl = this.meleeBtn.querySelector('.ft-mlbl');
     const weapon = $('ft-weapon');
     const score = $('ft-score');
     input.onTouchRelease = () => this.forget();
@@ -165,10 +172,20 @@ export class FpsTouch {
       this.syncCrouch();
     });
     this.bag.on<PointerEvent>(weapon, 'pointerdown', (e) => { e.preventDefault(); if (this.armed()) this.input.switchWeapon(); });
+    // Melee: a tap is one swing. The pointer is not captured, so it never
+    // takes over a finger that is also steering or aiming.
+    this.bag.on<PointerEvent>(this.meleeBtn, 'pointerdown', (e) => {
+      e.preventDefault();
+      if (!this.armed()) return;
+      this.input.pressMelee();
+      this.meleeBtn.classList.add('held');
+      clearTimeout(this.meleeFlash);
+      this.meleeFlash = window.setTimeout(() => this.meleeBtn.classList.remove('held'), 140);
+    });
     this.bag.on<PointerEvent>(score, 'pointerdown', (e) => { e.preventDefault(); if (this.armed()) this.input.toggleScoreboard(); });
 
     // No long-press menus, text selection or drag images on the controls.
-    for (const el of [this.root, move, look, this.throwBtn, this.jumpBtn, this.crouchBtn, weapon, score]) {
+    for (const el of [this.root, move, look, this.throwBtn, this.jumpBtn, this.crouchBtn, this.meleeBtn, weapon, score]) {
       this.bag.on(el, 'contextmenu', (e) => e.preventDefault());
       this.bag.on(el, 'selectstart', (e) => e.preventDefault());
       this.bag.on(el, 'dragstart', (e) => e.preventDefault());
@@ -200,6 +217,20 @@ export class FpsTouch {
     this.arrows.clear(); this.stickX = 0; this.stickZ = 0; this.syncMove();
     this.lookId = -1;
     if (this.crouchOn && !this.input.touchCrouch) { this.crouchOn = false; this.syncCrouch(); }
+  }
+
+  /** The campaign has no melee: the button is hidden there. */
+  setMeleeAvailable(on: boolean): void {
+    if (this.meleeBtn.hidden === !on) return;
+    this.meleeBtn.hidden = !on;
+  }
+
+  /** Names the melee button after the attack the chancla in hand makes. */
+  setMelee(label: string, heavy: boolean, ready: boolean): void {
+    if (this.meleeLbl && this.meleeLbl.textContent !== label) this.meleeLbl.textContent = label;
+    this.meleeBtn.classList.toggle('heavy', heavy);
+    this.meleeBtn.classList.toggle('cooling', !ready);
+    if (this.meleeBtn.getAttribute('aria-label') !== label) this.meleeBtn.setAttribute('aria-label', label);
   }
 
   /** Throw button cooldown ring: 0 = just thrown, 1 = ready. */

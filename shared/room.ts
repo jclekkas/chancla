@@ -104,7 +104,7 @@ export class Room {
     };
     this.members.set(id, m);
     if (this.owner < 0 || !this.members.has(this.owner)) this.owner = id;
-    if (this.sim) this.sim.addPlayer(id, team);
+    if (this.sim) { this.sim.addPlayer(id, team); this.sim.setViewDelay(id, viewDelay(0)); }
     this.fillBots();
     this.roomDirty = true;
     return m;
@@ -252,7 +252,7 @@ export class Room {
         const sp = this.sim?.players.get(id);
         if (!sp) return null;
         for (const d of msg.d) {
-          this.sim!.queueInput(id, { seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4], buttons: d[5] & 7, weapon: weaponOf(d[6]) });
+          this.sim!.queueInput(id, { seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4], buttons: d[5] & 15, weapon: weaponOf(d[6]) });
         }
         return null;
       }
@@ -267,6 +267,7 @@ export class Room {
     const m = this.members.get(id);
     if (!m || m.bot) return;
     if (Math.abs(m.ping - ms) >= 15 || (m.ping === 0) !== (ms === 0)) { m.ping = ms; this.roomDirty = true; }
+    this.sim?.setViewDelay(id, viewDelay(ms));
   }
 
   // Everyone but the owner must be ready; at least two participants.
@@ -290,6 +291,7 @@ export class Room {
     for (const m of this.members.values()) {
       const p = sim.addPlayer(m.id, m.team, m.bot);
       if (!m.bot && !m.conn) p.active = false;
+      if (!m.bot) sim.setViewDelay(m.id, viewDelay(m.ping));
       if (m.bot) m.brain = new BotBrain(sim, m.id, this.bots.difficulty);
       m.snapPending = true;
     }
@@ -379,6 +381,7 @@ export class Room {
       players.push([
         p.id, r2(p.body.x), r2(p.body.y), r2(p.body.z), r3(p.yaw), r3(p.pitch), r2(p.body.vx), r2(p.body.vz), flags, p.hp, p.weapon,
         Math.min(9999, Math.round(sim.timeMs - p.lastThrowAt)), Math.min(9999, Math.round(sim.timeMs - p.lastHitAt)),
+        Math.min(9999, Math.round(sim.timeMs - p.lastMeleeAt)), p.ruleros,
       ]);
     }
     const ev = this.eventBuf;
@@ -389,8 +392,9 @@ export class Room {
       const p = sim.players.get(m.id);
       const me: SelfTuple | null = p ? [
         p.body.x, p.body.y, p.body.z, p.body.vx, p.body.vy, p.body.vz,
-        (p.alive ? 1 : 0) | (p.body.crouched ? 2 : 0) | (p.body.onGround ? 4 : 0), p.hp, Math.round(p.cooldownMs), Math.round(p.switchMs), p.weapon,
+        (p.alive ? 1 : 0) | (p.body.crouched ? 2 : 0) | (p.body.onGround ? 4 : 0) | (p.meleeQueued ? 8 : 0), p.hp, Math.round(p.cooldownMs), Math.round(p.switchMs), p.weapon,
         p.alive ? 0 : Math.max(0, Math.round(p.respawnAt - sim.timeMs)), Math.max(0, Math.round(p.protectedUntil - sim.timeMs)),
+        Math.round(p.meleeMs),
       ] : null;
       const snap: Snapshot = {
         t: 'snap', k: sim.tick, st: Math.round(sim.timeMs), ack: p?.lastSeq ?? 0, ph: this.phase,
@@ -403,6 +407,10 @@ export class Room {
 }
 
 function r2(v: number): number { return Math.round(v * 100) / 100; }
+
+// How far behind the server a client draws the other players: the
+// interpolation delay plus half its round trip. Melee contact is judged there.
+function viewDelay(pingMs: number): number { return NET.interpDelayMs + pingMs / 2; }
 function r3(v: number): number { return Math.round(v * 1000) / 1000; }
 
 function performanceNow(): number {

@@ -249,7 +249,7 @@ export function runBench(p: BenchParams, h: Hooks): void {
     input.yaw = sc.cam.yaw; input.pitch = sc.cam.pitch;
     ids.forEach((id, k) => {
       const w = sc.walkers[k]!;
-      s.remotes.set(id, { id, x: w.x, y: 0, z: w.z, yaw: w.yaw, pitch: 0, vx: w.vx, vz: w.vz, alive: true, crouched: false, onGround: true, protected: false, connected: true, hp: 100, weapon: 0, msSinceThrow: 1e6, msSinceHit: 1e6 });
+      s.remotes.set(id, { id, x: w.x, y: 0, z: w.z, yaw: w.yaw, pitch: 0, vx: w.vx, vz: w.vz, alive: true, crouched: false, onGround: true, protected: false, connected: true, hp: 100, weapon: 0, msSinceThrow: 1e6, msSinceHit: 1e6, msSinceMelee: 1e6, ruleros: 15 });
     });
     s.projectiles.clear();
     for (const q of sc.proj) {

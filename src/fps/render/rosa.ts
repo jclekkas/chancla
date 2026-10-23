@@ -4,11 +4,12 @@
 // head and a crescent moon on the back. Ink outlines separate players from
 // the scenery. All animation is procedural and driven by real game timing.
 import * as THREE from 'three';
-import { WEAPONS, type WeaponId } from '../../../shared/config';
+import { MELEE, WEAPONS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { COLORS, OUTLINE, toon } from './materials';
 import { buildSandal, markShared } from '../../models/sandal';
 import { chanclaModel } from './fp-chancla';
+import { RULERO_COLORS, ruleroGeometry } from './ruleros';
 
 const TEAM = {
   0: { dress: 0xf29a2e, trim: 0xb8441f, shawl: 0xf4e6c8, stripe: 0xe8871e, emblem: 0xf5c542, accent: 0xf2a33a },
@@ -63,7 +64,55 @@ export interface AvatarState {
   msSinceThrow: number;
   msSinceHit: number;
   connected: boolean;
+  /** Time since her last melee swing started (the weapon field says which). */
+  msSinceMelee?: number;
+  /** Bit i set: roller i is shown on her head. */
+  ruleros?: number;
 }
+
+// Third-person melee: keyframes for the right arm (shoulder pitch, outer
+// yaw sweep, forearm bend) and a torso twist, on the attack's own clock.
+// Contact sits inside the attack's real contact window.
+interface ArmKey { t: number; ax: number; ay: number; fx: number; tw: number }
+const MELEE_KEYS: Record<WeaponId, ArmKey[]> = {
+  // El Chanclazo: cocked back to her right, a quick forehand across, a short follow-through.
+  0: [
+    { t: 0, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+    { t: 90, ax: 1.25, ay: -0.95, fx: -0.95, tw: -0.3 },
+    { t: 155, ax: 1.4, ay: 0.25, fx: -0.25, tw: 0.25 },
+    { t: 300, ax: 1.05, ay: 0.95, fx: -0.35, tw: 0.4 },
+    { t: 700, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+  ],
+  // El Revés: the arm drawn across her chest, the shoulder turned, then a big
+  // backhand out to her right with an exaggerated follow-through.
+  1: [
+    { t: 0, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+    { t: 280, ax: 1.2, ay: 1.15, fx: -1.45, tw: 0.55 },
+    { t: 345, ax: 1.4, ay: -0.2, fx: -0.15, tw: -0.25 },
+    { t: 600, ax: 1.1, ay: -1.35, fx: -0.1, tw: -0.7 },
+    { t: 1100, ax: -0.5, ay: 0, fx: -0.6, tw: 0 },
+  ],
+};
+
+function sampleArm(keys: ArmKey[], t: number): ArmKey {
+  if (t <= keys[0]!.t) return keys[0]!;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const a = keys[i]!, b = keys[i + 1]!;
+    if (t <= b.t) {
+      const k = (t - a.t) / Math.max(1, b.t - a.t);
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      return { t, ax: a.ax + (b.ax - a.ax) * e, ay: a.ay + (b.ay - a.ay) * e, fx: a.fx + (b.fx - a.fx) * e, tw: a.tw + (b.tw - a.tw) * e };
+    }
+  }
+  return keys[keys.length - 1]!;
+}
+
+// Where the four match ruleros sit on the head (head-local): under the brim
+// of Team Sol's hat, peeking out of the front of Team Luna's rebozo.
+const RULERO_SPOTS: Record<Team, Array<[number, number, number, 'x' | 'z']>> = {
+  0: [[-0.075, 0.205, -0.135, 'z'], [0.075, 0.205, -0.135, 'z'], [-0.16, 0.18, -0.01, 'x'], [0.16, 0.18, -0.01, 'x']],
+  1: [[-0.075, 0.215, -0.2, 'z'], [0.075, 0.215, -0.2, 'z'], [-0.175, 0.16, -0.11, 'x'], [0.175, 0.16, -0.11, 'x']],
+};
 
 const geo = {
   head: new THREE.SphereGeometry(0.16, 16, 12),
@@ -120,6 +169,18 @@ export class Avatar {
   private smooth = { lean: 0, hips: 0, crouch: 0 };
   readonly team: Team;
   private curlers: THREE.Mesh[] = [];
+  /**
+   * The detachable ruleros of a match Rosa (not the campaign's): one
+   * instanced mesh and one instanced outline, so all four cost two draw
+   * calls. A roller that has come off is collapsed to nothing.
+   */
+  private rulMesh: THREE.InstancedMesh | null = null;
+  private rulOutline: THREE.InstancedMesh | null = null;
+  private rulPlace: THREE.Matrix4[] = [];
+  private rulMask = -1;
+  private reactT = 1;
+  private reactSide = 1;
+  private reactHead = false;
 
   // `home`: the campaign look (no hat or hood), so her ruleros show.
   constructor(team: Team, opts: { home?: boolean } = {}) {
@@ -246,6 +307,25 @@ export class Avatar {
       tail.rotation.z = 0.25;
       this.head.add(tail);
     }
+    if (!opts.home) {
+      // Four ruleros: the ones a backhand to the face can knock off.
+      const spots = RULERO_SPOTS[team];
+      this.rulMesh = new THREE.InstancedMesh(ruleroGeometry(), rulMaterial(), spots.length);
+      this.rulOutline = new THREE.InstancedMesh(ruleroGeometry(), OUTLINE, spots.length);
+      const q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), big = new THREE.Vector3(1.14, 1.14, 1.14);
+      spots.forEach(([x, y, z, axis], i) => {
+        e.set(axis === 'x' ? Math.PI / 2 : 0, 0, axis === 'z' ? Math.PI / 2 : 0);
+        const at = new THREE.Vector3(x, y, z);
+        this.rulPlace.push(new THREE.Matrix4().compose(at, q.setFromEuler(e), one));
+        this.rulOutline!.setMatrixAt(i, new THREE.Matrix4().compose(at, q, big));
+        this.rulMesh!.setColorAt(i, new THREE.Color(RULERO_COLORS[i % RULERO_COLORS.length]!));
+      });
+      this.setRulerosMask((1 << spots.length) - 1);
+      // Bounds would come from the bare geometry, not the instances: never cull (four tiny pieces).
+      this.rulMesh.frustumCulled = false;
+      this.rulOutline.frustumCulled = false;
+      this.head.add(this.rulMesh, this.rulOutline);
+    }
 
     // Arms: shoulder pivot, elbow pivot, hand. The right hand holds the weapon.
     for (const [arm, fore, x] of [[this.armL, this.foreL, -0.22], [this.armR, this.foreR, 0.22]] as const) {
@@ -291,7 +371,7 @@ export class Avatar {
 
     this.root.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh && m.material !== OUTLINE && o !== this.bubble) m.castShadow = true;
+      if (m.isMesh && m.material !== OUTLINE && o !== this.bubble && o !== this.rulMesh) m.castShadow = true;
     });
   }
 
@@ -301,6 +381,43 @@ export class Avatar {
     return m;
   }
 
+  /** Shows the match ruleros whose bit is set. */
+  setRulerosMask(mask: number): void {
+    if (mask === this.rulMask || !this.rulMesh || !this.rulOutline) return;
+    this.rulMask = mask;
+    const outline = new THREE.Matrix4(), s = new THREE.Vector3(1.14, 1.14, 1.14);
+    this.rulPlace.forEach((m, i) => {
+      const on = (mask & (1 << i)) !== 0;
+      this.rulMesh!.setMatrixAt(i, on ? m : HIDDEN);
+      const p = new THREE.Vector3().setFromMatrixPosition(m);
+      const r = new THREE.Quaternion().setFromRotationMatrix(m);
+      this.rulOutline!.setMatrixAt(i, on ? outline.compose(p, r, s) : HIDDEN);
+    });
+    this.rulMesh.instanceMatrix.needsUpdate = true;
+    this.rulOutline.instanceMatrix.needsUpdate = true;
+  }
+
+  /** World position of roller i (where a flying one starts). */
+  ruleroWorld(i: number, out: THREE.Vector3): THREE.Vector3 {
+    const m = this.rulPlace[i];
+    this.root.updateMatrixWorld(true);
+    if (!m) return this.head.getWorldPosition(out);
+    return out.setFromMatrixPosition(m).applyMatrix4(this.head.matrixWorld);
+  }
+
+  /** Paving height under her (for a roller's bounce). */
+  get groundY(): number { return this.root.position.y; }
+
+  /**
+   * A cartoon flinch from a melee hit: the head snaps aside and the upper
+   * body twists, for a third of a second. `side`: +1 knocked to her left, -1 to her right.
+   */
+  react(head: boolean, side: number): void {
+    this.reactT = 0;
+    this.reactHead = head;
+    this.reactSide = side >= 0 ? 1 : -1;
+  }
+
   /** Shows the first `n` recovered ruleros on her head (campaign). */
   setRuleros(n: number): void {
     this.curlers.forEach((m, i) => (m.visible = i < n));
@@ -308,6 +425,8 @@ export class Avatar {
 
   dispose(): void {
     for (const m of this.flashMats) m.dispose();
+    this.rulMesh?.dispose();
+    this.rulOutline?.dispose();
     (this.bubble.material as THREE.Material).dispose();
     // Geometry made for this avatar alone (skirt trim, apron, shawl, hair,
     // hat parts...). Shared geometry and cached materials stay. Missing this
@@ -395,12 +514,39 @@ export class Avatar {
         fx = -0.2 - 0.4 * k;
       }
     }
-    this.armR.rotation.set(ax, 0, 0.1);
+    let ay = 0;
+    // Melee swing: overrides the throw pose; the sandal stays in her hand.
+    const tm = s.msSinceMelee ?? 1e9;
+    const mdef = MELEE[s.weapon]!;
+    const swinging = tm < mdef.cycleMs;
+    if (swinging) {
+      const k = sampleArm(MELEE_KEYS[s.weapon], tm);
+      const m = reducedMotion ? 0.6 : 1;
+      ax = -0.5 + (k.ax + 0.5) * m; ay = k.ay * m; fx = -0.6 + (k.fx + 0.6) * m; twist = k.tw * m;
+    }
+    this.armR.rotation.order = 'YXZ'; // the sweep turns about the vertical, outside the arm's lift
+    this.armR.rotation.set(ax, ay, 0.1);
     this.foreR.rotation.x = fx;
     this.torso.rotation.y += twist;
-    const inHand = tThrow > def.cooldownMs * 0.55 || tThrow < (s.weapon === 1 ? 160 : 90);
+    const inHand = swinging || tThrow > def.cooldownMs * 0.55 || tThrow < (s.weapon === 1 ? 160 : 90);
     this.weapons[0]!.visible = s.weapon === 0 && inHand;
     this.weapons[1]!.visible = s.weapon === 1 && inHand;
+    if (s.ruleros !== undefined) this.setRulerosMask(s.ruleros);
+
+    // Melee flinch: the head snaps aside and the shoulders follow.
+    if (this.reactT < 1) {
+      this.reactT = Math.min(1, this.reactT + dt / 0.34);
+      const k = Math.sin(Math.PI * Math.min(1, this.reactT * 1.6)) * (1 - this.reactT) * (reducedMotion ? 0.4 : 1);
+      const big = this.reactHead ? 1 : 0.55;
+      this.head.rotation.y = this.reactSide * 0.75 * k * big;
+      this.head.rotation.z = this.reactSide * 0.3 * k * big;
+      this.torso.rotation.y += this.reactSide * 0.28 * k * big;
+      this.torso.rotation.z = -this.reactSide * 0.1 * k * big;
+    } else {
+      this.head.rotation.y = 0;
+      this.head.rotation.z = 0;
+      this.torso.rotation.z = 0;
+    }
 
     // Hit flinch and flash (playful, brief, not graphic).
     const hitK = s.msSinceHit < 220 ? 1 - s.msSinceHit / 220 : 0;
@@ -410,6 +556,14 @@ export class Avatar {
     this.bubble.visible = s.protected;
     if (s.protected) (this.bubble.material as THREE.MeshBasicMaterial).opacity = 0.14 + Math.sin(performance.now() * 0.01) * 0.05;
   }
+}
+
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+let rulMat: THREE.MeshToonMaterial | null = null;
+/** One material for every avatar's rollers; the colour comes per instance. */
+function rulMaterial(): THREE.MeshToonMaterial {
+  if (!rulMat) rulMat = toon(0xffffff, { emissive: 0x1a1010 });
+  return rulMat;
 }
 
 function easeOut(t: number): number { return 1 - (1 - t) * (1 - t); }

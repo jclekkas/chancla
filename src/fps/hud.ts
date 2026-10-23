@@ -1,6 +1,6 @@
 // In-match HUD. DOM is only touched when values change.
 import * as THREE from 'three';
-import { MATCH, WEAPONS, type WeaponId } from '../../shared/config';
+import { MATCH, MELEE, WEAPONS, type WeaponId } from '../../shared/config';
 import type { RoomView } from '../../shared/protocol';
 import { t, type Key } from './strings';
 import { chanclaSVG, rosaSVG, svgUrl } from '../ui/art';
@@ -13,6 +13,8 @@ export interface HudFrame {
   weapon: WeaponId;
   cooldownMs: number;
   switchMs: number;
+  /** Melee recovery left (ms), if a swing is under way. */
+  meleeMs?: number;
   respawnInMs: number;
   protectedMs: number;
   scores: [number, number];
@@ -122,13 +124,16 @@ export class Hud {
     if (this.floats.length > 12) this.floats.shift()!.el.remove();
   }
 
-  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean): void {
+  /** `melee`: the elimination was a Chanclazo or a Revés (named next to the chancla). */
+  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean, melee = false): void {
     const row = document.createElement('div');
     row.className = `kf${mine ? ' me' : ''}`;
     const a = document.createElement('span'); a.className = aTeam === 0 ? 's' : 'l'; a.textContent = attacker;
     const w = document.createElement('span'); w.className = 'w'; w.style.backgroundImage = svgUrl(weapon === 0 ? chanclaSVG(-15) : pesadaIcon);
     const v = document.createElement('span'); v.className = vTeam === 0 ? 's' : 'l'; v.textContent = victim;
-    row.append(a, w, v);
+    row.append(a, w);
+    if (melee) { const m = document.createElement('span'); m.className = 'kf-melee'; m.textContent = t(weapon === 1 ? 'melee.reves' : 'melee.chanclazo'); row.append(m); }
+    row.append(v);
     this.el.killfeed.prepend(row);
     while (this.el.killfeed.children.length > 5) this.el.killfeed.lastElementChild!.remove();
     setTimeout(() => row.remove(), 6000);
@@ -181,7 +186,9 @@ export class Hud {
     this.set('prot', String(f.protectedMs > 0 && f.alive), () => (this.el.protect.hidden = !(f.protectedMs > 0 && f.alive)));
     this.set('weapon', `${f.weapon}`, () => this.el.slots.forEach((s, i) => s.classList.toggle('on', i === f.weapon)));
     const def = WEAPONS[f.weapon]!;
-    const readyK = f.switchMs > 0 ? 0 : 1 - f.cooldownMs / def.cooldownMs;
+    // Ready when neither a throw nor a swing is recovering.
+    const meleeK = f.meleeMs && f.meleeMs > 0 ? 1 - f.meleeMs / (MELEE[f.weapon]!.cycleMs + MELEE[f.weapon]!.whiffMs) : 1;
+    const readyK = f.switchMs > 0 ? 0 : Math.min(1 - f.cooldownMs / def.cooldownMs, meleeK);
     const ring = 138.2 * (readyK >= 1 ? 1 : readyK);
     this.set('cd', ring.toFixed(0), () => (this.el.cd.style.strokeDashoffset = (readyK >= 1 ? 138.2 : 138.2 - ring).toFixed(1)));
     this.el.slots.forEach((s, i) => {

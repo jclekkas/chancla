@@ -606,3 +606,16 @@ body.touch-input .hud-practice { display: none; }
   body.touch-input .hud-btn.menu-btn { min-height: 40px; font-size: 14px; }
 }
 body.touch-input .wslot .wcd { width: 34px; }
+/* Melee (close-combat experiment). One button at the top of the right-hand
+   arc, clear of Crouch and Switch, named after the attack the chancla in hand
+   makes: Chanclazo or Revés. */
+.ft-melee { right: calc(100px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); width: 66px; height: 66px; font-size: 11px; }
+.ft-melee .ft-mico { width: 26px; height: 15px; border-radius: 50% 50% 46% 46%; background: var(--turquoise); border: 2px solid var(--cream); transform: rotate(52deg); box-shadow: -7px -5px 0 -5px var(--cream); }
+.ft-melee.heavy .ft-mico { background: #6a3a8c; height: 17px; }
+.ft-melee .ft-mlbl { font-size: 10px; letter-spacing: 0.02em; margin-top: 3px; font-weight: 800; white-space: nowrap; }
+.ft-melee.cooling { opacity: 0.6; }
+body.touch-input .ft-melee { width: 62px; height: 62px; right: calc(100px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); }
+.wslot .wmelee { font-size: 11px; opacity: 0.85; white-space: nowrap; }
+.wslot .wmelee kbd { font: inherit; font-weight: 800; padding: 0 4px; border-radius: 4px; border: 1px solid rgba(244, 230, 200, 0.5); }
+body.touch-input .wslot .wmelee { display: none; }
+.killfeed .kf-melee { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 5px; border-radius: 6px; background: rgba(244, 166, 35, 0.85); color: var(--violet-deep); }

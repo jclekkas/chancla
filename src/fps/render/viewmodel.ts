@@ -7,8 +7,13 @@
 // wind-up, a snap forward with a wrist flick peaking at release (90 ms light,
 // 160 ms heavy), a follow-through, the empty hand dropping away and a fresh
 // item rising into it before the cooldown ends.
+//
+// Melee keeps the item in the hand: El Chanclazo is a forehand from the
+// right across the view, El Revés a backhand drawn across the chest and
+// swung out to the right. The strike passes the centre of the view inside
+// each attack's contact window (config.ts MELEE).
 import * as THREE from 'three';
-import { WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
+import { MELEE, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { applyRest, buildFpHand, FP_REST, type FpPose, type FpRig } from './fp-hand';
 import { COLORS } from './materials';
@@ -22,6 +27,9 @@ export interface ViewState {
   crouched: boolean;
   alive: boolean;
   msSinceThrow: number;
+  /** Your swing in progress (predicted): time since it started, and the chancla it uses. */
+  msSinceMelee?: number;
+  meleeWeapon?: WeaponId | null;
 }
 
 /** Offsets from the rest pose: position (camera space), root rotation, wrist flick. */
@@ -68,6 +76,32 @@ function throwKeys(weapon: WeaponId, release: number, show: number, end: number)
     { t: end, p: {}, ease: settle },
   ];
 }
+
+function meleeKeys(weapon: WeaponId): Key[] {
+  const d = MELEE[weapon]!;
+  const hit0 = d.windupMs, hit1 = d.windupMs + d.activeMs;
+  if (weapon === 1) {
+    // El Revés: drawn across the chest (wind-up), then out to the right.
+    return [
+      { t: 0, p: {}, ease: easeOut2 },
+      { t: hit0 * 0.55, p: { x: -0.3, y: -0.03, z: 0.06, pitch: 0.08, yaw: -0.7, roll: -0.5, flick: -0.6 }, ease: easeOut2 },
+      { t: hit0, p: { x: -0.44, y: -0.02, z: 0.1, pitch: 0.12, yaw: -0.98, roll: -0.72, flick: -0.85 }, ease: easeInOut },
+      { t: hit1, p: { x: 0.02, y: 0.05, z: -0.16, pitch: -0.02, yaw: 0.45, roll: 0.35, flick: 0.9 }, ease: easeIn3 },
+      { t: hit1 + 230, p: { x: 0.15, y: -0.02, z: -0.06, pitch: -0.25, yaw: 0.95, roll: 0.6, flick: 1.0 }, ease: easeOut3 },
+      { t: d.cycleMs, p: {}, ease: settle },
+    ];
+  }
+  // El Chanclazo: cocked back to the right, a quick forehand across.
+  return [
+    { t: 0, p: {}, ease: easeOut2 },
+    { t: hit0 * 0.55, p: { x: 0.08, y: 0.06, z: 0.06, pitch: 0.15, yaw: 0.55, roll: 0.35, flick: -0.7 }, ease: easeOut2 },
+    { t: hit0, p: { x: -0.08, y: 0.05, z: -0.13, pitch: 0.0, yaw: -0.2, roll: -0.05, flick: 0.4 }, ease: easeIn3 },
+    { t: hit1, p: { x: -0.3, y: 0.0, z: -0.12, pitch: -0.05, yaw: -0.75, roll: -0.25, flick: 1.0 }, ease: easeOut3 },
+    { t: hit1 + 140, p: { x: -0.36, y: -0.08, z: -0.06, pitch: -0.3, yaw: -0.9, roll: -0.3, flick: 0.6 }, ease: easeOut2 },
+    { t: d.cycleMs, p: {}, ease: settle },
+  ];
+}
+const MELEE_KEYS: Record<WeaponId, Key[]> = { 0: meleeKeys(0), 1: meleeKeys(1) };
 
 function sample(keys: Key[], t: number, out: Pose): void {
   for (const f of FIELDS) out[f] = 0;
@@ -159,6 +193,13 @@ export class ViewModel {
       }
     } else {
       for (const f of FIELDS) p[f] = 0;
+    }
+    // A melee swing overrides the throw pose, and the item never leaves the hand.
+    const mt = s.msSinceMelee ?? 1e9, mw = s.meleeWeapon;
+    if (mw !== undefined && mw !== null && mt < MELEE[mw]!.cycleMs) {
+      sample(MELEE_KEYS[mw], mt, p);
+      if (reducedMotion) for (const f of FIELDS) p[f] *= 0.5;
+      visible = true;
     }
     // Weapon switch: lower out, raise in (eased, with a small tilt).
     let sw = 0;

@@ -1,0 +1,227 @@
+{
+ "checks": [
+  {
+   "name": "practice explains melee once at the first spawn (V, Chanclazo, Revés)",
+   "ok": true,
+   "detail": "Up close, V swings your chancla: Chanclazo with La Chancla, Revés with La Pesada."
+  },
+  {
+   "name": "the weapon slot names the melee attack beside the throw (V · Chanclazo)",
+   "ok": true,
+   "detail": "V Chanclazo"
+  },
+  {
+   "name": "El Chanclazo (V with La Chancla) hits an opponent in reach for 25",
+   "ok": true,
+   "detail": {
+    "hp": 75
+   }
+  },
+  {
+   "name": "the sandal stays in the first-person hand through the swing, and nothing is thrown",
+   "ok": true,
+   "detail": {
+    "inHand": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "throws": 0
+   }
+  },
+  {
+   "name": "the confirmed hit names its swing and weapon (server event)",
+   "ok": true,
+   "detail": [
+    {
+     "m": 1,
+     "w": 0,
+     "d": 25,
+     "head": true
+    }
+   ]
+  },
+  {
+   "name": "a swing out of reach misses: no damage, a whiff from the server",
+   "ok": true,
+   "detail": {
+    "hp": 75,
+    "whiffs": 1
+   }
+  },
+  {
+   "name": "holding V swings once, never again until it is pressed again",
+   "ok": true,
+   "detail": {
+    "swings": 1
+   }
+  },
+  {
+   "name": "V while the menu is open starts no swing",
+   "ok": true,
+   "detail": {
+    "swings": 0
+   }
+  },
+  {
+   "name": "with La Pesada in hand the slot says Revés",
+   "ok": true,
+   "detail": "V Revés"
+  },
+  {
+   "name": "El Revés (V with La Pesada) to the face hits for 45 and counts as a head hit",
+   "ok": true,
+   "detail": {
+    "hp": 55,
+    "head": true
+   }
+  },
+  {
+   "name": "one attached roller comes off her head (server state and what the client shows)",
+   "ok": true,
+   "detail": {
+    "before": 15,
+    "after": 14,
+    "ru": [
+     0
+    ]
+   }
+  },
+  {
+   "name": "a roller flies (pooled effect)",
+   "ok": true,
+   "detail": {
+    "f0": {
+     "active": 0,
+     "spawned": 0
+    },
+    "f1": {
+     "active": 1,
+     "spawned": 1
+    }
+   }
+  },
+  {
+   "name": "everyone sees the same missing roller: the snapshot carries her hairstyle",
+   "ok": true,
+   "detail": {
+    "shown": 14,
+    "server": 14
+   }
+  },
+  {
+   "name": "the flying roller expires (nothing left in flight)",
+   "ok": true,
+   "detail": {
+    "active": 0,
+    "spawned": 1
+   }
+  },
+  {
+   "name": "an El Revés head hit eliminates her and scatters what was left of her rollers",
+   "ok": true,
+   "detail": {
+    "alive": false,
+    "ruleros": 0,
+    "scatter": [
+     3
+    ]
+   }
+  },
+  {
+   "name": "the kill feed names the attack",
+   "ok": true,
+   "detail": "Revés"
+  },
+  {
+   "name": "she respawns with a full head of rollers",
+   "ok": true,
+   "detail": {
+    "ruleros": 15
+   }
+  },
+  {
+   "name": "every melee outcome arrived once (no duplicates handled)",
+   "ok": true,
+   "detail": {
+    "hits": 4,
+    "dropped": 0
+   }
+  },
+  {
+   "name": "rollers in flight stay within the pool (cap 12)",
+   "ok": true
+  },
+  {
+   "name": "the melee button is a generous target, on screen and clear of Throw, Jump, Crouch and Switch",
+   "ok": true,
+   "detail": {
+    "melee": {
+     "x": 713,
+     "y": 199,
+     "w": 62,
+     "h": 62
+    }
+   }
+  },
+  {
+   "name": "the melee button says Chanclazo with La Chancla in hand",
+   "ok": true,
+   "detail": "Chanclazo"
+  },
+  {
+   "name": "one tap on melee, with the stick and a look drag held, makes exactly one swing",
+   "ok": true,
+   "detail": {
+    "presses": 1,
+    "swings": 1
+   }
+  },
+  {
+   "name": "throw and jump work together with the stick after a melee swing",
+   "ok": true,
+   "detail": {
+    "throws": 3,
+    "jumping": true
+   }
+  },
+  {
+   "name": "after switching to La Pesada the button says Revés",
+   "ok": true,
+   "detail": "Revés"
+  },
+  {
+   "name": "no page zoom or scroll from the taps",
+   "ok": true,
+   "detail": {
+    "scale": 1,
+    "sx": 0,
+    "sy": 0
+   }
+  },
+  {
+   "name": "bots use both El Chanclazo and El Revés, and connect, in an ordinary practice match",
+   "ok": true,
+   "detail": {
+    "0": 2,
+    "1": 1,
+    "hits": 2
+   }
+  },
+  {
+   "name": "no request or socket left this machine",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": []
+  }
+ ]
+}

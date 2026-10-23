@@ -11,11 +11,16 @@
 //     everyone else's are simulated from the server's throw/bounce/end
 //     events on the same delayed timeline as the players they come from.
 //     Damage and hits are only ever shown when the server confirms them.
+//   * Melee: your own swing starts on screen at once (predicted), with the
+//     same lockout rules as the server so no throw or switch is predicted
+//     that the server would refuse. Whether it connects, the damage and the
+//     ruleros come only from the server's events.
 
-import { MOVE, NET, PROTOCOL_VERSION, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../shared/config';
+import { MELEE, MELEE_BUFFER_MS, MOVE, NET, PROTOCOL_VERSION, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../shared/config';
 import type { Team } from '../../shared/map';
 import { DEFAULT_MAP, mapData, type MapId } from '../../shared/maps';
-import { World, newBody, stepMove, type Body } from '../../shared/physics';
+import { World, eyeHeight, newBody, stepMove, type Body } from '../../shared/physics';
+import { meleeContact } from '../../shared/melee';
 import { BTN, hitboxOf, launch, stepProjectileWorld, type Hitbox, type Projectile, type SimEvent } from '../../shared/sim';
 import { segmentCapsule } from '../../shared/collision';
 import type { ClientMsg, ErrorCode, InputTuple, RoomView, ServerMsg, Snapshot } from '../../shared/protocol';
@@ -39,7 +44,9 @@ export interface RemotePlayer {
   vx: number; vz: number;
   alive: boolean; crouched: boolean; onGround: boolean; protected: boolean; connected: boolean;
   hp: number; weapon: WeaponId;
-  msSinceThrow: number; msSinceHit: number;
+  msSinceThrow: number; msSinceHit: number; msSinceMelee: number;
+  /** Bit i set while roller i is still on her head. */
+  ruleros: number;
 }
 
 export interface ClientProjectile {
@@ -63,6 +70,8 @@ export interface LocalInput {
   fire: boolean;
   jump: boolean;
   crouch: boolean;
+  /** The melee button went down since the last tick (a press, never a hold). */
+  melee?: boolean;
   weapon: WeaponId;
 }
 
@@ -72,6 +81,8 @@ export interface SessionEvents {
   error?(code: ErrorCode): void;
   event?(e: SimEvent, mine: boolean): void;
   localThrow?(weapon: WeaponId): void;
+  /** Your own swing started (predicted): animation and swish. */
+  localMelee?(weapon: WeaponId): void;
   impact?(p: ClientProjectile, pos: [number, number, number], reason: string): void;
   left?(): void;
 }
@@ -131,6 +142,11 @@ export class GameSession {
   switchMs = 0;
   respawnInMs = 0;
   protectedMs = 0;
+  /** Melee lockout left (predicted), ms. */
+  meleeMs = 0;
+  private meleeQueued = false;
+  /** Your current swing, as predicted: seq of the press, and whether it touched anyone on screen. */
+  private swing: { seq: number; weapon: WeaponId; hit: boolean } | null = null;
   private seq = 0;
   private pending: Pending[] = [];
   private outbox: InputTuple[] = [];
@@ -145,6 +161,14 @@ export class GameSession {
   readonly remotes = new Map<number, RemotePlayer>();
   readonly projectiles = new Map<string, ClientProjectile>();
   private localShot = 0;
+  /**
+   * Melee outcomes already handled, by kind and swing id: a repeated event
+   * (a resent snapshot, a reconnect) never plays a second hit, roller or
+   * elimination. Cleared when a new match starts (swing ids restart).
+   */
+  private seenMelee = new Set<string>();
+  /** Duplicate melee events dropped (tests and diagnostics). */
+  duplicatesDropped = 0;
 
   debugLog: Array<Record<string, unknown>> | null = null;
   bytesIn = 0;
@@ -278,6 +302,7 @@ export class GameSession {
         if (m.room.phase === 'lobby' || m.room.phase === 'results') {
           this.projectiles.clear();
         }
+        if (m.room.phase === 'lobby') this.seenMelee.clear();
         this.handlers.room?.(m.room);
         return;
       case 'snap':
@@ -379,13 +404,14 @@ export class GameSession {
     this.lastSnapAt = local;
     const prevPhase = this.snap?.ph;
     this.snap = s;
+    if (s.ph === 'countdown' && prevPhase !== 'countdown') this.seenMelee.clear();
 
     const players = new Map<number, RemotePlayer>();
     for (const t of s.p) {
       players.set(t[0], {
         id: t[0], x: t[1], y: t[2], z: t[3], yaw: t[4], pitch: t[5], vx: t[6], vz: t[7],
         alive: (t[8] & 1) !== 0, crouched: (t[8] & 2) !== 0, onGround: (t[8] & 4) !== 0, protected: (t[8] & 8) !== 0, connected: (t[8] & 16) !== 0,
-        hp: t[9], weapon: t[10] === 1 ? 1 : 0, msSinceThrow: t[11], msSinceHit: t[12],
+        hp: t[9], weapon: t[10] === 1 ? 1 : 0, msSinceThrow: t[11], msSinceHit: t[12], msSinceMelee: t[13] ?? 9999, ruleros: t[14] ?? 15,
       });
     }
     this.history.push({ st: s.st, players });
@@ -413,9 +439,11 @@ export class GameSession {
     this.cooldownMs = me[8];
     this.switchMs = me[9];
     this.weapon = me[10] === 1 ? 1 : 0;
+    this.meleeMs = me[13] ?? 0;
+    this.meleeQueued = (me[6] & 8) !== 0;
     this.pending = this.pending.filter((p) => p.seq > s.ack);
     const frozen = s.ph !== 'playing';
-    for (const p of this.pending) this.simulate(p.inp, frozen, false);
+    for (const p of this.pending) this.simulate(p.inp, frozen, false, p.seq);
     if (!this.alive || !wasAlive || phaseChanged) {
       // Spawns and deaths are teleports, not errors.
       this.correction.x = this.correction.y = this.correction.z = 0;
@@ -432,23 +460,64 @@ export class GameSession {
     this.correction.x += ex; this.correction.y += ey; this.correction.z += ez;
   }
 
-  // One step of local movement plus local cooldown bookkeeping.
-  private simulate(inp: LocalInput, frozen: boolean, live: boolean): boolean {
+  // One step of local movement plus local cooldown bookkeeping. The rules
+  // mirror MatchSim.applyInput, stepMelee and processInputs.
+  private simulate(inp: LocalInput, frozen: boolean, live: boolean, seq: number): boolean {
     let fired = false;
     if (this.cooldownMs > 0) this.cooldownMs = Math.max(0, this.cooldownMs - DT_MS);
     if (this.switchMs > 0) this.switchMs = Math.max(0, this.switchMs - DT_MS);
+    if (this.meleeMs > 0) this.meleeMs = this.meleeMs - DT_MS < 1e-6 ? 0 : this.meleeMs - DT_MS;
     if (!this.alive) return false;
-    if (inp.weapon !== this.weapon) { this.weapon = inp.weapon; this.switchMs = WEAPON_SWITCH_MS; }
+    if (this.meleeMs <= 0 && inp.weapon !== this.weapon) { this.weapon = inp.weapon; this.switchMs = WEAPON_SWITCH_MS; }
     stepMove(this.world, this.body, {
       mx: frozen ? 0 : inp.mx, mz: frozen ? 0 : inp.mz, yaw: inp.yaw, jump: !frozen && inp.jump, crouch: inp.crouch,
     }, DT);
-    if (!frozen && inp.fire && this.cooldownMs <= 0 && this.switchMs <= 0) {
-      this.cooldownMs = WEAPONS[this.weapon]!.cooldownMs;
-      fired = true;
-      if (live) this.predictThrow(inp);
+    if (!frozen) {
+      if (inp.melee) {
+        if (this.meleeMs <= 0 && this.cooldownMs <= 0 && this.switchMs <= 0) this.startSwing(seq, live);
+        else if (Math.max(this.meleeMs, this.cooldownMs, this.switchMs) <= MELEE_BUFFER_MS) this.meleeQueued = true;
+      }
+      if (inp.fire && this.cooldownMs <= 0 && this.switchMs <= 0 && this.meleeMs <= 0) {
+        this.cooldownMs = WEAPONS[this.weapon]!.cooldownMs;
+        fired = true;
+        if (live) this.predictThrow(inp);
+      }
     }
+    this.stepSwing(inp, frozen, live, seq);
     return fired;
   }
+
+  private startSwing(seq: number, live: boolean): void {
+    // A replayed press that was already predicted keeps its record.
+    if (this.swing && this.swing.seq === seq) { this.meleeMs = MELEE[this.swing.weapon]!.cycleMs; this.meleeQueued = false; return; }
+    this.swing = { seq, weapon: this.weapon, hit: false };
+    this.meleeMs = MELEE[this.weapon]!.cycleMs;
+    this.meleeQueued = false;
+    if (live) this.handlers.localMelee?.(this.weapon);
+  }
+
+  // The contact window and the miss penalty, as the server will see them.
+  // Whether the swing touched someone is guessed from what is on screen
+  // (live ticks only; replays reuse the guess). The server's next snapshot
+  // corrects the lockout if the guess was wrong.
+  private stepSwing(inp: LocalInput, frozen: boolean, live: boolean, seq: number): void {
+    const sw = this.swing;
+    if (sw) {
+      const def = MELEE[sw.weapon]!;
+      const age = (seq - sw.seq) * DT_MS + 1e-6;
+      if (live && !sw.hit && !frozen && age >= def.windupMs && age < def.windupMs + def.activeMs) {
+        const eye = { x: this.body.x, y: this.body.y + eyeHeight(this.body), z: this.body.z };
+        const targets = this.displayedEnemyHitboxes().map((h, i) => ({ id: i, ...h }));
+        if (meleeContact(eye, inp.yaw, inp.pitch, def, targets, this.world.near(eye.x - 2, eye.z - 2, eye.x + 2, eye.z + 2, 0))) sw.hit = true;
+      }
+      const end = def.windupMs + def.activeMs;
+      if (age >= end && age - DT_MS < end && !sw.hit) this.meleeMs += def.whiffMs;
+    }
+    if (this.meleeQueued && !frozen && this.meleeMs <= 0 && this.cooldownMs <= 0 && this.switchMs <= 0) this.startSwing(seq, live);
+  }
+
+  /** Your swing in progress: the chancla it uses (for the HUD and the first-person view), or null. */
+  get swingWeapon(): WeaponId | null { return this.meleeMs > 0 && this.swing ? this.swing.weapon : null; }
 
   // Called by the game loop at NET.tickRate with the current controls.
   tick(inp: LocalInput): void {
@@ -460,10 +529,10 @@ export class GameSession {
     const frozen = this.phase !== 'playing';
     // Simulate exactly what the server will receive (the wire rounds values).
     const q: LocalInput = { ...inp, mx: round(inp.mx), mz: round(inp.mz), yaw: round4(inp.yaw), pitch: round4(inp.pitch) };
-    this.simulate(q, frozen, true);
+    this.simulate(q, frozen, true, seq);
     this.pending.push({ seq, inp: q });
     if (this.pending.length > 240) this.pending.shift();
-    const buttons = (q.fire ? BTN.fire : 0) | (q.jump ? BTN.jump : 0) | (q.crouch ? BTN.crouch : 0);
+    const buttons = (q.fire ? BTN.fire : 0) | (q.jump ? BTN.jump : 0) | (q.crouch ? BTN.crouch : 0) | (q.melee ? BTN.melee : 0);
     this.outbox.push([seq, q.mx, q.mz, q.yaw, q.pitch, buttons, q.weapon]);
     // Blend out reconciliation corrections over about 100 ms.
     const k = Math.exp(-DT * 18);
@@ -521,6 +590,8 @@ export class GameSession {
       r.hp = src.hp; r.weapon = src.weapon;
       r.msSinceThrow = src.msSinceThrow + (rt - (tt < 0.5 ? a.st : b.st));
       r.msSinceHit = src.msSinceHit + (rt - (tt < 0.5 ? a.st : b.st));
+      r.msSinceMelee = src.msSinceMelee + (rt - (tt < 0.5 ? a.st : b.st));
+      r.ruleros = src.ruleros;
       r.id = id;
       this.remotes.set(id, r);
     }
@@ -550,6 +621,12 @@ export class GameSession {
   }
 
   private onEvent(e: SimEvent): void {
+    const meleeKey = e.k === 'swing' || e.k === 'whiff' ? `${e.k}:${e.id}` : (e.k === 'hit' || e.k === 'elim' || e.k === 'shielded') && e.m !== undefined ? `${e.k}:${e.m}` : null;
+    if (meleeKey) {
+      if (this.seenMelee.has(meleeKey)) { this.duplicatesDropped++; return; }
+      this.seenMelee.add(meleeKey);
+      if (this.seenMelee.size > 512) this.seenMelee.delete(this.seenMelee.values().next().value!);
+    }
     const mine = 'o' in e ? e.o === this.id : 'a' in e ? e.a === this.id || ('v' in e && e.v === this.id) : 'id' in e && e.id === this.id;
     switch (e.k) {
       case 'throw':

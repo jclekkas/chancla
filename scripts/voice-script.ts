@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { LINES, POOLS } from '../src/audio/lines';
 
 const when: Record<string, string> = {};
-for (const [pool, ids] of Object.entries(POOLS)) for (const id of ids) when[id] = `reaction: ${pool}`;
+for (const [pool, ids] of Object.entries(POOLS)) for (const id of ids) when[id] = when[id] ? `${when[id]}, ${pool}` : `reaction: ${pool}`;
 const NAMES: Record<string, string> = { rosa: 'Doña Rosa', influ: 'El Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000 (wind-up toy cart)', rollcart: 'Serving trolley', pinata: 'Premium party system (robot announcer)', vecina: 'Neighbor' };
 const out: string[] = [
   '# Voice recording script',

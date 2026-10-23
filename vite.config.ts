@@ -26,11 +26,13 @@ function buildId(): string {
   return `${sha} (${env})`;
 }
 
-// Graphics experiment builds are offline-only: no online play and no network
-// connections except to the site itself, so they can never reach the
-// production game server, even if the deployment inherits its address.
+// Experiment builds (graphics, close combat) are offline-only: no online play
+// and no network connections except to the site itself, so they can never
+// reach the production game server, even if the deployment inherits its
+// address. Their protocol may not match production's either.
+const EXPERIMENT_BRANCHES = ['codex/graphics', 'codex/close-combat'];
 const offlineOnly =
-  process.env.GRAPHICS_EXPERIMENT === '1' || (process.env.VERCEL_GIT_COMMIT_REF || '').startsWith('codex/graphics');
+  process.env.GRAPHICS_EXPERIMENT === '1' || EXPERIMENT_BRANCHES.some((b) => (process.env.VERCEL_GIT_COMMIT_REF || '').startsWith(b));
 
 function offlineCsp(): Plugin {
   return {

@@ -73,6 +73,7 @@ export class FpsInput {
   touchMode = false;
   /** Touch look speed, separate from the mouse's. */
   touchSensitivity = 1;
+  private pendingTouchJump = false;
   private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
   /** Called by release(): the touch overlay forgets the fingers it was tracking. */
   onTouchRelease: (() => void) | null = null;
@@ -186,7 +187,10 @@ export class FpsInput {
 
   setTouchButton(b: 'fire' | 'jump' | 'crouch', down: boolean): void {
     this.touch[b] = down && this.enabled;
+    if (b === 'jump' && down && this.enabled) this.pendingTouchJump = true;
   }
+
+  cancelTouchJump(): void { this.pendingTouchJump = false; this.touch.jump = false; }
 
   /** A look drag on the screen, in pixels. */
   addTouchLook(dx: number, dy: number): void {
@@ -213,10 +217,12 @@ export class FpsInput {
     let mx = 0, mz = 0;
     for (const k of this.keys) { const v = MOVE[k]; if (v) { mx += v[0]; mz += v[1]; } }
     const t = this.touch;
+    const jump = t.jump || this.pendingTouchJump;
+    this.pendingTouchJump = false;
     mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
-      jump: this.keys.has('Space') || t.jump,
+      jump: this.enabled && (this.keys.has('Space') || jump),
       crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
       fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
       weapon: this.weapon,
@@ -230,6 +236,7 @@ export class FpsInput {
     this.mouseFire = false;
     this.keyFire = false;
     this.touch.mx = 0; this.touch.mz = 0;
+    this.pendingTouchJump = false;
     this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
     this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }

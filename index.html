@@ -60,10 +60,16 @@
         <!-- Touch controls (phones, tablets): shown only while touch is the active input. -->
         <div class="fps-touch" id="fps-touch" hidden>
           <div class="ft-move" id="ft-move"><div class="ft-base" id="ft-base"><div class="ft-knob" id="ft-knob"></div></div><span class="ft-hint" data-t="touch.moveHint"></span></div>
+          <div class="ft-pad" aria-label="Movement">
+            <button type="button" class="ft-arrow ft-up" data-move-x="0" data-move-z="1" data-t-aria="touch.forward">↑</button>
+            <button type="button" class="ft-arrow ft-left" data-move-x="-1" data-move-z="0" data-t-aria="touch.left">←</button>
+            <button type="button" class="ft-arrow ft-down" data-move-x="0" data-move-z="-1" data-t-aria="touch.back">↓</button>
+            <button type="button" class="ft-arrow ft-right" data-move-x="1" data-move-z="0" data-t-aria="touch.right">→</button>
+          </div>
           <div class="ft-look" id="ft-look"><span class="ft-hint" data-t="touch.lookHint"></span></div>
           <button type="button" class="ft-btn ft-throw" id="ft-throw" data-t-aria="touch.throw"><span class="ft-ico" aria-hidden="true"></span><span class="ft-lbl" data-t="touch.throw"></span></button>
-          <button type="button" class="ft-btn ft-jump" id="ft-jump" data-t-aria="touch.jump"><span aria-hidden="true">⤒</span><span class="ft-lbl" data-t="touch.jump"></span></button>
-          <button type="button" class="ft-btn ft-crouch" id="ft-crouch" aria-pressed="false" data-t-aria="touch.crouch"><span aria-hidden="true">⤓</span><span class="ft-lbl" data-t="touch.crouch"></span></button>
+          <button type="button" class="ft-btn ft-jump" id="ft-jump" data-t-aria="touch.jump"><span aria-hidden="true">↑</span><span class="ft-lbl" data-t="touch.jump"></span></button>
+          <button type="button" class="ft-btn ft-crouch" id="ft-crouch" aria-pressed="false" data-t-aria="touch.crouch"><span aria-hidden="true">↓</span><span class="ft-lbl" data-t="touch.crouch"></span></button>
           <button type="button" class="ft-btn ft-weapon" id="ft-weapon" data-t-aria="touch.weapon"><span aria-hidden="true">⇄</span><span class="ft-lbl" data-t="touch.weapon"></span></button>
           <button type="button" class="ft-btn ft-score" id="ft-score" data-t-aria="touch.scores"><span aria-hidden="true">≡</span><span class="ft-lbl" data-t="touch.scores"></span></button>
         </div>
@@ -195,7 +201,8 @@
       <section id="scr-online" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="online-title">
         <div class="panel">
           <h2 id="online-title" data-t="online.title"></h2>
-          <label class="field"><span data-t="online.name"></span><input id="in-name" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" data-t-ph="online.namePh" /></label>
+          <label class="field"><span data-t="online.name"></span><input id="in-name" aria-describedby="name-help" enterkeyhint="done" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" data-t-ph="online.namePh" /></label>
+          <p class="note name-help" id="name-help" data-t="online.nameHelp"></p>
           <button type="button" class="btn primary" id="btn-create" data-t="online.create"></button>
           <div class="join-row">
             <label class="field grow"><span data-t="online.joinLabel"></span><input id="in-code" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" data-t-ph="online.codePh" /></label>

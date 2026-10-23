@@ -3,6 +3,7 @@
 // (rosa-anim.ts) meet through the joints in rosa-rig.ts; this class keeps
 // the game-facing state: which ruleros are on her head and where they are.
 import * as THREE from 'three';
+import type { WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import type { Quality } from '../settings';
 import { RosaAnimator } from './rosa-anim';
@@ -71,6 +72,9 @@ export class Avatar {
    * body twists, for a third of a second. `side`: +1 knocked to her left, -1 to her right.
    */
   react(head: boolean, side: number): void { this.anim.react(head, side); }
+
+  /** A confirmed miss: a short off-balance follow-through. */
+  whiff(weapon: WeaponId): void { this.anim.whiff(weapon); }
 
   /** Shows the first `n` recovered ruleros on her head (campaign). */
   setRuleros(n: number): void {

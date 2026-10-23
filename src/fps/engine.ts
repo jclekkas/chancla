@@ -13,6 +13,7 @@ import type { ClientProjectile, GameSession } from '../net/session';
 import { audio } from '../audio/audio';
 import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
+import { CombatFx } from './render/combat-fx';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
@@ -60,6 +61,8 @@ export class Engine {
   readonly vm = new ViewModel();
   /** Flying ruleros (cosmetic, pooled, capped). */
   readonly ruleros = new RuleroFx();
+  /** Melee contact, miss and shielded effects (cosmetic, pooled). */
+  readonly fx = new CombatFx();
   private lastLocalMelee = -1e9;
   private localMeleeWeapon: WeaponId = 0;
   /** Effects of other players' melee, played when the delayed render timeline reaches them. */
@@ -114,7 +117,9 @@ export class Engine {
     this.scene.fog = new THREE.Fog(0xf3b07a, 45, 140);
 
     this.world = buildWorld(s.quality);
-    this.scene.add(this.world.group, this.proj.group, this.ruleros.group);
+    this.scene.add(this.world.group, this.proj.group, this.ruleros.group, this.fx.group);
+    this.fx.setQuality(s.quality);
+    this.fx.setReducedMotion(s.reducedMotion);
     this.buildPickups();
     this.buildMenuAvatars();
 
@@ -220,8 +225,10 @@ export class Engine {
     const s = this.settings();
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
+    this.fx.setReducedMotion(s.reducedMotion);
     if (s.quality !== this.quality) {
       this.quality = s.quality;
+      this.fx.setQuality(s.quality);
       this.renderer.shadowMap.enabled = s.quality !== 'low';
       this.scene.remove(this.world.group);
       disposeTree(this.world.group);
@@ -335,6 +342,7 @@ export class Engine {
 
   private clearMelee(): void {
     this.ruleros.clear();
+    this.fx.clear();
     this.fxQueue = [];
     this.heldRuleros.clear();
     this.lastLocalMelee = -1e9;
@@ -400,9 +408,26 @@ export class Engine {
         }
         break;
       }
-      case 'shielded':
+      case 'shielded': {
         if (e.a === me) { audio.play('shielded'); this.hud.sub(t('hud.protected'), 0.8); }
+        const v = e.v === me ? null : s.remotes.get(e.v);
+        if (v && e.m !== undefined) {
+          const show = () => { const r = s.remotes.get(e.v); if (r) this.fx.shielded({ x: r.x, y: r.y + 1.2, z: r.z }); };
+          if (e.a === me) show(); else this.later(this.lastMeleeAt.get(e.m) ?? s.renderTime(), show);
+        }
         break;
+      }
+      case 'whiff': {
+        // A swing that touched nobody: the miss reads on the attacker (you see your own in first person).
+        if (e.a === me) break;
+        this.later(e.tm, () => {
+          const r = s.remotes.get(e.a);
+          if (!r) return;
+          this.fx.meleeWhiff(e.w, { x: r.x, y: r.y, z: r.z }, r.yaw);
+          this.avatars.get(e.a)?.whiff(e.w);
+        });
+        break;
+      }
       case 'elim': {
         this.stat(e.a).k++;
         this.stat(e.v).d++;
@@ -473,6 +498,8 @@ export class Engine {
         const left = { x: -Math.cos(yaw), z: Math.sin(yaw) };
         av.react(e.head, dir.x * left.x + dir.z * left.z);
       }
+      // Your own face: the contact effect would fill the view, so it is not drawn.
+      if (e.v !== me) this.fx.meleeHit(e.w, { x: e.p[0], y: e.p[1], z: e.p[2] }, dir, e.head);
       if (ru?.length) this.popRuleros(e.v, ru, dir, false);
     };
     if (involved) go(); else this.later(at, go);
@@ -660,6 +687,7 @@ export class Engine {
     if (!this.paused) s.updateProjectiles(dt);
     this.runFx(s);
     this.ruleros.update(this.paused ? 0 : dt);
+    this.fx.update(this.paused ? 0 : dt, this.camera);
 
     const team = s.team;
     if (team !== null) this.vm.setTeam(team);

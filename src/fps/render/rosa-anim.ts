@@ -85,6 +85,9 @@ export class RosaAnimator {
     this.reactSide = side >= 0 ? 1 : -1;
   }
 
+  /** A confirmed miss (placeholder: the animation pass adds the off-balance follow-through). */
+  whiff(_weapon: WeaponId): void { /* placeholder */ }
+
   update(s: AvatarState, dt: number, reducedMotion: boolean): void {
     const r = this.rig;
     const def = WEAPONS[s.weapon]!;

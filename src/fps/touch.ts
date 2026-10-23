@@ -22,6 +22,9 @@ const DEAD = 0.12;
 export class FpsTouch {
   private bag = new ListenerBag();
   private stickId = -1;
+  private arrows = new Map<number, { el: HTMLElement; x: number; z: number }>();
+  private stickX = 0;
+  private stickZ = 0;
   private ox = 0;
   private oy = 0;
   private lookId = -1;
@@ -41,7 +44,7 @@ export class FpsTouch {
   private jumpBtn: HTMLElement;
   private crouchBtn: HTMLElement;
   /** Pointers currently tracked (tests and the debug API). */
-  get active(): number { return [this.stickId, this.lookId, this.throwId, this.jumpId].filter((x) => x !== -1).length; }
+  get active(): number { return [this.stickId, this.lookId, this.throwId, this.jumpId].filter((x) => x !== -1).length + this.arrows.size; }
 
   constructor(private input: FpsInput) {
     const $ = (id: string) => document.getElementById(id)!;
@@ -56,6 +59,24 @@ export class FpsTouch {
     const weapon = $('ft-weapon');
     const score = $('ft-score');
     input.onTouchRelease = () => this.forget();
+
+    // Arrow buttons have independent fingers and combine for diagonal movement.
+    for (const el of this.root.querySelectorAll<HTMLElement>('[data-move-x]')) {
+      this.bag.on<PointerEvent>(el, 'pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (!this.armed() || !this.input.enabled) return;
+        this.arrows.set(e.pointerId, { el, x: Number(el.dataset.moveX), z: Number(el.dataset.moveZ) });
+        capture(el, e.pointerId); el.classList.add('held'); this.syncMove();
+      });
+      const end = (e: PointerEvent) => {
+        const held = this.arrows.get(e.pointerId);
+        if (!held || held.el !== el) return;
+        this.arrows.delete(e.pointerId);
+        if (![...this.arrows.values()].some((p) => p.el === el)) el.classList.remove('held');
+        this.syncMove();
+      };
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.bag.on<PointerEvent>(el, ev, end);
+    }
 
     // Movement stick.
     this.bag.on<PointerEvent>(move, 'pointerdown', (e) => {
@@ -80,7 +101,7 @@ export class FpsTouch {
       let x = dx / STICK_RADIUS, z = -dy / STICK_RADIUS;
       const m = Math.hypot(x, z);
       if (m < DEAD) { x = 0; z = 0; } else { const k = (m - DEAD) / (1 - DEAD) / m; x *= k; z *= k; }
-      this.input.setTouchMove(x, z);
+      this.stickX = x; this.stickZ = z; this.syncMove();
     });
     const endStick = (e: PointerEvent) => { if (e.pointerId === this.stickId) this.dropStick(); };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.bag.on<PointerEvent>(move, ev, endStick);
@@ -132,7 +153,7 @@ export class FpsTouch {
       this.jumpBtn.classList.add('held');
       this.input.setTouchButton('jump', true);
     });
-    const endJump = (e: PointerEvent) => { if (e.pointerId === this.jumpId) this.dropJump(); };
+    const endJump = (e: PointerEvent) => { if (e.pointerId === this.jumpId) this.dropJump(e.type !== 'pointerup'); };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.bag.on<PointerEvent>(this.jumpBtn, ev, endJump);
 
     // Crouch (toggle), weapon switch and scoreboard: taps.
@@ -173,7 +194,10 @@ export class FpsTouch {
   forget(): void {
     if (this.stickId !== -1) this.dropStick();
     if (this.throwId !== -1) this.dropThrow();
-    if (this.jumpId !== -1) this.dropJump();
+    if (this.jumpId !== -1) this.dropJump(true);
+    this.input.cancelTouchJump();
+    for (const p of this.arrows.values()) p.el.classList.remove('held');
+    this.arrows.clear(); this.stickX = 0; this.stickZ = 0; this.syncMove();
     this.lookId = -1;
     if (this.crouchOn && !this.input.touchCrouch) { this.crouchOn = false; this.syncCrouch(); }
   }
@@ -188,7 +212,7 @@ export class FpsTouch {
 
   private dropStick(): void {
     this.stickId = -1;
-    this.input.setTouchMove(0, 0);
+    this.stickX = 0; this.stickZ = 0; this.syncMove();
     this.knobAt(0, 0);
     this.base.classList.remove('on');
     this.base.style.left = '';
@@ -201,10 +225,18 @@ export class FpsTouch {
     this.input.setTouchButton('fire', false);
   }
 
-  private dropJump(): void {
+  private dropJump(cancel = false): void {
+    if (cancel) this.input.cancelTouchJump();
     this.jumpId = -1;
     this.jumpBtn.classList.remove('held');
     this.input.setTouchButton('jump', false);
+  }
+
+  private syncMove(): void {
+    let x = this.stickX, z = this.stickZ;
+    for (const p of this.arrows.values()) { x += p.x; z += p.z; }
+    const length = Math.max(1, Math.hypot(x, z));
+    this.input.setTouchMove(x / length, z / length);
   }
 
   private syncCrouch(): void {

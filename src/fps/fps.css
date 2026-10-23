@@ -562,3 +562,15 @@ body.mouse-captured #btn-menu { display: none; }
 body.mouse-captured .esc-hint { display: block; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; padding: 8px 14px; border-radius: 12px; background: rgba(46, 24, 70, 0.82); border: 2px solid rgba(244, 230, 200, 0.6); }
 body.touch-input .menu-key { display: none; }
 .build-note { margin: 0; font-size: 12px; opacity: 0.75; }
+
+/* Large, labeled mobile actions and a tappable directional pad. */
+.ft-pad { position: absolute; z-index: 2; left: calc(22px + var(--safe-l)); bottom: calc(32px + var(--safe-b)); display: grid; grid-template: repeat(3, 48px) / repeat(3, 48px); gap: 4px; pointer-events: none; }
+.ft-arrow { pointer-events: auto; touch-action: none; border: 2px solid var(--cream); border-radius: 14px; background: rgba(46,24,70,.8); color: white; font: bold 32px/1 sans-serif; padding: 0; }
+.ft-arrow.held { background: var(--cream); color: var(--violet-deep); }
+.ft-up { grid-area: 1 / 2; } .ft-left { grid-area: 2 / 1; } .ft-down { grid-area: 3 / 2; } .ft-right { grid-area: 2 / 3; }
+.ft-base:not(.on) { opacity: 0; }
+.ft-jump { width: 80px; height: 80px; right: calc(138px + var(--safe-r)); bottom: calc(24px + var(--safe-b)); background: #246c70; font-size: 32px; }
+.ft-crouch { bottom: calc(116px + var(--safe-b)); }
+.ft-btn .ft-lbl { font-size: 12px; }
+body.touch-input .weapons { pointer-events: none; bottom: calc(8px + var(--safe-b)); }
+.name-help { margin-top: 0; }

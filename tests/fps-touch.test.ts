@@ -34,6 +34,37 @@ beforeEach(() => {
 });
 
 describe('touch controls', () => {
+  it('a quick jump tap survives until the next simulation tick, then clears', () => {
+    ptr('pointerdown', $('ft-jump'), 4, 700, 320);
+    ptr('pointerup', $('ft-jump'), 4, 700, 320);
+    expect(input.sample().jump).toBe(true);
+    expect(input.sample().jump).toBe(false);
+    ptr('pointerdown', $('ft-jump'), 4, 700, 320);
+    ptr('pointerup', $('ft-jump'), 4, 700, 320);
+    input.release();
+    expect(input.sample().jump).toBe(false);
+  });
+
+  it('arrow movement combines diagonally with jump and throw and releases independently', () => {
+    const up = document.querySelector('.ft-up')!;
+    const right = document.querySelector('.ft-right')!;
+    ptr('pointerdown', up, 10, 100, 200);
+    ptr('pointerdown', right, 11, 150, 250);
+    ptr('pointerdown', $('ft-jump'), 12, 700, 320);
+    ptr('pointerdown', $('ft-throw'), 13, 780, 320);
+    const c = input.sample();
+    expect(c.mx).toBeCloseTo(Math.SQRT1_2);
+    expect(c.mz).toBeCloseTo(Math.SQRT1_2);
+    expect(c.jump && c.fire).toBe(true);
+    ptr('pointercancel', right, 11, 150, 250);
+    expect(input.sample().mx).toBe(0);
+    expect(input.sample().mz).toBe(1);
+    input.release();
+    expect(input.sample()).toMatchObject({mx: 0, mz: 0, jump: false, fire: false});
+    expect(touch.active).toBe(0);
+    expect(up.classList.contains('held')).toBe(false);
+  });
+
   it('move, look and throw at once, each finger on its own control', () => {
     const y0 = input.yaw;
     ptr('pointerdown', $('ft-move'), 1, 100, 300);

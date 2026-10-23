@@ -31,6 +31,13 @@ async function waitHttp(url: string, ms = 20000): Promise<boolean> {
   return false;
 }
 
+// Software rendering on a busy machine can take a long time per frame.
+async function snap(p: Page, file: string): Promise<void> {
+  for (let i = 0; ; i++) {
+    try { await p.screenshot({ path: file, timeout: 120000 }); return; } catch (e) { if (i >= 2) throw e; }
+  }
+}
+
 async function run(p: Page, ms: number): Promise<void> { for (let t = 0; t < ms; t += 50) await p.clock.runFor(Math.min(50, ms - t)); }
 
 // The spawn banner and centre messages ("YOU ARE ON TEAM SOL", "¡A la
@@ -41,7 +48,7 @@ const HIDE_TRANSIENT = '#spawn-banner, #center-msg { visibility: hidden !importa
 async function shot(p: Page, name: string, label: string): Promise<void> {
   await p.clock.runFor(1000 / 60);
   const file = path.join(OUT, `${name}.png`);
-  await p.screenshot({ path: file });
+  await snap(p, file);
   shots.push({ file: path.basename(file), label });
 }
 
@@ -294,7 +301,7 @@ const marks: Array<{ frame: number; label: string }> = [];
 async function film(p: Page, ms: number, stepMs = 1000 / 30): Promise<void> {
   for (let t = 0; t < ms - 1e-6; t += stepMs) {
     await p.clock.runFor(stepMs);
-    await p.screenshot({ path: path.join(OUT, `f-${String(frame++).padStart(4, '0')}.png`) });
+    await snap(p, path.join(OUT, `f-${String(frame++).padStart(4, '0')}.png`));
   }
 }
 const mark = (label: string) => marks.push({ frame, label });

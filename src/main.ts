@@ -1,9 +1,13 @@
 import './styles.css';
+import { inject } from '@vercel/analytics';
 import { applyDom, detectLang, setLang, t } from './i18n/i18n';
 import type { StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, defaultSettings } from './persistence/storage';
 import { inputProfile } from './ui/device';
 import { installDiag } from './diag';
+
+// Initialize Vercel Web Analytics
+inject();
 
 installDiag('arcade');
 

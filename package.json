@@ -29,6 +29,7 @@
     "e2e:soak": "node --import tsx scripts/soak-e2e.ts",
     "music:playlist": "python3 scripts/music/playlist.py",
     "perf:mobile": "node --import tsx scripts/perf-mobile.ts",
+    "capture:maps": "node --import tsx scripts/map-capture.ts",
     "perf:maps": "node --import tsx scripts/perf-maps.ts",
     "shots:maps": "node --import tsx scripts/map-shots.ts",
     "smoke:online": "node --import tsx scripts/online-smoke.ts"

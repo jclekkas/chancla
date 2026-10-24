@@ -9,6 +9,9 @@ import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTextu
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
 import { FOCAL_MATS, buildFocal } from './patio-focal';
+import type { DressingModule } from './map-dressing';
+import { PLAZA_DRESSING } from './plaza-dressing';
+import { FIESTA_DRESSING } from './fiesta-dressing';
 import { patioGround, patioLight } from './patio-materials';
 import type { Quality } from '../settings';
 
@@ -83,11 +86,18 @@ const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
   const map = opts.map ?? EL_PATIO;
-  // Graphics experiment: the El Patio arena itself (not a campaign layout,
-  // which also builds on El Patio's map) is drawn with the patio kit.
-  const patioKit = map === EL_PATIO && !opts.boxes && sectionEnabled();
+  // Graphics experiment: the arena maps themselves (not a campaign layout,
+  // which also builds on El Patio's map) are drawn with the El Patio kit.
+  // `patioKit` keeps what belongs to El Patio alone: the café and Panadería
+  // hero blocks, the paving zones, the fountain path rings and its focal
+  // objects (patio-focal.ts).
+  const kit = !opts.boxes && sectionEnabled();
+  const patioKit = kit && map === EL_PATIO;
+  // A map's own props (map-dressing.ts): La Plaza's market, La Fiesta's party.
+  const dressing: DressingModule | null = !kit ? null : map.id === 'plaza' ? PLAZA_DRESSING : map.id === 'fiesta' ? FIESTA_DRESSING : null;
+  const dressed = (k: 'awnings' | 'trees' | 'danceFloor') => !!dressing?.decor.has(k);
   const th0 = THEMES[opts.theme ?? 'afternoon'];
-  const th: Theme = patioKit ? { ...th0, ...patioLight({ hemi: th0.hemi, sun: th0.sun }) } : th0;
+  const th: Theme = kit ? { ...th0, ...patioLight({ hemi: th0.hemi, sun: th0.sun }) } : th0;
   const decor = map.decor ?? EL_PATIO.decor!;
   const bd = map.bounds;
   const group = new THREE.Group();
@@ -137,14 +147,14 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // El Patio: one repeating paving texture, with production's ground zones
   // (streets, team courts) kept as vertex tints, and the fountain's path
   // rings as a flat mesh (they were painted into production's ground canvas).
-  const pg = patioKit ? patioGround(quality, decor.ground, true) : null;
+  const pg = kit ? patioGround(quality, decor.ground, patioKit) : null;
   const ground = pg
     ? new THREE.Mesh(pg.geometry, pg.material)
     : new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18) }));
   if (!pg) ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
-  if (pg) group.add(fountainRings());
+  if (pg && patioKit) group.add(fountainRings());
   const beyond = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), toon(0xc9a27a));
   beyond.rotation.x = -Math.PI / 2;
   beyond.position.y = -0.02;
@@ -159,11 +169,12 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // Graphics experiment: the café section gets the detailed kit (section.ts);
   // its boxes skip the generic dressing below. Collision is unchanged.
-  const sectionBoxes: MapBox[] = [], focalBoxes: MapBox[] = [];
+  const sectionBoxes: MapBox[] = [], focalBoxes: MapBox[] = [], dressBoxes: MapBox[] = [];
   for (const bx of opts.boxes ?? map.boxes) {
-    if (patioKit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    if (kit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
     // El Patio's fountain, statue and kiosks at the kit's quality (patio-focal.ts); the kiosks keep their signs.
     if (patioKit && FOCAL_MATS.has(bx.mat)) { focalBoxes.push(bx); if (bx.mat === 'kiosk') kioskSigns(bx); continue; }
+    if (dressing?.mats.has(bx.mat)) { dressBoxes.push(bx); if (bx.mat === 'kiosk') kioskSigns(bx); continue; }
     addBox(bx);
   }
 
@@ -494,8 +505,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     const hgt = 6 + ((i * 7) % 5) * 1.6;
     const m = new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * r, hgt / 2, Math.sin(a) * r), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(9, hgt, 6));
     batch.addMesh(toon([0xd8765a, 0xf1dfbc, 0x7cc7bb, 0xf0b45a, 0x8a6aa8][i % 5]!, { map: stucco }), UNIT, m);
-    if (patioKit) {
-      // El Patio: the skyline gets the same roofline as the arena's houses
+    if (kit) {
+      // The skyline gets the same roofline as the arena's houses
       // (a cream cornice and a terracotta tile slab), instanced: no new draws.
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       trims.add(x, hgt + 0.1, z, 9.3, 0.2, 6.3, -a, COLORS.cream);
@@ -514,7 +525,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ---------------------------------------------------- map-specific dressing
   // Awnings over market stalls: the poles stand inside the stall's own footprint.
-  for (const a of decor.awnings ?? []) {
+  for (const a of dressed('awnings') ? [] : decor.awnings ?? []) {
     const stall = (opts.boxes ?? map.boxes).find((q) => q.mat === 'stall' && q.minX < a.maxX && q.maxX > a.minX && q.minZ < a.maxZ && q.maxZ > a.minZ);
     const aw = a.maxX - a.minX;
     for (let i = 0; i < 4; i++) batch.add(toon(i % 2 ? 0xffffff : a.color), boxGeo(a.minX + (aw / 4) * i, a.y, a.minZ, a.minX + (aw / 4) * (i + 1), a.y + 0.08, a.maxZ, 1));
@@ -526,14 +537,14 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     }
   }
   // Trees growing out of planters: trunk inside the planter, canopy above head height.
-  for (const tr of decor.trees ?? []) {
+  for (const tr of dressed('trees') ? [] : decor.trees ?? []) {
     batch.add(toon(COLORS.woodDark), boxGeo(tr.x - 0.12, tr.y, tr.z - 0.12, tr.x + 0.12, 3.3, tr.z + 0.12, 1));
     for (const [dx, dy, dz, r] of [[0, 4.1, 0, 1.15], [0.7, 3.8, 0.3, 0.8], [-0.6, 3.9, -0.4, 0.85], [0.1, 4.6, -0.2, 0.75]] as const) {
       bushes.add(tr.x + dx, dy, tr.z + dz, r * 2, r * 1.6, r * 2, dx, dy > 4.2 ? COLORS.leaf : COLORS.leafDark);
     }
   }
   // Dance floor tiles, painted flush with the ground.
-  if (decor.danceFloor) {
+  if (decor.danceFloor && !dressed('danceFloor')) {
     const df = decor.danceFloor;
     const n = 8, step = (df.r / n) * 1.2;
     for (let i = -n; i < n; i++) for (let j = -n; j < n; j++) {
@@ -548,9 +559,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
-  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality); group.add(sec.group); calls += sec.calls; }
+  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality, { heroZone: patioKit, banners: decor.banners ?? [] }); group.add(sec.group); calls += sec.calls; }
   const focal = focalBoxes.length ? buildFocal(focalBoxes, quality) : null;
   if (focal) { group.add(focal.group); calls += focal.calls; }
+  const dress = dressing ? dressing.build(dressBoxes, decor, quality) : null;
+  if (dress) { group.add(dress.group); calls += dress.calls; }
   const add = (im: THREE.InstancedMesh | null) => { if (im) { group.add(im); calls++; } };
   add(glass.build(UNIT, toon(0x3a2a52, { emissive: 0x120a20 })));
   add(frames.build(UNIT, toon(0xffffff)));
@@ -582,6 +595,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       if (water) (water.material as THREE.MeshToonMaterial).emissive.setHSL(0.52, 0.6, 0.08 + Math.sin(t * 2) * 0.02);
       if (statue) statue.rotation.y = 0.4 + Math.sin(t * 0.3) * 0.1;
       focal?.update(t);
+      dress?.update?.(t);
       const dt = Math.min(0.1, Math.max(0, t - lastT));
       lastT = t;
       pinata?.step(dt, t);

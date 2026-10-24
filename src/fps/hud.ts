@@ -40,7 +40,7 @@ export class Hud {
   private el = {
     root: $('hud'), solScore: $('sc-sol'), lunaScore: $('sc-luna'), timer: $('timer'), practice: $('hud-practice'),
     killfeed: $('killfeed'), net: $('net'), netPing: $('net-ping'), fps: $('fps'),
-    cd: $('cd-ring'), hitmarker: $('hitmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
+    cd: $('cd-ring'), hitmarker: $('hitmarker'), missmarker: document.getElementById('missmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
     region: $('region'), hp: $('hp'), hpFill: $('hp-fill'), hpNum: $('hp-num'), protect: $('protect'),
     slots: Array.from(document.querySelectorAll<HTMLElement>('.wslot')), conn: $('banner-conn'),
     vigHurt: $('vig-hurt'), vigLow: $('vig-low'), names: $('names'), sb: $('scoreboard'), sbBody: $('sb-body'),
@@ -50,6 +50,7 @@ export class Hud {
   };
   private bannerT = 0;
   private hitT = 0;
+  private missT = 0;
   private hurtT = 0;
   private centerT = 0;
   private subT = 0;
@@ -76,7 +77,8 @@ export class Hud {
     this.el.killfeed.innerHTML = '';
     this.el.center.hidden = true;
     this.el.sub.hidden = true;
-    this.hitT = this.hurtT = this.centerT = this.subT = 0;
+    this.hitT = this.missT = this.hurtT = this.centerT = this.subT = 0;
+    this.el.missmarker?.classList.remove('on');
     for (const f of this.floats) f.el.remove();
     this.floats = [];
     for (const a of this.dmgArcs) a.el.remove();
@@ -103,6 +105,16 @@ export class Hud {
     h.classList.toggle('head', kind === 'head');
     h.classList.toggle('kill', kind === 'kill');
     this.hitT = kind === 'kill' ? 0.32 : 0.18;
+  }
+
+  /** Your own confirmed miss: pale air arcs on the side the swing finished (+1 right, -1 left). Never a hit marker. */
+  missMarker(side: 1 | -1): void {
+    const m = this.el.missmarker;
+    if (!m) return;
+    this.el.hitmarker.classList.remove('on');
+    m.classList.remove('r', 'l');
+    m.classList.add('on', side > 0 ? 'r' : 'l');
+    this.missT = 0.2;
   }
 
   hurt(fromAngle: number | null): void {
@@ -145,6 +157,7 @@ export class Hud {
 
   update(f: HudFrame, dt: number, myYaw: number): void {
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) this.el.hitmarker.classList.remove('on');
+    if (this.missT > 0 && (this.missT -= dt) <= 0) this.el.missmarker?.classList.remove('on');
     if (this.hurtT > 0 && (this.hurtT -= dt) <= 0) this.el.vigHurt.classList.remove('on');
     if (this.centerT > 0 && (this.centerT -= dt) <= 0) this.el.center.hidden = true;
     if (this.subT > 0 && (this.subT -= dt) <= 0) this.el.sub.hidden = true;

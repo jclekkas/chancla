@@ -225,6 +225,17 @@ export class FpsTouch {
     this.meleeBtn.hidden = !on;
   }
 
+  /** Your own swing missed (confirmed by the server): a short nudge of the melee button. */
+  meleeMiss(): void {
+    const b = this.meleeBtn;
+    b.classList.remove('miss');
+    void b.offsetWidth; // restart the animation for back-to-back misses
+    b.classList.add('miss');
+    clearTimeout(this.missFlash);
+    this.missFlash = window.setTimeout(() => b.classList.remove('miss'), 320);
+  }
+  private missFlash = 0;
+
   /** Names the melee button after the attack the chancla in hand makes. */
   setMelee(label: string, heavy: boolean, ready: boolean): void {
     if (this.meleeLbl && this.meleeLbl.textContent !== label) this.meleeLbl.textContent = label;

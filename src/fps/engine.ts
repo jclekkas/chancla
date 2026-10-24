@@ -14,6 +14,7 @@ import { audio } from '../audio/audio';
 import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
 import { CombatFx } from './render/combat-fx';
+import { missFeedback } from './miss-feedback';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
@@ -418,8 +419,8 @@ export class Engine {
         break;
       }
       case 'whiff': {
-        // A swing that touched nobody: the miss reads on the attacker (you see your own in first person).
-        if (e.a === me) break;
+        // A swing that touched nobody: the miss reads on the attacker.
+        if (e.a === me) { this.ownWhiff(e.w); break; }
         this.later(e.tm, () => {
           const r = s.remotes.get(e.a);
           if (!r) return;
@@ -463,6 +464,20 @@ export class Engine {
         break;
     }
   }
+
+  /** Your own swing missed (confirmed): the touch button's nudge (set by main). */
+  onOwnMiss: ((weapon: WeaponId) => void) | null = null;
+
+  // Your own confirmed miss (the session has already deduplicated it): shown
+  // on top of the swing in hand, faded by lateness, never by replaying it.
+  private ownWhiff(weapon: WeaponId): void {
+    const f = missFeedback(weapon, this.lastLocalMelee > 0 ? this.localMeleeWeapon : null, performance.now() - this.lastLocalMelee);
+    this.lastOwnMiss = { at: Math.round(performance.now()), weapon, motion: +f.motion.toFixed(2), mark: f.mark };
+    if (f.motion > 0) this.vm.whiff(weapon, f.motion);
+    if (f.mark) { this.hud.missMarker(weapon === 1 ? 1 : -1); this.onOwnMiss?.(weapon); }
+  }
+  /** The last own miss and what it showed (diagnostics and tests). */
+  lastOwnMiss: { at: number; weapon: WeaponId; motion: number; mark: boolean } | null = null;
 
   /** Your own swing started (predicted): animation clock and swish. */
   onLocalMelee(weapon: WeaponId): void {

@@ -453,6 +453,7 @@ async function boot(): Promise<void> {
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
       engine.onContextLost = (lost) => graphicsLost(lost);
+      engine.onOwnMiss = () => touch?.meleeMiss();
       engine.onFatal = () => showCrash();
       engine.start();
     } catch (err) {

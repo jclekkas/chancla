@@ -129,6 +129,8 @@ export class ViewModel {
   private wasGround = true;
   private team: Team | null = null;
   private pose: Pose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, flick: 0 };
+  /** A confirmed miss: the hand overruns the way the swing was going, then settles (seconds since, strength, weapon). */
+  private miss = { t: 1e9, k: 0, weapon: 0 as WeaponId };
   private keys = new Map<string, Key[]>();
   private q = new THREE.Quaternion();
   private restPos = REST_POS.clone();
@@ -165,6 +167,16 @@ export class ViewModel {
       this.keys.set(id, k);
     }
     return k;
+  }
+
+  /**
+   * Your swing missed (confirmed by the server): the hand carries on past
+   * the end of the swing and settles back, layered on the pose it is in, so
+   * a late event never replays the swing. `strength` 0..1 (lateness).
+   */
+  whiff(weapon: WeaponId, strength: number): void {
+    if (strength <= 0) return;
+    this.miss.t = 0; this.miss.k = Math.min(1, strength); this.miss.weapon = weapon;
   }
 
   update(s: ViewState, dt: number, reducedMotion: boolean): void {
@@ -208,6 +220,25 @@ export class ViewModel {
       sample(MELEE_KEYS[mw], mt, p);
       if (reducedMotion) for (const f of FIELDS) p[f] *= 0.5;
       visible = true;
+    }
+    // A confirmed miss. Both swings end with the hand at the edge of the
+    // view (El Revés to the right, El Chanclazo low to the left), so going
+    // further would not be seen: it gives a short push past the end, then
+    // the arm swings back into view toward the middle, off balance, the
+    // chancla wobbling, as if it met nothing. Added to the pose in progress,
+    // so nothing restarts; a late miss arrives weaker (strength).
+    this.miss.t += dt;
+    const md = this.miss.weapon === 1 ? 0.5 : 0.4;
+    if (this.miss.t < md) {
+      const u = this.miss.t / md;
+      const push = u < 0.22 ? Math.sin((u / 0.22) * Math.PI) : 0;
+      const back = u > 0.15 ? Math.sin(((u - 0.15) / 0.85) * Math.PI) * (1 - 0.35 * u) : 0;
+      const wob = Math.sin(u * Math.PI * 5) * (1 - u) * (u > 0.15 ? 1 : 0);
+      const dir = this.miss.weapon === 1 ? 1 : -1, k = this.miss.k * (reducedMotion ? 0.4 : 1) * (this.miss.weapon === 1 ? 1 : 0.85);
+      const lobe = 0.6 * push - back; // + past the end, - back toward the middle
+      p.x += dir * 0.11 * lobe * k; p.yaw -= dir * 0.3 * lobe * k;
+      p.y += (0.07 * back - 0.02 * push) * k; p.pitch -= 0.1 * back * k;
+      p.roll += dir * 0.22 * wob * k; p.flick += 0.45 * wob * k;
     }
     // Weapon switch: lower out, raise in (eased, with a small tilt).
     let sw = 0;

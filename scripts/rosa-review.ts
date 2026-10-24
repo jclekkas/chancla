@@ -381,6 +381,57 @@ async function clip(p: Page): Promise<void> {
   await drive(p, 'ally', null);
 }
 
+/** The crouch and own-miss corrections (VIDEO=fixes): crouch movement, then your own misses with both chanclas. */
+async function fixesClip(p: Page): Promise<void> {
+  const at: [number, number] = [8.6, LANE_Z];
+  for (const [label, me] of process.env.SKIP_CROUCH ? [] : [['side', [7.6, -2.4]], ['front', [4.6, LANE_Z + 0.3]]] as const) {
+    await stage(p, { me: me as [number, number], look: [7.6, 0.75, LANE_Z], spectate: true, bots: { foe: { at, face: [4, LANE_Z] } } });
+    mark(`Crouch, then crouch-walk and back (third person, ${label}, own hand hidden)`);
+    await film(p, 200);
+    await drive(p, 'foe', { hold: 4, yaw: Math.PI / 2 });
+    await film(p, 700);
+    await drive(p, 'foe', { hold: 4, mz: 1, yaw: Math.PI / 2 });
+    await film(p, 900);
+    await drive(p, 'foe', { hold: 4, mz: -1, yaw: Math.PI / 2 });
+    await film(p, 700);
+    await drive(p, 'foe', null);
+    await film(p, 400);
+  }
+  // Your own misses: the foe 3 m away, out of reach (1.5 m).
+  for (const w of [0, 1] as const) {
+    const name = w === 1 ? 'El Revés' : 'El Chanclazo';
+    await stage(p, { me: [6.0, LANE_Z], look: [9.0, 1.45, LANE_Z], bots: { foe: { at: [9.0, LANE_Z] } } });
+    await p.evaluate((w) => { (window as any).__fps.input().weapon = w; }, w);
+    await run(p, 700);
+    mark(`Your own ${name}, out of reach: the confirmed miss (hand overruns, air arcs at the crosshair)`);
+    await film(p, 200);
+    await p.keyboard.press('KeyV');
+    await film(p, 1300);
+    mark(`SLOW MOTION x4: your own ${name} miss`);
+    await run(p, 600);
+    await film(p, 100, 1000 / 120);
+    await p.keyboard.press('KeyV');
+    await film(p, (w === 1 ? 900 : 700), 1000 / 120);
+    await run(p, 900);
+  }
+  await p.evaluate(() => { (window as any).__fps.input().weapon = 0; });
+}
+
+/** Touch: your own misses tapped on the melee button (phone landscape, Low). */
+async function touchMissClip(p: Page): Promise<void> {
+  for (const w of [0, 1] as const) {
+    const name = w === 1 ? 'El Revés' : 'El Chanclazo';
+    await stage(p, { me: [6.0, LANE_Z], look: [9.0, 1.45, LANE_Z], bots: { foe: { at: [9.0, LANE_Z] } } });
+    await p.evaluate((w) => { (window as any).__fps.input().weapon = w; }, w);
+    await run(p, 700);
+    mark(`Phone, touch, Low: ${name} tapped out of reach (the button nudges on the confirmed miss)`);
+    await film(p, 200);
+    await p.tap('#ft-melee');
+    await film(p, 1300);
+  }
+  await p.evaluate(() => { (window as any).__fps.input().weapon = 0; });
+}
+
 async function main(): Promise<void> {
   let preview: ChildProcess | null = null;
   if (!(await waitHttp(SITE, 500))) {
@@ -390,8 +441,11 @@ async function main(): Promise<void> {
   const browser = await launch();
   try {
     if (process.env.VIDEO) {
-      const p = await startPractice(browser, { quality: 'high', viewport: { width: 960, height: 540 }, allies: 1, enemies: 1 });
-      await clip(p);
+      const phone = process.env.VIDEO === 'touch-miss';
+      const p = await startPractice(browser, phone ? { quality: 'low', viewport: { width: 844, height: 390 }, phone: true, allies: 1, enemies: 1 } : { quality: 'high', viewport: { width: 960, height: 540 }, allies: 1, enemies: 1 });
+      if (process.env.VIDEO === 'fixes') await fixesClip(p);
+      else if (phone) await touchMissClip(p);
+      else await clip(p);
       await p.context().close();
       fs.writeFileSync(path.join(OUT, 'marks.json'), JSON.stringify({ fps: 30, frames: frame, marks }, null, 1));
       console.log(`${frame} frames; ${marks.map((m) => `${m.frame} ${m.label}`).join(' | ')}`);

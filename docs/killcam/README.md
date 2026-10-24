@@ -13,13 +13,20 @@ plays, at normal speed: 1.2 s before the finishing blow and 0.3 s after
 it. After that the death screen returns until you can respawn (3 s after
 the elimination).
 
-- **The view.** The replay is seen from the attacker's eyes, using her
-  recorded position and aim, when the recording supports it: she is in the
-  history from the start of the clip, she is alive at the blow, and you were
-  in her line of sight. Otherwise (for example, a lob over cover or a splash
-  round a corner) the camera sits behind you, facing her. That camera is
-  pulled in until nothing is between your eyes and it, so it never clips
-  into a wall or shows a spot you could not see from.
+- **The view.**
+  - **El Chanclazo and El Revés:** a three-quarter view behind and beside
+    the attacker, looking past her shoulder at your face, so her recorded
+    forehand or backhand, you and the contact are all in frame. It uses her
+    right side first, then her left. It is pulled in until the camera is
+    clear of every wall and both of you are in plain sight, and the side
+    chosen at the blow is kept for the whole replay. Her own eyes would show
+    neither her body nor her hand, so the swing would not show.
+  - **Thrown chanclas:** from the attacker's eyes (her recorded position and
+    aim) when the recording supports it: she is in the history from the start
+    of the clip, alive at the blow, and you were in her line of sight.
+  - **Otherwise** (a lob over cover, a splash round a corner, or a melee
+    with no clear spot): behind you, facing her, pulled in until nothing is
+    between your eyes and the camera.
 - **The overlay.**
   - A "● REPLAY" tag.
   - "Eliminated by ☾ Lupita (Luna) · El Revés", with the attacker's team
@@ -29,11 +36,15 @@ the elimination).
     saltar".
   - The live health, scores, timer, crosshair, kill feed and name tags are
     hidden, so nothing live reads as part of the past scene. The respawn
-    countdown and the menu button stay.
+    countdown and the menu button stay. A live subtitle still on screen
+    moves up under the REPLAY tag.
+  - The point of contact stays clear of every overlay, on desktop and phone
+    (checked in the browser).
 - **Skipping.** On desktop: a Skip button, or Space. On touch: a large "Tap
   to skip". Esc keeps its menu behaviour. After a skip you are back on the
-  death screen, and nothing is left held (Space does not become a jump at
-  respawn).
+  death screen. The whole Space press that skipped is used up: holding it,
+  with the keyboard's auto-repeat, through respawn never jumps. The next
+  real press does.
 - **What is shown.** Positions, facing, aim and animation of everyone in
   the recording. The finishing swing (or the thrown chancla in flight) and
   its impact. Hit reactions, misses and blocked blows. The elimination. The
@@ -45,6 +56,8 @@ the elimination).
   overlap. Music and the mute and volume settings are untouched.
 
 Screenshots:
+- [The moment of contact in the melee view](melee-contact-frame.jpg) (El
+  Revés, from the clip).
 - Desktop: [El Chanclazo](desktop-replay-chanclazo.jpg),
   [El Revés](desktop-replay-reves.jpg) and
   [a thrown chancla](desktop-replay-thrown.jpg).
@@ -53,7 +66,8 @@ Screenshots:
 - [Online, local server](online-replay.jpg).
 
 Clip: [clip.mp4](clip.mp4), 6 s at true speed: the elimination, the
-replay and back to play. It was rendered frame by frame on a controlled
+replay of El Revés in the melee view (Lupita steps in, winds up La Pesada,
+the backhand lands with ¡PAF!, the rollers fly) and back to play. It was rendered frame by frame on a controlled
 clock, so the software renderer's frame rate does not show.
 
 ## How it works
@@ -124,20 +138,22 @@ Measured with Chromium and SwiftShader on this Linux container.
 | Recording | about 2 µs per snapshot plus event (Node, 20,000 iterations) |
 | Buffer | 71 snapshot references, 31 of them beyond the session's own 40-snapshot history: about 15 KB (as JSON) with 2 players, scaling with the player count; at most 256 events (a few hundred bytes typical) |
 | Characters | one per player shown, pooled and reused (2 in these tests); after 5 more replays: +1 geometry, +0 textures |
-| Replay logic | 0.18 ms per frame on Low, 0.40 on Medium, 0.74 on High (its own work, without drawing) |
+| Replay logic | about 0.4-0.5 ms per frame (its own work, without drawing) |
 | Download | 408.2 KB to 412.8 KB of gzipped JavaScript (+4.6 KB); no assets |
 
 The whole frame during the replay, compared with the death screen it
 replaces (same spot, same elimination; [costs.json](costs.json)):
 
-| Quality | Death screen: calls / triangles | Replay: calls / triangles |
+| Quality | Death screen: calls / triangles | Melee replay: calls / triangles |
 |---|---|---|
-| High | 94 / 107.9k | 89 / 106.5k |
-| Medium | 89 / 95.6k | 85 / 94.6k |
-| Low | 62 / 54.1k | 57 / 53.3k |
+| High | 93 / 107.8k | 114 / 126.5k |
+| Medium | 90 / 95.7k | 106 / 107.6k |
+| Low | 62 / 54.1k | 67 / 57.5k |
 
-The replay draws slightly less, because the attacker is not drawn from her
-own eyes. Whole-frame times here mostly measure the software rasterizer
+The melee replay draws both Rosas (and, on High and Medium, their
+shadows), as live play with two players in view does. That is the price of
+showing the swing. A replay from the attacker's eyes (throws) draws a
+little less than the death screen. Whole-frame times here mostly measure the software rasterizer
 drawing a different view (eye level instead of looking down). With 5 or 6
 frames per replay on High and Medium, they are not evidence for any device.
 
@@ -145,8 +161,14 @@ frames per replay on High and Medium, they are not evidence for any device.
 
 - **Typecheck and offline build.** No production server address is in the
   bundle.
-- **Unit and multiplayer: 415/415, all suites.** That includes the new
-  `tests/killcam.test.ts`, which runs a real practice match on a test clock:
+- **Unit and multiplayer: 415/415, all suites** at bdc9cb7. After the
+  corrections, the affected suites were rerun: killcam 11/11, Space skip
+  5/5, touch, input and practice pause, 45/45 in all.
+  - `tests/fps-input-skip.test.ts` covers the reported sequence (the skip,
+    its auto-repeat, then keyup: no jump), a fresh press afterwards jumping,
+    a keyup lost to a focus change, Space without a replay, and menu typing.
+    Without the fix, the reported sequence fails.
+  - `tests/killcam.test.ts` runs a real practice match on a test clock:
   - the thrown chancla, El Chanclazo and El Revés to the face;
   - the killer, the team and the attack;
   - the thrown chancla arriving where the server says it hit;
@@ -158,10 +180,17 @@ frames per replay on High and Medium, they are not evidence for any device.
   - the setting off, and a late start;
   - six deaths in a row (bounded buffer, nothing in the match changes);
   - the third-person camera beside 40 walls;
+  - the melee camera beside the same walls: clear of every wall, both
+    players in plain sight, behind and beside the attacker, the side held;
+  - Chanclazo and Revés clips using the melee view;
   - the recording cost.
-- **Browser, offline practice: 24/24** (`scripts/killcam-e2e.ts`;
+- **Browser, offline practice: 29/29** (`scripts/killcam-e2e.ts`;
   [killcam-e2e.json](killcam-e2e.json)):
   - El Chanclazo, El Revés and a thrown chancla;
+  - the melee view, with the attacker drawn mid-swing;
+  - the contact on screen and clear of every overlay, desktop and phone;
+  - Space held through respawn with auto-repeat: no jump; a fresh press
+    jumps;
   - the overlay and the hidden HUD;
   - real-time length;
   - at most two sounds;
@@ -178,7 +207,7 @@ frames per replay on High and Medium, they are not evidence for any device.
   [killcam-mp-e2e.json](killcam-mp-e2e.json)). The victim plays in a
   browser page and a scripted attacker client on the same local server lands
   El Revés three times:
-  - the replay plays from the attacker's view;
+  - the replay plays in the melee view, with the attacker drawn mid-swing;
   - the attacker keeps moving and receiving snapshots meanwhile;
   - the scores agree and each elimination is handled once;
   - Esc online ends the replay;
@@ -193,8 +222,10 @@ frames per replay on High and Medium, they are not evidence for any device.
 - Everyone, you included, is shown from the server's snapshots (20 a
   second), interpolated. Your own movement in the replay can differ slightly
   from the predicted view you had.
-- The attacker's view uses her recorded aim. Her first-person hand is not
-  drawn.
+- The attacker's view (throws only) uses her recorded aim. Her
+  first-person hand is not drawn.
+- The melee view tracks both players from the recorded positions. While
+  she walks in from a distance, the pair is smaller in frame.
 - A thrown chancla's path between the recorded launch, bounce and end
   points follows its weapon's gravity. It is not swept against the walls
   again (a bounce comes from its recorded event).

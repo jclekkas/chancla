@@ -3,7 +3,7 @@
   "name": "online: the victim sees a replay of the Revés from the attacker",
   "ok": true,
   "detail": {
-   "view": "attacker",
+   "view": "melee",
    "killer": 2,
    "attacker": 2
   }
@@ -12,25 +12,28 @@
   "name": "online: the replay plays to its end",
   "ok": true,
   "detail": {
-   "startedAt": 20601,
-   "endedAt": 22210,
+   "startedAt": 19702,
+   "endedAt": 21279,
    "reason": "done",
-   "view": "attacker",
+   "view": "melee",
    "killer": 2,
    "ms": 1500,
    "cues": 2,
    "ruleros": 3,
    "projMax": 0,
-   "shownMs": 1500
+   "shownMs": 1500,
+   "swingShown": true,
+   "jsMsPerFrame": 0.89,
+   "frames": 17
   }
  },
  {
   "name": "online: the attacker keeps playing meanwhile (moves, gets at least 10 snapshots a second, alive)",
   "ok": true,
   "detail": {
-   "moved": 4.07,
-   "msgs": 20,
-   "ms": 945,
+   "moved": 2.34,
+   "msgs": 15,
+   "ms": 711,
    "alive": true
   }
  },

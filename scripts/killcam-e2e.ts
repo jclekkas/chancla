@@ -109,6 +109,26 @@ const hudNow = (p: Page) => p.evaluate(() => {
   };
 });
 
+/**
+ * Where the finishing blow lands on screen, and whether any replay overlay covers it
+ * (the REPLAY tag, the attribution line, Skip or Tap to skip, the respawn countdown).
+ */
+const contactClear = (p: Page) => p.evaluate(() => {
+  const f = (window as any).__fps, e = f.engine(), me = f.session().id, cam = e.camera;
+  const hit = [...e.killcam.rec.events].reverse().find((r: any) => r.e.k === 'hit' && r.e.v === me);
+  if (!hit) return { ok: false, why: 'no hit' };
+  const v = new cam.position.constructor(hit.e.p[0], hit.e.p[1], hit.e.p[2]).project(cam);
+  const W = innerWidth, H = innerHeight, x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * H;
+  const covers: string[] = [];
+  for (const sel of ['.kc-tag', '#kc-by', '#kc-skip', '.kc-tap span', '#sub-msg']) {
+    const el = document.querySelector(sel) as HTMLElement | null;
+    if (!el || !el.checkVisibility({ visibilityProperty: true } as never)) continue;
+    const r = el.getBoundingClientRect();
+    if (x > r.left - 12 && x < r.right + 12 && y > r.top - 12 && y < r.bottom + 12) covers.push(sel);
+  }
+  return { ok: v.z < 1 && x > 0 && x < W && y > 0 && y < H && !covers.length, x: Math.round(x), y: Math.round(y), covers };
+});
+
 const simInfo = (p: Page) => p.evaluate(() => {
   const f = (window as any).__fps, s = f.session(), room = [...f.host().hub.rooms.values()][0], sim = room.sim;
   const me = sim.players.get(s.id), bot = [...sim.players.values()].find((q: any) => q.team !== me.team);
@@ -164,14 +184,19 @@ async function main(): Promise<void> {
       let started = await untilState(p, 'k.active', 3000);
       let k = await state(p);
       const hud = await hudNow(p);
+      // While the replay is still on screen (the screenshot below is slow in software rendering).
+      await untilState(p, 'k.rt >= 100', 2000); // the replay's camera is placed
+      const clear1 = { ...(await contactClear(p)), active: (await state(p)).active };
       await p.screenshot({ path: path.join(OUT, 'desktop-replay-chanclazo.png') });
       check('chanclazo: replay starts after the death screen', started, { view: k.view, length: k.length, killer: k.killer });
-      check('chanclazo: attacker view, 1.5 s (1.2 s before the blow, 0.3 s after)', k.view === 'attacker' && k.length === 1500, { view: k.view, length: k.length });
+      check('chanclazo: the melee view (both of them, not her eyes), 1.5 s (1.2 s before the blow, 0.3 s after)', k.view === 'melee' && k.length === 1500, { view: k.view, length: k.length });
+      check('chanclazo: the contact is on screen and no overlay covers it (desktop)', clear1.ok && clear1.active, clear1);
       check('chanclazo: overlay names killer, team and attack', hud.overlay && /Eliminated by ☾ .+ \(Luna\) · El Chanclazo/.test(hud.by ?? '') && /luna/.test(hud.nameClass ?? ''), hud.by);
       check('chanclazo: live health, scores, timer, crosshair and kill feed hidden', !hud.hp && !hud.scores && !hud.timer && !hud.crosshair && !hud.killfeed, hud);
       check('chanclazo: menu button kept; desktop Skip shown, no tap layer', hud.menu === menuBefore && hud.skip && !hud.tap, hud);
       await untilState(p, '!k.active', 4000);
       k = await state(p);
+      check('chanclazo: the attacker is drawn mid-swing in the replay', k.last?.swingShown === true, k.last);
       check('chanclazo: plays to its end in real time, then the death screen', k.last?.reason === 'done' && k.last.shownMs === 1500 && Math.abs((k.last.endedAt - k.last.startedAt) - 1500) < 400, k.last);
       check('chanclazo: two replay sounds at most (the swing and the slap)', (k.last?.cues ?? 9) <= 2 && (k.last?.cues ?? 0) >= 1, k.last?.cues);
       await untilAlive(p);
@@ -187,6 +212,7 @@ async function main(): Promise<void> {
       k = await state(p);
       // Every roller the server said came off, once; Low (like live play on Low) launches only the first of a scatter.
       const ru = await p.evaluate(() => { const me = (window as any).__fps.session().id, low = (window as any).__fps.engine().killcamState && document.documentElement && JSON.parse(localStorage.getItem('chancla.mp.settings.v1') || '{}').quality === 'low'; const evs = (window as any).__fps.engine().killcam.rec.events.filter((r: any) => (r.e.k === 'hit' || r.e.k === 'elim') && r.e.ru && r.e.v === me).slice(-2); return { sent: evs.reduce((n: number, r: any) => n + r.e.ru.length, 0), expected: evs.reduce((n: number, r: any) => n + (r.e.k === 'elim' && low ? Math.min(1, r.e.ru.length) : r.e.ru.length), 0) }; });
+      check('revés: the melee view, the attacker drawn mid-swing', k.last?.view === 'melee' && k.last?.swingShown === true, k.last);
       check('revés: the rollers the server sent fly once in the replay', k.last?.ruleros === ru.expected && ru.sent >= 1, { shown: k.last?.ruleros, ...ru });
       await untilAlive(p);
 
@@ -202,20 +228,32 @@ async function main(): Promise<void> {
       check('thrown: overlay says La Chancla, thrown', /La Chancla, thrown/.test(hudT.by ?? ''), hudT.by);
       await untilAlive(p);
 
-      // 4. Space skips; nothing held afterwards (no jump on respawn).
+      // 4. Space skips, and the whole press is used up: held through respawn with the
+      //    keyboard's auto-repeat, it never jumps; a fresh press afterwards does.
       await eliminate(p, 'chanclazo');
       await untilState(p, 'k.active', 3000);
       await p.keyboard.down('Space');
       await untilState(p, '!k.active', 1000);
       k = await state(p);
-      await p.keyboard.up('Space');
       check('Space skips the replay', k.last?.reason === 'skip', k.last);
       const deadAfterSkip = await simInfo(p);
       check('after Skip: back to the death screen, nothing held', !deadAfterSkip.alive && deadAfterSkip.held === 0, deadAfterSkip);
+      // Auto-repeat, as a held key sends it (about 30 a second), until well after respawn.
+      await p.evaluate(() => { (window as any).__rep = setInterval(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', repeat: true, bubbles: true, cancelable: true })), 33); });
       await untilAlive(p);
-      await p.waitForTimeout(400);
+      let maxVy = 0, airborne = false;
+      for (let i = 0; i < 12; i++) { await p.waitForTimeout(100); const x = await simInfo(p); maxVy = Math.max(maxVy, x.vy); airborne ||= !x.onGround; }
       after = await simInfo(p);
-      check('after Skip: no jump on respawn', after.onGround && Math.abs(after.vy) < 0.01, after);
+      check('Space held through respawn (auto-repeat): no jump', !airborne && maxVy < 0.01 && after.held === 0, { maxVy, airborne, held: after.held });
+      await p.evaluate(() => clearInterval((window as any).__rep));
+      await p.keyboard.up('Space');
+      await p.waitForTimeout(200);
+      await p.keyboard.down('Space');
+      let jumped = false;
+      for (let i = 0; i < 10 && !jumped; i++) { await p.waitForTimeout(60); const x = await simInfo(p); jumped = x.vy > 0.5 || !x.onGround; }
+      await p.keyboard.up('Space');
+      check('a fresh Space press afterwards jumps', jumped, null);
+      await p.waitForTimeout(800);
 
       // 5. Respawn during playback ends it at once.
       await eliminate(p, 'chanclazo');
@@ -370,6 +408,9 @@ async function main(): Promise<void> {
       await untilState(p, 'k.active', 3000);
       const hud = await hudNow(p);
       check('touch: large Tap to skip, no desktop button', touchOn && hud.tap && !hud.skip, { touchOn, hud });
+      await untilState(p, 'k.rt >= 100', 2000);
+      const clearT = { ...(await contactClear(p)), active: (await state(p)).active };
+      check('touch: the contact is on screen and no overlay covers it (phone)', clearT.ok && clearT.active, clearT);
       await p.touchscreen.tap(422, 300);
       await untilState(p, '!k.active', 1500);
       const k = await state(p);

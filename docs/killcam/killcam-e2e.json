@@ -4,30 +4,41 @@
    "name": "chanclazo: replay starts after the death screen",
    "ok": true,
    "detail": {
-    "view": "attacker",
+    "view": "melee",
     "length": 1500,
     "killer": 1000
    }
   },
   {
-   "name": "chanclazo: attacker view, 1.5 s (1.2 s before the blow, 0.3 s after)",
+   "name": "chanclazo: the melee view (both of them, not her eyes), 1.5 s (1.2 s before the blow, 0.3 s after)",
    "ok": true,
    "detail": {
-    "view": "attacker",
+    "view": "melee",
     "length": 1500
+   }
+  },
+  {
+   "name": "chanclazo: the contact is on screen and no overlay covers it (desktop)",
+   "ok": true,
+   "detail": {
+    "ok": true,
+    "x": 484,
+    "y": 267,
+    "covers": [],
+    "active": true
    }
   },
   {
    "name": "chanclazo: overlay names killer, team and attack",
    "ok": true,
-   "detail": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo"
+   "detail": "Eliminated by ☾ Lupita (Luna) · El Chanclazo"
   },
   {
    "name": "chanclazo: live health, scores, timer, crosshair and kill feed hidden",
    "ok": true,
    "detail": {
     "overlay": true,
-    "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo",
+    "by": "Eliminated by ☾ Lupita (Luna) · El Chanclazo",
     "nameClass": "kc-name luna",
     "hp": false,
     "scores": false,
@@ -44,7 +55,7 @@
    "ok": true,
    "detail": {
     "overlay": true,
-    "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo",
+    "by": "Eliminated by ☾ Lupita (Luna) · El Chanclazo",
     "nameClass": "kc-name luna",
     "hp": false,
     "scores": false,
@@ -57,19 +68,41 @@
    }
   },
   {
-   "name": "chanclazo: plays to its end in real time, then the death screen",
+   "name": "chanclazo: the attacker is drawn mid-swing in the replay",
    "ok": true,
    "detail": {
-    "startedAt": 11312,
-    "endedAt": 12898,
+    "startedAt": 12394,
+    "endedAt": 14026,
     "reason": "done",
-    "view": "attacker",
+    "view": "melee",
     "killer": 1000,
     "ms": 1500,
     "cues": 2,
     "ruleros": 0,
     "projMax": 0,
-    "shownMs": 1500
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.54,
+    "frames": 14
+   }
+  },
+  {
+   "name": "chanclazo: plays to its end in real time, then the death screen",
+   "ok": true,
+   "detail": {
+    "startedAt": 12394,
+    "endedAt": 14026,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.54,
+    "frames": 14
    }
   },
   {
@@ -105,7 +138,26 @@
    }
   },
   {
-   "name": "rev\u00e9s: the rollers the server sent fly once in the replay",
+   "name": "revés: the melee view, the attacker drawn mid-swing",
+   "ok": true,
+   "detail": {
+    "startedAt": 17465,
+    "endedAt": 19118,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 2,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.32,
+    "frames": 14
+   }
+  },
+  {
+   "name": "revés: the rollers the server sent fly once in the replay",
    "ok": true,
    "detail": {
     "shown": 2,
@@ -117,8 +169,8 @@
    "name": "thrown: replay with the chancla in flight",
    "ok": true,
    "detail": {
-    "startedAt": 21371,
-    "endedAt": 22987,
+    "startedAt": 22337,
+    "endedAt": 24045,
     "reason": "done",
     "view": "attacker",
     "killer": 1000,
@@ -126,28 +178,34 @@
     "cues": 2,
     "ruleros": 0,
     "projMax": 1,
-    "shownMs": 1500
+    "shownMs": 1500,
+    "swingShown": false,
+    "jsMsPerFrame": 0.36,
+    "frames": 13
    }
   },
   {
    "name": "thrown: overlay says La Chancla, thrown",
    "ok": true,
-   "detail": "Eliminated by \u263e Lupita (Luna) \u00b7 La Chancla, thrown"
+   "detail": "Eliminated by ☾ Lupita (Luna) · La Chancla, thrown"
   },
   {
    "name": "Space skips the replay",
    "ok": true,
    "detail": {
-    "startedAt": 26156,
-    "endedAt": 26166,
+    "startedAt": 26959,
+    "endedAt": 26993,
     "reason": "skip",
-    "view": "attacker",
+    "view": "melee",
     "killer": 1000,
     "ms": 1500,
     "cues": 0,
     "ruleros": 0,
     "projMax": 0,
-    "shownMs": 0
+    "shownMs": 0,
+    "swingShown": false,
+    "jsMsPerFrame": 0.4,
+    "frames": 1
    }
   },
   {
@@ -168,37 +226,37 @@
    }
   },
   {
-   "name": "after Skip: no jump on respawn",
+   "name": "Space held through respawn (auto-repeat): no jump",
    "ok": true,
    "detail": {
-    "scores": [
-     0,
-     4
-    ],
-    "botHp": 100,
-    "deaths": 4,
-    "kills": 4,
-    "alive": true,
-    "held": 0,
-    "vy": 0,
-    "onGround": true
+    "maxVy": 0,
+    "airborne": false,
+    "held": 0
    }
+  },
+  {
+   "name": "a fresh Space press afterwards jumps",
+   "ok": true,
+   "detail": null
   },
   {
    "name": "respawn during playback ends it immediately and play resumes",
    "ok": true,
    "detail": {
     "last": {
-     "startedAt": 31042,
-     "endedAt": 31170,
+     "startedAt": 34049,
+     "endedAt": 34192,
      "reason": "respawn",
-     "view": "attacker",
+     "view": "melee",
      "killer": 1000,
      "ms": 1500,
      "cues": 0,
      "ruleros": 0,
      "projMax": 0,
-     "shownMs": 0
+     "shownMs": 0,
+     "swingShown": false,
+     "jsMsPerFrame": 0.2,
+     "frames": 1
     },
     "alive": true
    }
@@ -216,16 +274,19 @@
    "name": "Resume: the replay carries on to its end",
    "ok": true,
    "detail": {
-    "startedAt": 33653,
-    "endedAt": 36826,
+    "startedAt": 36673,
+    "endedAt": 39599,
     "reason": "done",
-    "view": "attacker",
+    "view": "melee",
     "killer": 1000,
     "ms": 1500,
     "cues": 2,
     "ruleros": 0,
     "projMax": 0,
-    "shownMs": 1500
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.25,
+    "frames": 20
    }
   },
   {
@@ -295,7 +356,7 @@
     "touchOn": true,
     "hud": {
      "overlay": true,
-     "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Rev\u00e9s",
+     "by": "Eliminated by ☾ Lupita (Luna) · El Revés",
      "nameClass": "kc-name luna",
      "hp": false,
      "scores": false,
@@ -309,38 +370,52 @@
    }
   },
   {
+   "name": "touch: the contact is on screen and no overlay covers it (phone)",
+   "ok": true,
+   "detail": {
+    "ok": true,
+    "x": 431,
+    "y": 168,
+    "covers": [],
+    "active": true
+   }
+  },
+  {
    "name": "touch: a tap skips; nothing held; touch controls back",
    "ok": true,
    "detail": {
     "last": {
-     "startedAt": 10886,
-     "endedAt": 11410,
+     "startedAt": 10248,
+     "endedAt": 10745,
      "reason": "skip",
-     "view": "attacker",
+     "view": "melee",
      "killer": 1000,
      "ms": 1500,
      "cues": 0,
      "ruleros": 0,
      "projMax": 0,
-     "shownMs": 519
+     "shownMs": 491,
+     "swingShown": false,
+     "jsMsPerFrame": 1.42,
+     "frames": 5
     },
     "held": 0,
     "touchUi": true
    }
   },
   {
-   "name": "Spanish: REPETICI\u00d3N, Te elimin\u00f3 \u2026 \u00b7 El Rev\u00e9s, Saltar",
+   "name": "Spanish: REPETICIÓN, Te eliminó … · El Revés, Saltar",
    "ok": true,
    "detail": {
-    "tag": "REPETICI\u00d3N",
-    "by": "Te elimin\u00f3 \u263e Lupita (Luna) \u00b7 El Rev\u00e9s"
+    "tag": "REPETICIÓN",
+    "by": "Te eliminó ☾ Lupita (Luna) · El Revés"
    }
   }
  ],
  "report": {
   "buffer": {
    "snapshotsOnlyHere": 31,
-   "playersBytes": 14963,
+   "playersBytes": 14961,
    "eventsBytes": 345,
    "size": {
     "snaps": 71,
@@ -350,83 +425,21 @@
   "costs": {
    "live": {
     "frames": 228,
-    "calls": 72,
-    "tris": 59482,
-    "cpuMs": 3.6
+    "calls": 73,
+    "tris": 59544,
+    "cpuMs": 3.7
    },
    "dead": {
-    "frames": 177,
+    "frames": 164,
     "calls": 62,
-    "tris": 53980,
-    "cpuMs": 5.4
+    "tris": 53969,
+    "cpuMs": 4.8
    },
    "replay": {
-    "frames": 170,
-    "calls": 56,
-    "tris": 53187,
-    "cpuMs": 5.7
-   }
-  },
-  "costsByQuality": {
-   "high": {
-    "deathScreen": {
-     "frames": 9,
-     "calls": 93,
-     "tris": 107654,
-     "cpuMs": 18.8
-    },
-    "replay": {
-     "frames": 5,
-     "calls": 89,
-     "tris": 106536,
-     "cpuMs": 89.8
-    },
-    "live": {
-     "frames": 4,
-     "calls": 100,
-     "tris": 112804,
-     "cpuMs": 33.3
-    }
-   },
-   "medium": {
-    "deathScreen": {
-     "frames": 9,
-     "calls": 89,
-     "tris": 95681,
-     "cpuMs": 9.8
-    },
-    "replay": {
-     "frames": 6,
-     "calls": 85,
-     "tris": 94609,
-     "cpuMs": 21
-    },
-    "live": {
-     "frames": 5,
-     "calls": 95,
-     "tris": 100822,
-     "cpuMs": 16.3
-    }
-   },
-   "low": {
-    "deathScreen": {
-     "frames": 25,
-     "calls": 62,
-     "tris": 54069,
-     "cpuMs": 3.7
-    },
-    "replay": {
-     "frames": 16,
-     "calls": 57,
-     "tris": 53375,
-     "cpuMs": 3.5
-    },
-    "live": {
-     "frames": 15,
-     "calls": 69,
-     "tris": 59620,
-     "cpuMs": 3.8
-    }
+    "frames": 161,
+    "calls": 67,
+    "tris": 57155,
+    "cpuMs": 5.9
    }
   }
  }

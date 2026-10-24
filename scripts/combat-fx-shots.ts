@@ -153,11 +153,12 @@ async function strip(p: Page, name: string, times: number[]): Promise<Frame[]> {
 }
 
 async function cost(p: Page): Promise<{ calls: number; tris: number; fx: unknown }> {
-  // One whole engine frame (shadow pass, world, held item), counted from the renderer.
-  await p.evaluate(() => { const r = (window as any).__fps.engine().renderer; r.info.autoReset = false; r.info.reset(); });
-  await step(p);
+  // Exactly one whole engine frame (shadow pass, world, held item), counted
+  // from the renderer: run here, with no clock step that could slip in another.
   return p.evaluate(() => {
     const e = (window as any).__fps.engine(); const r = e.renderer;
+    r.info.autoReset = false; r.info.reset();
+    e.frame(performance.now());
     const o = { calls: r.info.render.calls, tris: r.info.render.triangles, fx: { fx: e.fx.stats?.(), proj: e.proj.stats?.(), ruleros: e.ruleros.stats?.() ?? { active: e.ruleros.active } } };
     r.info.autoReset = true;
     return o;
@@ -317,7 +318,7 @@ async function run(quality: string): Promise<void> {
       await p.evaluate(() => { const e = (window as any).__fps.engine(); for (const g of [e.fx.group, e.proj.group, e.ruleros.group]) g.visible = true; });
       // Effects only (stats): CombatFx, impacts, trails and particles, rollers and accents.
       const st = during.fx as any;
-      const effectCalls = st.fx.drawCalls + st.proj.drawCalls + (st.ruleros.drawCalls ?? 0);
+      const effectCalls = (st.fx?.drawCalls ?? 0) + (st.proj?.drawCalls ?? 0) + (st.ruleros?.drawCalls ?? 0);
       worst = { before, during, hidden, extraCalls: during.calls - before.calls, ownCalls: during.calls - hidden.calls, ownTris: during.tris - hidden.tris, effectCalls };
       await p.evaluate(() => { (window as any).__fx.proj = null; });
       await stage(p, m.scene);

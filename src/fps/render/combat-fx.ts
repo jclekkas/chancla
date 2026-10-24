@@ -663,12 +663,12 @@ export class CombatFx {
     for (let i = 0; i < rings; i++) {
       const ti = clamp01((t - i * 0.22) / 0.78);
       if (ti <= 0) continue;
-      const [a, r] = nearSafe(d, 0.3 + 0.4 * smooth(0, 1, ti) * grow, this.safe, 0.24);
-      s.add('ring', x, y, z, v.billboard(0, this.q), r, r * 1.35, r, i ? C.shieldFill : C.shield, (1 - smooth(0.4, 1, ti)) * a);
+      const [a, r] = nearSafe(d, 0.16 + 0.34 * smooth(0, 1, ti) * grow, this.safe, 0.18);
+      s.add('ring', x, y, z, v.billboard(0, this.q), r, r * 1.25, r, i ? C.shieldFill : C.shield, (1 - smooth(0.3, 1, ti)) * 0.8 * a);
     }
     if (q !== 'low') {
-      const [a, r] = nearSafe(d, 0.5 + 0.1 * t, this.safe, 0.24);
-      s.add('puff', x, y, z, v.billboard(0, this.q), r, r * 1.35, r, C.shieldFill, 0.32 * (1 - smooth(0.3, 0.9, t)) * a);
+      const [a, r] = nearSafe(d, 0.3 + 0.15 * smooth(0, 0.5, t), this.safe, 0.16);
+      s.add('puff', x, y, z, v.billboard(0, this.q), r, r * 1.25, r, C.shieldFill, 0.2 * (1 - smooth(0.3, 0.9, t)) * a);
     }
   }
 

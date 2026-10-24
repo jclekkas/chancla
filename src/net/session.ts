@@ -84,6 +84,8 @@ export interface SessionEvents {
   /** Your own swing started (predicted): animation and swish. */
   localMelee?(weapon: WeaponId): void;
   impact?(p: ClientProjectile, pos: [number, number, number], reason: string): void;
+  /** A snapshot arrived (before its events): its players, never modified afterwards (the replay recorder keeps them). */
+  snapshot?(rec: SnapRecord): void;
   left?(): void;
 }
 
@@ -95,9 +97,12 @@ const DT_MS = 1000 / NET.tickRate;
 export const CONNECT_TIMEOUT_MS = 8000;
 export const RECONNECT_ATTEMPT_MS = 5000;
 
-interface SnapRecord {
+/** One snapshot's players, as received (never modified after). */
+export interface SnapRecord {
   st: number;
-  players: Map<number, RemotePlayer>;
+  players: ReadonlyMap<number, RemotePlayer>;
+  /** Pickup recharge times, as received. */
+  pk?: readonly number[];
 }
 
 interface Pending {
@@ -414,8 +419,10 @@ export class GameSession {
         hp: t[9], weapon: t[10] === 1 ? 1 : 0, msSinceThrow: t[11], msSinceHit: t[12], msSinceMelee: t[13] ?? 9999, ruleros: t[14] ?? 15,
       });
     }
-    this.history.push({ st: s.st, players });
+    const rec: SnapRecord = { st: s.st, players, pk: s.pk };
+    this.history.push(rec);
     while (this.history.length > 40) this.history.shift();
+    this.handlers.snapshot?.(rec);
     for (const id of [...this.remotes.keys()]) if (!players.has(id)) this.remotes.delete(id);
 
     for (const e of s.ev as SimEvent[]) this.onEvent(e);
@@ -578,45 +585,7 @@ export class GameSession {
 
   // Interpolated state of remote players at the render time.
   updateRemotes(): void {
-    const rt = this.renderTime();
-    const h = this.history;
-    if (h.length === 0) return;
-    let a = h[0]!, b = h[0]!;
-    for (let i = h.length - 1; i >= 0; i--) {
-      if (h[i]!.st <= rt) { a = h[i]!; b = h[Math.min(i + 1, h.length - 1)]!; break; }
-    }
-    const span = b.st - a.st;
-    let t = span > 0 ? (rt - a.st) / span : 0;
-    if (b === a) t = Math.min(0.1, (rt - a.st) / 1000) * 10; // brief extrapolation
-    t = Math.max(0, Math.min(1.2, t));
-    for (const [id, pb] of b.players) {
-      if (id === this.id) continue;
-      const pa = a.players.get(id) ?? pb;
-      const teleport = pa.alive !== pb.alive || Math.hypot(pb.x - pa.x, pb.z - pa.z) > 4;
-      const r: RemotePlayer = this.remotes.get(id) ?? { ...pb };
-      const tt = teleport ? 1 : t;
-      if (b === a) {
-        r.x = pb.x + pb.vx * Math.min(0.1, (rt - a.st) / 1000);
-        r.z = pb.z + pb.vz * Math.min(0.1, (rt - a.st) / 1000);
-        r.y = pb.y;
-      } else {
-        r.x = pa.x + (pb.x - pa.x) * tt;
-        r.y = pa.y + (pb.y - pa.y) * tt;
-        r.z = pa.z + (pb.z - pa.z) * tt;
-      }
-      r.yaw = lerpAngle(pa.yaw, pb.yaw, Math.min(1, tt));
-      r.pitch = pa.pitch + (pb.pitch - pa.pitch) * Math.min(1, tt);
-      r.vx = pb.vx; r.vz = pb.vz;
-      const src = tt < 0.5 ? pa : pb;
-      r.alive = src.alive; r.crouched = src.crouched; r.onGround = src.onGround; r.protected = src.protected; r.connected = pb.connected;
-      r.hp = src.hp; r.weapon = src.weapon;
-      r.msSinceThrow = src.msSinceThrow + (rt - (tt < 0.5 ? a.st : b.st));
-      r.msSinceHit = src.msSinceHit + (rt - (tt < 0.5 ? a.st : b.st));
-      r.msSinceMelee = src.msSinceMelee + (rt - (tt < 0.5 ? a.st : b.st));
-      r.ruleros = src.ruleros;
-      r.id = id;
-      this.remotes.set(id, r);
-    }
+    samplePlayers(this.history, this.renderTime(), this.id, this.remotes);
   }
 
   // Hitboxes of enemies as currently displayed, for predicted visuals.
@@ -731,6 +700,53 @@ export class GameSession {
     if (this.rtt > 180 || gap > 300) return 'poor';
     if (this.rtt > 90) return 'ok';
     return 'good';
+  }
+}
+
+/**
+ * Players at render time `rt`, interpolated between the two snapshots around
+ * it (a brief extrapolation past the newest), into `out` (entries are reused).
+ * The live view of remote players and the elimination replay both use it, so
+ * a replay moves exactly as the match looked.
+ */
+export function samplePlayers(history: readonly SnapRecord[], rt: number, skip: number, out: Map<number, RemotePlayer>): void {
+  const h = history;
+  if (h.length === 0) return;
+  let a = h[0]!, b = h[0]!;
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (h[i]!.st <= rt) { a = h[i]!; b = h[Math.min(i + 1, h.length - 1)]!; break; }
+  }
+  const span = b.st - a.st;
+  let t = span > 0 ? (rt - a.st) / span : 0;
+  if (b === a) t = Math.min(0.1, (rt - a.st) / 1000) * 10; // brief extrapolation
+  t = Math.max(0, Math.min(1.2, t));
+  for (const [id, pb] of b.players) {
+    if (id === skip) continue;
+    const pa = a.players.get(id) ?? pb;
+    const teleport = pa.alive !== pb.alive || Math.hypot(pb.x - pa.x, pb.z - pa.z) > 4;
+    const r: RemotePlayer = out.get(id) ?? { ...pb };
+    const tt = teleport ? 1 : t;
+    if (b === a) {
+      r.x = pb.x + pb.vx * Math.min(0.1, (rt - a.st) / 1000);
+      r.z = pb.z + pb.vz * Math.min(0.1, (rt - a.st) / 1000);
+      r.y = pb.y;
+    } else {
+      r.x = pa.x + (pb.x - pa.x) * tt;
+      r.y = pa.y + (pb.y - pa.y) * tt;
+      r.z = pa.z + (pb.z - pa.z) * tt;
+    }
+    r.yaw = lerpAngle(pa.yaw, pb.yaw, Math.min(1, tt));
+    r.pitch = pa.pitch + (pb.pitch - pa.pitch) * Math.min(1, tt);
+    r.vx = pb.vx; r.vz = pb.vz;
+    const src = tt < 0.5 ? pa : pb;
+    r.alive = src.alive; r.crouched = src.crouched; r.onGround = src.onGround; r.protected = src.protected; r.connected = pb.connected;
+    r.hp = src.hp; r.weapon = src.weapon;
+    r.msSinceThrow = src.msSinceThrow + (rt - (tt < 0.5 ? a.st : b.st));
+    r.msSinceHit = src.msSinceHit + (rt - (tt < 0.5 ? a.st : b.st));
+    r.msSinceMelee = src.msSinceMelee + (rt - (tt < 0.5 ? a.st : b.st));
+    r.ruleros = src.ruleros;
+    r.id = id;
+    out.set(id, r);
   }
 }
 

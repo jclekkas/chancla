@@ -70,8 +70,16 @@
           <button type="button" class="ft-btn ft-throw" id="ft-throw" data-t-aria="touch.throw"><span class="ft-ico" aria-hidden="true"></span><span class="ft-lbl" data-t="touch.throw"></span></button>
           <button type="button" class="ft-btn ft-jump" id="ft-jump" data-t-aria="touch.jump"><span aria-hidden="true">↑</span><span class="ft-lbl" data-t="touch.jump"></span></button>
           <button type="button" class="ft-btn ft-crouch" id="ft-crouch" aria-pressed="false" data-t-aria="touch.crouch"><span aria-hidden="true">↓</span><span class="ft-lbl" data-t="touch.crouch"></span></button>
+          <button type="button" class="ft-btn ft-melee" id="ft-melee" data-t-aria="touch.melee"><span class="ft-mico" aria-hidden="true"></span><span class="ft-mlbl" data-t="touch.melee"></span></button>
           <button type="button" class="ft-btn ft-weapon" id="ft-weapon" data-t-aria="touch.weapon"><span aria-hidden="true">⇄</span><span class="ft-lbl" data-t="touch.weapon"></span></button>
           <button type="button" class="ft-btn ft-score" id="ft-score" data-t-aria="touch.scores"><span aria-hidden="true">≡</span><span class="ft-lbl" data-t="touch.scores"></span></button>
+        </div>
+        <!-- Elimination replay: shown over the replayed scene; the live HUD is hidden meanwhile. -->
+        <div class="killcam" id="killcam" hidden>
+          <div class="kc-tag" data-t="killcam.replay"></div>
+          <div class="kc-by" id="kc-by" aria-live="polite"><span data-t="killcam.by"></span> <b class="kc-name" id="kc-name"></b> <span class="kc-dot" aria-hidden="true">·</span> <span id="kc-attack"></span></div>
+          <button type="button" class="kc-skip" id="kc-skip"><span data-t="killcam.skip"></span> <kbd>Space</kbd></button>
+          <button type="button" class="kc-tap" id="kc-tap"><span data-t="killcam.tapSkip"></span></button>
         </div>
         <div class="hud-tr">
           <div class="net" id="net"><span class="dot" id="net-dot"></span><span id="net-ping"></span></div>
@@ -86,6 +94,7 @@
             <circle cx="32" cy="32" r="22" class="cd-bg" />
             <circle cx="32" cy="32" r="22" class="cd" id="cd-ring" />
             <g class="hitmarker" id="hitmarker"><path d="M22 22 l6 6 M42 22 l-6 6 M22 42 l6 -6 M42 42 l-6 -6" /></g>
+            <g class="missmarker" id="missmarker"><path class="mm-r" d="M44 18 q11 14 0 28 M51 23 q6 9 0 18" /><path class="mm-l" d="M20 18 q-11 14 0 28 M13 23 q-6 9 0 18" /></g>
           </svg>
         </div>
         <div class="dmg-ind" id="dmg-ind" aria-hidden="true"></div>
@@ -101,8 +110,8 @@
           <div class="protect" id="protect" hidden data-t="hud.protected"></div>
         </div>
         <div class="weapons" id="weapons">
-          <div class="wslot" data-w="0"><span class="wkey">1</span><span class="wicon w0" aria-hidden="true"></span><span class="wname" data-t="hud.weapon0"></span><span class="wcd"><i></i></span></div>
-          <div class="wslot" data-w="1"><span class="wkey">2</span><span class="wicon w1" aria-hidden="true"></span><span class="wname" data-t="hud.weapon1"></span><span class="wcd"><i></i></span></div>
+          <div class="wslot" data-w="0"><span class="wkey">1</span><span class="wicon w0" aria-hidden="true"></span><span class="wname" data-t="hud.weapon0"></span><span class="wmelee"><kbd>V</kbd> <span data-t="melee.chanclazo"></span></span><span class="wcd"><i></i></span></div>
+          <div class="wslot" data-w="1"><span class="wkey">2</span><span class="wicon w1" aria-hidden="true"></span><span class="wname" data-t="hud.weapon1"></span><span class="wmelee"><kbd>V</kbd> <span data-t="melee.reves"></span></span><span class="wcd"><i></i></span></div>
         </div>
         <div class="banner-conn" id="banner-conn" hidden role="status"></div>
         <div class="hint" id="hint" data-t="hud.scoreHint"></div>
@@ -424,6 +433,7 @@
           </div>
           <label class="field check"><input type="checkbox" id="set-hints" /><span data-t="settings.hints"></span></label>
           <p class="note" data-t="settings.voiceNote"></p>
+          <label class="field check"><input type="checkbox" id="set-killcam" /><span data-t="settings.killcam"></span></label>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
         </div>
@@ -437,6 +447,7 @@
             <dt data-t="controls.tMove"></dt><dd data-t="controls.move"></dd>
             <dt data-t="controls.tLook"></dt><dd data-t="controls.look"></dd>
             <dt data-t="controls.tThrow"></dt><dd data-t="controls.throw"></dd>
+            <dt data-t="controls.tMelee"></dt><dd data-t="controls.melee"></dd>
             <dt data-t="controls.tJump"></dt><dd data-t="controls.jump"></dd>
             <dt data-t="controls.tCrouch"></dt><dd data-t="controls.crouch"></dd>
             <dt data-t="controls.tWeapon"></dt><dd data-t="controls.weapon"></dd>
@@ -447,6 +458,7 @@
             <dt data-t="controls.kMove"></dt><dd data-t="controls.move"></dd>
             <dt data-t="controls.kLook"></dt><dd data-t="controls.look"></dd>
             <dt data-t="controls.kThrow"></dt><dd data-t="controls.throw"></dd>
+            <dt data-t="controls.kMelee"></dt><dd data-t="controls.melee"></dd>
             <dt data-t="controls.kJump"></dt><dd data-t="controls.jump"></dd>
             <dt data-t="controls.kCrouch"></dt><dd data-t="controls.crouch"></dd>
             <dt data-t="controls.kWeapon"></dt><dd data-t="controls.weapon"></dd>
@@ -458,6 +470,7 @@
             <div><span class="wicon w1" aria-hidden="true"></span><b data-t="hud.weapon1"></b><span data-t="hud.weapon1Desc"></span></div>
           </div>
           <p class="note" data-t="controls.tip"></p>
+          <p class="note" data-t="controls.meleeTip"></p>
           <button type="button" class="btn primary" id="btn-controls-close" data-t="settings.close"></button>
         </div>
       </section>

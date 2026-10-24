@@ -268,12 +268,32 @@ function setTouchMode(on: boolean): void {
 
 /** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
 let benchHold = false;
+/** The last practice pause: when, inputs discarded, and whether momentum (a jump, a knockback) was kept (diagnostics). */
+let lastPause: { at: number; discarded: number; keptVelocity: boolean | null } | null = null;
 
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
   const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
-  if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
+  if (shouldPause && !host.paused) {
+    // Pausing mid-stride used to leave inputs queued on the host and her
+    // walking momentum in place, so she walked on after Resume with no key
+    // held. Now held keys are dropped, everything already sent is flushed,
+    // and the host discards what it had not simulated and re-syncs the
+    // client (Room.pauseSync) without simulating anything: the clock, bots,
+    // attacks and cooldowns freeze where they are. The benchmark's hold
+    // keeps its scripted scene.
+    input?.release();
+    let sync: ReturnType<LocalHost['pauseSync']>[number] | undefined;
+    if (!benchHold && session) {
+      session.flush();
+      sync = host.pauseSync().find((r) => r.id === session!.id);
+      if (sync) session.pauseSync(sync.ackBefore);
+    }
+    host.pause(); engine.paused = true;
+    lastPause = { at: Math.round(performance.now()), discarded: sync?.discarded ?? 0, keptVelocity: sync?.keptVelocity ?? null };
+    diagLog('input', `practice paused (discarded ${sync?.discarded ?? 0} queued inputs${sync?.keptVelocity ? ', momentum kept' : ''})`);
+  }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
 
@@ -328,7 +348,22 @@ async function boot(): Promise<void> {
     held: input?.heldCount ?? null,
     lang: getLang(),
   }));
-  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden }));
+  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden, engineInput: !!engine?.inputActive }));
+  // Movement, to tell a stuck key from knockback, a correction or a stale command.
+  diagProvide('movement', () => {
+    const s = session;
+    if (!s) return { session: 'none' };
+    const room = host ? [...host.hub.rooms.values()][0] : null;
+    const sp = room?.sim?.players.get(s.id);
+    const now = Math.round(performance.now());
+    return {
+      speed: +Math.hypot(s.body.vx, s.body.vz).toFixed(2), onGround: s.body.onGround, alive: s.alive, phase: s.phase,
+      pendingInputs: s.pendingInputs, hostQueue: sp ? sp.queue.length : null, hostSpeed: sp ? +Math.hypot(sp.body.vx, sp.body.vz).toFixed(2) : null,
+      corrections: s.corrections, maxCorrection: +s.maxCorrection.toFixed(3), lastCorrection: +s.lastCorrection.toFixed(3),
+      lastHitOnMe: s.lastHitOnMe ? { ...s.lastHitOnMe, msAgo: now - s.lastHitOnMe.at } : null,
+      lastPracticePause: lastPause ? { ...lastPause, msAgo: now - lastPause.at } : null,
+    };
+  });
   diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
   diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({
@@ -358,7 +393,11 @@ async function boot(): Promise<void> {
     if (touch?.visible && s) {
       const def = WEAPONS[s.weapon];
       touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+      // The melee button names the attack the chancla in hand makes.
+      touch.setMelee(t(s.weapon === 1 ? 'melee.reves' : 'melee.chanclazo'), s.weapon === 1, s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0);
     }
+    // Melee is a multiplayer and practice move: the campaign keeps its own rules.
+    touch?.setMeleeAvailable(!campaign.active);
   };
   requestAnimationFrame(uiTick);
   music.setPrefs(loadMusicPrefs());
@@ -414,6 +453,7 @@ async function boot(): Promise<void> {
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
       engine.onContextLost = (lost) => graphicsLost(lost);
+      engine.onOwnMiss = () => touch?.meleeMiss();
       engine.onFatal = () => showCrash();
       engine.start();
     } catch (err) {
@@ -589,8 +629,11 @@ function handlers() {
     state: (s: ConnState, detail?: string) => onState(s, detail),
     room: (room: RoomView) => onRoom(room),
     error: (code: ErrorCode) => onError(code),
-    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); mpDialogue(e); },
+    // Live voice lines wait out a replay (it plays none of its own).
+    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); if (!engine?.replaying) mpDialogue(e); },
+    snapshot: (r: Parameters<Engine['onSnapshot']>[0]) => engine?.onSnapshot(r),
     localThrow: (w: 0 | 1) => engine?.onLocalThrow(w),
+    localMelee: (w: 0 | 1) => engine?.onLocalMelee(w),
     impact: (...a: Parameters<Engine['onImpact']>) => engine?.onImpact(...a),
     left: () => endSession('title'),
   };
@@ -622,6 +665,8 @@ function mpDialogue(e: SimEvent): void {
       if (e.id === me && s.phase === 'playing') dialogue.react('respawn');
       break;
     case 'hit':
+      // Now and then, when El Revés knocks a roller off your own head.
+      if (e.v === me && e.ru?.length && Math.random() < 0.6) dialogue.react('rulero');
       if (e.v === me && e.hp > 0 && e.hp <= 30 && !mpLowHp) { mpLowHp = true; dialogue.react('low'); }
       if (e.v === me && e.hp > 30) mpLowHp = false;
       break;
@@ -946,6 +991,7 @@ function renderSettings(): void {
   ($('set-sfx') as HTMLInputElement).value = String(Math.round(v.sfx * 100));
   $('out-sfx').textContent = `${Math.round(v.sfx * 100)}%`;
   ($('set-stats') as HTMLInputElement).checked = v.showStats;
+  ($('set-killcam') as HTMLInputElement).checked = v.killcam;
 }
 
 function renderPracticeSetup(): void {
@@ -1255,6 +1301,9 @@ function bindUi(): void {
   check('set-invert', (v) => store.update({ invertY: v }));
   check('set-motion', (v) => store.update({ reducedMotion: v }));
   check('set-stats', (v) => store.update({ showStats: v }));
+  check('set-killcam', (v) => store.update({ killcam: v }));
+  // The replay's Skip button (mouse, when the pointer is free) and the touch "Tap to skip" layer.
+  for (const id of ['kc-skip', 'kc-tap']) $(id).addEventListener('click', (e) => { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); engine?.skipReplay(); });
   range('set-voice', (v) => store.update({ voice: v / 100 }));
   check('set-banter', (v) => store.update({ banter: v }));
   check('set-hints', (v) => store.update({ campaignHints: v }));

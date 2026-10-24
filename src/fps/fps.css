@@ -216,6 +216,12 @@ body.reduced-motion .spawn-banner { animation: none; }
 .crosshair .hitmarker.on { opacity: 1; }
 .crosshair .hitmarker.head path { stroke: var(--gold); stroke-width: 4; }
 .crosshair .hitmarker.kill path { stroke: var(--pink); stroke-width: 4; }
+/* Your own confirmed miss: two pale air arcs on the side the swing finished; no X, no colour (it is not a hit). */
+.crosshair .missmarker path { fill: none; stroke: #e8f4ff; stroke-width: 3.2; stroke-linecap: round; filter: drop-shadow(0 0 1px #1a0f2a) drop-shadow(0 0 1px #1a0f2a); opacity: 0; transition: opacity 0.3s ease-out, transform 0.3s ease-out; transform-origin: 32px 32px; }
+.crosshair .missmarker.on.r .mm-r, .crosshair .missmarker.on.l .mm-l { opacity: 1; transition: none; }
+.crosshair .missmarker.on.r .mm-r { transform: translateX(3px); }
+.crosshair .missmarker.on.l .mm-l { transform: translateX(-3px); }
+body.reduced-motion .crosshair .missmarker path { transform: none !important; }
 .dmg-ind { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
 .dmg-ind i { position: absolute; left: 50%; top: 0; width: 40px; height: 22px; margin-left: -20px; background: radial-gradient(ellipse at 50% 100%, rgba(255, 60, 60, 0.9), rgba(255, 60, 60, 0) 70%); transform-origin: 20px 110px; border-radius: 50% 50% 0 0; }
 .center-msg { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); font-family: var(--display); font-weight: 400; font-size: clamp(30px, 5vw, 58px); color: var(--marigold); -webkit-text-stroke: 1.5px var(--violet-deep); text-shadow: 0 4px 0 var(--violet), 0 10px 20px rgba(0, 0, 0, 0.4); text-align: center; white-space: nowrap; }
@@ -606,3 +612,46 @@ body.touch-input .hud-practice { display: none; }
   body.touch-input .hud-btn.menu-btn { min-height: 40px; font-size: 14px; }
 }
 body.touch-input .wslot .wcd { width: 34px; }
+/* Melee (close-combat experiment). One button at the top of the right-hand
+   arc, clear of Crouch and Switch, named after the attack the chancla in hand
+   makes: Chanclazo or Revés. */
+.ft-melee { right: calc(100px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); width: 66px; height: 66px; font-size: 11px; }
+.ft-melee .ft-mico { width: 26px; height: 15px; border-radius: 50% 50% 46% 46%; background: var(--turquoise); border: 2px solid var(--cream); transform: rotate(52deg); box-shadow: -7px -5px 0 -5px var(--cream); }
+.ft-melee.heavy .ft-mico { background: #6a3a8c; height: 17px; }
+.ft-melee .ft-mlbl { font-size: 10px; letter-spacing: 0.02em; margin-top: 3px; font-weight: 800; white-space: nowrap; }
+.ft-melee.cooling { opacity: 0.6; }
+/* Your own confirmed miss: a short sideways nudge and a cool rim (a hit gets nothing here). */
+.ft-melee.miss, .ft-melee.miss.cooling { opacity: 1; border-color: #d6eeff; box-shadow: 0 0 0 3px rgba(190, 228, 255, 0.85), 0 0 10px rgba(190, 228, 255, 0.6); animation: ft-miss 0.3s ease-out; }
+@keyframes ft-miss { 0% { transform: translateX(0); } 30% { transform: translateX(-5px); } 65% { transform: translateX(3px); } 100% { transform: translateX(0); } }
+body.reduced-motion .ft-melee.miss { animation: none; }
+body.touch-input .ft-melee { width: 62px; height: 62px; right: calc(100px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); }
+.wslot .wmelee { font-size: 11px; opacity: 0.85; white-space: nowrap; }
+.wslot .wmelee kbd { font: inherit; font-weight: 800; padding: 0 4px; border-radius: 4px; border: 1px solid rgba(244, 230, 200, 0.5); }
+body.touch-input .wslot .wmelee { display: none; }
+.killfeed .kf-melee { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 5px; border-radius: 6px; background: rgba(244, 166, 35, 0.85); color: var(--violet-deep); }
+
+/* Elimination replay. The live HUD (scores, timer, health, crosshair, kill
+   feed, name tags) is hidden so nothing live reads as part of the past
+   scene; the respawn countdown and the menu button stay. */
+.killcam { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.hud.killcam-on .hud-top, .hud.killcam-on .hud-ident, .hud.killcam-on .killfeed, .hud.killcam-on .crosshair, .hud.killcam-on .dmg-ind,
+.hud.killcam-on .center-msg, .hud.killcam-on .region, .hud.killcam-on .hud-bl, .hud.killcam-on .weapons, .hud.killcam-on .vig,
+.hud.killcam-on .names, .hud.killcam-on .spawn-banner, .hud.killcam-on .fps-touch { visibility: hidden; }
+.hud.killcam-on .hud-tr { z-index: 3; }
+.hud.killcam-on .sub-msg { top: auto; bottom: calc(118px + var(--safe-b)); }
+/* A live subtitle still on screen moves up under the REPLAY tag, clear of the attribution and the blow. */
+body.killcam-on .subs { bottom: auto; top: calc(58px + var(--safe-t)); }
+.killcam::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 4px rgba(242, 201, 74, 0.55), inset 0 0 90px rgba(20, 8, 30, 0.45); }
+.kc-tag { position: absolute; top: calc(14px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: 0.12em; color: var(--marigold); -webkit-text-stroke: 1px var(--violet-deep); background: rgba(46, 24, 70, 0.78); padding: 4px 16px 2px; border-radius: 8px; }
+.kc-tag::before { content: ''; display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #e2463a; margin-right: 10px; vertical-align: 2px; }
+.kc-by { position: absolute; left: 50%; bottom: calc(66px + var(--safe-b)); transform: translateX(-50%); max-width: calc(100% - 32px); font-size: 20px; text-align: center; background: rgba(46, 24, 70, 0.82); padding: 8px 16px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kc-name.sol { color: #ffb44a; }
+.kc-name.luna { color: #7fe3ef; }
+.kc-skip { position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%); pointer-events: auto; font: inherit; font-size: 16px; color: #fff; background: rgba(46, 24, 70, 0.85); border: 2px solid rgba(255, 255, 255, 0.55); border-radius: 10px; padding: 6px 14px; cursor: pointer; }
+.kc-skip kbd { font: inherit; font-size: 13px; border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 4px; padding: 0 5px; margin-left: 4px; }
+.kc-tap { display: none; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: auto; background: transparent; border: 0; padding: 0; font: inherit; color: #fff; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.kc-tap span { position: absolute; left: 50%; bottom: calc(14px + var(--safe-b)); transform: translateX(-50%); font-size: 22px; background: rgba(46, 24, 70, 0.85); border: 2px solid rgba(255, 255, 255, 0.6); border-radius: 14px; padding: 12px 28px; white-space: nowrap; }
+body.touch-input .kc-skip { display: none; }
+body.touch-input .kc-tap { display: block; }
+body.touch-input .kc-by { bottom: calc(84px + var(--safe-b)); font-size: 17px; }
+@media (max-height: 420px) { .kc-tag { font-size: 20px; } .kc-by { font-size: 15px; } }

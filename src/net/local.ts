@@ -26,6 +26,13 @@ export class LocalHost {
 
   pause(): void { if (this.pausedAt < 0) this.pausedAt = performance.now(); }
 
+  /** The pause transition for every room (see Room.pauseSync); simulates nothing. */
+  pauseSync(): ReturnType<import('../../shared/room').Room['pauseSync']> {
+    const out: ReturnType<import('../../shared/room').Room['pauseSync']> = [];
+    for (const room of this.hub.rooms.values()) out.push(...room.pauseSync());
+    return out;
+  }
+
   resume(): void {
     if (this.pausedAt < 0) return;
     this.pausedTotal += performance.now() - this.pausedAt;

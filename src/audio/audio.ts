@@ -8,7 +8,8 @@ export type Sfx =
   | 'gust' | 'heart' | 'bassDrop' | 'scratch' | 'bossHit' | 'blocked' | 'victory' | 'defeat' | 'waveStart'
   | 'waveClear' | 'chargeReady' | 'meterFull' | 'splash'
   | 'throwHeavy' | 'hitConfirm' | 'headshot' | 'hurtFps' | 'elimConfirm' | 'died' | 'heartbeat' | 'countdown' | 'go'
-  | 'win' | 'lose' | 'switch' | 'jump' | 'landSoft' | 'step' | 'spawn' | 'shielded' | 'heavyImpact';
+  | 'win' | 'lose' | 'switch' | 'jump' | 'landSoft' | 'step' | 'spawn' | 'shielded' | 'heavyImpact'
+  | 'swish' | 'swishHeavy' | 'slap' | 'paf' | 'ruleroPop';
 
 export type MusicMode = 'off' | 'title' | 'game' | 'boss';
 
@@ -559,6 +560,31 @@ export class AudioEngine {
         break;
       case 'shielded':
         this.tone('sine', 1800, 2400, t, 0.08, 0.07);
+        break;
+      // Close combat. El Chanclazo: a quick swish and a sharp rubber slap.
+      // El Revés: a longer, lower swish and a deep, wobbly rubber ¡PAF!
+      case 'swish':
+        this.noise(t, 0.11, 0.2 * k, { filter: 'bandpass', fq: 900, fq1: 3800, q: 3 });
+        break;
+      case 'swishHeavy':
+        this.noise(t, 0.26, 0.3 * k, { filter: 'bandpass', fq: 260, fq1: 1500, q: 2.6 });
+        this.noise(t + 0.08, 0.16, 0.12 * k, { filter: 'bandpass', fq: 1200, fq1: 2600, q: 3 });
+        break;
+      case 'slap':
+        this.noise(t, 0.03, 0.6 * k, { filter: 'highpass', fq: 2400, q: 0.8 });
+        this.tone('triangle', 420, 150, t, 0.08, 0.42 * k);
+        this.noise(t + 0.003, 0.06, 0.35 * k, { filter: 'bandpass', fq: 1500, fq1: 700, q: 2 });
+        break;
+      case 'paf':
+        this.noise(t, 0.04, 0.6 * k, { filter: 'highpass', fq: 1600, q: 0.7 });
+        this.tone('triangle', 190, 48, t, 0.26, 0.55 * k);
+        this.tone('sine', 100, 38, t, 0.32, 0.45 * k);
+        this.tone('sine', 170, 95, t + 0.02, 0.22, 0.14 * k, { vibrato: 28 });
+        this.noise(t + 0.005, 0.16, 0.38 * k, { filter: 'bandpass', fq: 650, fq1: 240, q: 2 });
+        break;
+      case 'ruleroPop':
+        this.tone('sine', 880, 1500, t, 0.07, 0.09 * k);
+        this.noise(t, 0.025, 0.12 * k, { filter: 'highpass', fq: 3000 });
         break;
       case 'heavyImpact':
         this.tone('sine', 110, 40, t, 0.3, 0.4);

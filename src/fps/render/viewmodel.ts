@@ -7,8 +7,13 @@
 // wind-up, a snap forward with a wrist flick peaking at release (90 ms light,
 // 160 ms heavy), a follow-through, the empty hand dropping away and a fresh
 // item rising into it before the cooldown ends.
+//
+// Melee keeps the item in the hand: El Chanclazo is a forehand from the
+// right across the view, El Revés a backhand drawn across the chest and
+// swung out to the right. The strike passes the centre of the view inside
+// each attack's contact window (config.ts MELEE).
 import * as THREE from 'three';
-import { WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
+import { MELEE, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { applyRest, buildFpHand, FP_REST, type FpPose, type FpRig } from './fp-hand';
 import { COLORS } from './materials';
@@ -22,6 +27,9 @@ export interface ViewState {
   crouched: boolean;
   alive: boolean;
   msSinceThrow: number;
+  /** Your swing in progress (predicted): time since it started, and the chancla it uses. */
+  msSinceMelee?: number;
+  meleeWeapon?: WeaponId | null;
 }
 
 /** Offsets from the rest pose: position (camera space), root rotation, wrist flick. */
@@ -69,6 +77,40 @@ function throwKeys(weapon: WeaponId, release: number, show: number, end: number)
   ];
 }
 
+function meleeKeys(weapon: WeaponId): Key[] {
+  const d = MELEE[weapon]!;
+  const hit0 = d.windupMs, hit1 = d.windupMs + d.activeMs, mid = (hit0 + hit1) / 2;
+  // Signs in camera space: +x right, +y up, -z ahead; a positive yaw turns the
+  // hand about the elbow toward the LEFT of the view, a negative one to the right.
+  if (weapon === 1) {
+    // El Revés: the hand is drawn across to the left of the view at face
+    // height, wrist cocked (wind-up); through the contact window it sweeps
+    // out to the right, crossing the centre of the view where the face is,
+    // the back of the hand leading; then it carries on out to the right.
+    // The path is mostly position; the small rotations only orient the hand.
+    return [
+      { t: 0, p: {}, ease: easeOut2 },
+      { t: hit0 * 0.55, p: { x: -0.3, y: 0.12, z: 0.05, pitch: 0.2, yaw: 0.25, roll: 0.1, flick: -0.55 }, ease: easeOut2 },
+      { t: hit0, p: { x: -0.48, y: 0.17, z: 0.04, pitch: 0.25, yaw: 0.35, roll: 0.15, flick: -0.85 }, ease: easeInOut },
+      { t: mid, p: { x: -0.3, y: 0.26, z: -0.12, pitch: 0.18, yaw: 0.05, roll: 0, flick: 0.2 }, ease: easeIn3 },
+      { t: hit1, p: { x: -0.04, y: 0.2, z: -0.12, pitch: 0.1, yaw: -0.35, roll: -0.2, flick: 0.9 }, ease: easeOut3 },
+      { t: hit1 + 220, p: { x: 0.16, y: 0.0, z: -0.05, pitch: -0.12, yaw: -0.8, roll: -0.35, flick: 1.0 }, ease: easeOut3 },
+      { t: d.cycleMs, p: {}, ease: settle },
+    ];
+  }
+  // El Chanclazo: a quick forehand, cocked back to the right, then across to
+  // the left, palm leading, with a short follow-through.
+  return [
+    { t: 0, p: {}, ease: easeOut2 },
+    { t: hit0 * 0.6, p: { x: 0.08, y: 0.08, z: 0.06, pitch: 0.12, yaw: -0.6, roll: -0.3, flick: -0.7 }, ease: easeOut2 },
+    { t: hit0, p: { x: -0.04, y: 0.12, z: -0.12, pitch: 0.1, yaw: -0.1, roll: -0.05, flick: 0.3 }, ease: easeIn3 },
+    { t: hit1, p: { x: -0.26, y: 0.08, z: -0.12, pitch: 0.02, yaw: 0.6, roll: 0.25, flick: 1.0 }, ease: easeOut3 },
+    { t: hit1 + 140, p: { x: -0.34, y: -0.04, z: -0.06, pitch: -0.25, yaw: 0.85, roll: 0.3, flick: 0.6 }, ease: easeOut2 },
+    { t: d.cycleMs, p: {}, ease: settle },
+  ];
+}
+const MELEE_KEYS: Record<WeaponId, Key[]> = { 0: meleeKeys(0), 1: meleeKeys(1) };
+
 function sample(keys: Key[], t: number, out: Pose): void {
   for (const f of FIELDS) out[f] = 0;
   if (t <= keys[0]!.t || t >= keys[keys.length - 1]!.t) return;
@@ -87,6 +129,8 @@ export class ViewModel {
   private wasGround = true;
   private team: Team | null = null;
   private pose: Pose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, flick: 0 };
+  /** A confirmed miss: the hand overruns the way the swing was going, then settles (seconds since, strength, weapon). */
+  private miss = { t: 1e9, k: 0, weapon: 0 as WeaponId };
   private keys = new Map<string, Key[]>();
   private q = new THREE.Quaternion();
   private restPos = REST_POS.clone();
@@ -125,9 +169,24 @@ export class ViewModel {
     return k;
   }
 
+  /**
+   * Your swing missed (confirmed by the server): the hand carries on past
+   * the end of the swing and settles back, layered on the pose it is in, so
+   * a late event never replays the swing. `strength` 0..1 (lateness).
+   */
+  whiff(weapon: WeaponId, strength: number): void {
+    if (strength <= 0) return;
+    this.miss.t = 0; this.miss.k = Math.min(1, strength); this.miss.weapon = weapon;
+  }
+
+  /** Ends a miss cue at once (death, respawn, a new round). */
+  cancelMiss(): void { this.miss.t = 1e9; }
+
   update(s: ViewState, dt: number, reducedMotion: boolean): void {
     this.root.visible = s.alive;
-    if (!s.alive) return;
+    if (!s.alive) { this.cancelMiss(); return; }
+    // A miss cue belongs to the chancla that missed: switching ends it.
+    if (s.weapon !== this.miss.weapon) this.cancelMiss();
     const def = WEAPONS[s.weapon]!;
     if (!this.wasGround && s.onGround) this.landing = 1;
     this.wasGround = s.onGround;
@@ -159,6 +218,32 @@ export class ViewModel {
       }
     } else {
       for (const f of FIELDS) p[f] = 0;
+    }
+    // A melee swing overrides the throw pose, and the item never leaves the hand.
+    const mt = s.msSinceMelee ?? 1e9, mw = s.meleeWeapon;
+    if (mw !== undefined && mw !== null && mt < MELEE[mw]!.cycleMs) {
+      sample(MELEE_KEYS[mw], mt, p);
+      if (reducedMotion) for (const f of FIELDS) p[f] *= 0.5;
+      visible = true;
+    }
+    // A confirmed miss. Both swings end with the hand at the edge of the
+    // view (El Revés to the right, El Chanclazo low to the left), so going
+    // further would not be seen: it gives a short push past the end, then
+    // the arm swings back into view toward the middle, off balance, the
+    // chancla wobbling, as if it met nothing. Added to the pose in progress,
+    // so nothing restarts; a late miss arrives weaker (strength).
+    this.miss.t += dt;
+    const md = this.miss.weapon === 1 ? 0.5 : 0.4;
+    if (this.miss.t < md) {
+      const u = this.miss.t / md;
+      const push = u < 0.22 ? Math.sin((u / 0.22) * Math.PI) : 0;
+      const back = u > 0.15 ? Math.sin(((u - 0.15) / 0.85) * Math.PI) * (1 - 0.35 * u) : 0;
+      const wob = Math.sin(u * Math.PI * 5) * (1 - u) * (u > 0.15 ? 1 : 0);
+      const dir = this.miss.weapon === 1 ? 1 : -1, k = this.miss.k * (reducedMotion ? 0.4 : 1) * (this.miss.weapon === 1 ? 1 : 0.85);
+      const lobe = 0.6 * push - back; // + past the end, - back toward the middle
+      p.x += dir * 0.11 * lobe * k; p.yaw -= dir * 0.3 * lobe * k;
+      p.y += (0.07 * back - 0.02 * push) * k; p.pitch -= 0.1 * back * k;
+      p.roll += dir * 0.22 * wob * k; p.flick += 0.45 * wob * k;
     }
     // Weapon switch: lower out, raise in (eased, with a small tilt).
     let sw = 0;

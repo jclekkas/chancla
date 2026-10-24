@@ -150,8 +150,18 @@ class KindBatch {
   }
 }
 
+/** Map-specific inputs: El Patio's by default. */
+export interface SectionOptions {
+  /** The café and the Panadería (El Patio only) get their hero dressing. */
+  heroZone?: boolean;
+  /** Team banners hung on the walls (windows keep clear of them). */
+  banners?: ReadonlyArray<{ x: number; z: number }>;
+}
+
 /** Builds the kit for the given boxes. Returns the group and its draw-call count. */
-export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'): { group: THREE.Group; calls: number } {
+export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high', opts: SectionOptions = {}): { group: THREE.Group; calls: number } {
+  const heroZone = opts.heroZone ?? true;
+  const banners = opts.banners ?? EL_PATIO.decor?.banners ?? [];
   const lite = quality === 'low'; // no shadows on Low, so the smallest details go too
   const group = new THREE.Group();
   group.name = 'section-patio';
@@ -591,7 +601,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   /** True when a window at `a` on this face stays clear of the arena's team banners (1.2 m wide, hung 3.3-5.5 m). */
   const bannerClear = (b: MapBox, side: Side, a: number): boolean => {
     const fc = faceOf(b, side);
-    for (const bn of EL_PATIO.decor?.banners ?? []) {
+    for (const bn of banners) {
       const [n, w] = fc.axis === 'x' ? [bn.x, bn.z] : [bn.z, bn.x];
       if (Math.abs(n - fc.plane) > 0.2 || w < fc.lo - 0.6 || w > fc.hi + 0.6) continue;
       if (Math.abs(toAlong(b, side, w) - a) < 1.45) return false;
@@ -856,7 +866,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     if (b.mat in STUCCO) {
       const col = STUCCO[b.mat]!;
       const fl = b.facade ? frameOf(b, b.facade).len : 0;
-      if (b.facade && inZone(b)) { heroBuilding(b); hero = false; }
+      if (b.facade && heroZone && inZone(b)) { heroBuilding(b); hero = false; }
       else if (b.facade && fl >= 2 && h >= 4) building(b, col);
       else wall(b, col);
       continue;

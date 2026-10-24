@@ -1,8 +1,9 @@
 // In-match HUD. DOM is only touched when values change.
 import * as THREE from 'three';
-import { MATCH, WEAPONS, type WeaponId } from '../../shared/config';
+import { MATCH, MELEE, WEAPONS, type WeaponId } from '../../shared/config';
 import type { RoomView } from '../../shared/protocol';
 import { t, type Key } from './strings';
+import { attackKey } from './killcam';
 import { chanclaSVG, rosaSVG, svgUrl } from '../ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -13,6 +14,8 @@ export interface HudFrame {
   weapon: WeaponId;
   cooldownMs: number;
   switchMs: number;
+  /** Melee recovery left (ms), if a swing is under way. */
+  meleeMs?: number;
   respawnInMs: number;
   protectedMs: number;
   scores: [number, number];
@@ -38,7 +41,7 @@ export class Hud {
   private el = {
     root: $('hud'), solScore: $('sc-sol'), lunaScore: $('sc-luna'), timer: $('timer'), practice: $('hud-practice'),
     killfeed: $('killfeed'), net: $('net'), netPing: $('net-ping'), fps: $('fps'),
-    cd: $('cd-ring'), hitmarker: $('hitmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
+    cd: $('cd-ring'), hitmarker: $('hitmarker'), missmarker: document.getElementById('missmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
     region: $('region'), hp: $('hp'), hpFill: $('hp-fill'), hpNum: $('hp-num'), protect: $('protect'),
     slots: Array.from(document.querySelectorAll<HTMLElement>('.wslot')), conn: $('banner-conn'),
     vigHurt: $('vig-hurt'), vigLow: $('vig-low'), names: $('names'), sb: $('scoreboard'), sbBody: $('sb-body'),
@@ -48,6 +51,7 @@ export class Hud {
   };
   private bannerT = 0;
   private hitT = 0;
+  private missT = 0;
   private hurtT = 0;
   private centerT = 0;
   private subT = 0;
@@ -74,7 +78,8 @@ export class Hud {
     this.el.killfeed.innerHTML = '';
     this.el.center.hidden = true;
     this.el.sub.hidden = true;
-    this.hitT = this.hurtT = this.centerT = this.subT = 0;
+    this.hitT = this.missT = this.hurtT = this.centerT = this.subT = 0;
+    this.el.missmarker?.classList.remove('on');
     for (const f of this.floats) f.el.remove();
     this.floats = [];
     for (const a of this.dmgArcs) a.el.remove();
@@ -103,6 +108,16 @@ export class Hud {
     this.hitT = kind === 'kill' ? 0.32 : 0.18;
   }
 
+  /** Your own confirmed miss: pale air arcs on the side the swing finished (+1 right, -1 left). Never a hit marker. */
+  missMarker(side: 1 | -1): void {
+    const m = this.el.missmarker;
+    if (!m) return;
+    this.el.hitmarker.classList.remove('on');
+    m.classList.remove('r', 'l');
+    m.classList.add('on', side > 0 ? 'r' : 'l');
+    this.missT = 0.2;
+  }
+
   hurt(fromAngle: number | null): void {
     this.el.vigHurt.classList.add('on');
     this.hurtT = 0.2;
@@ -122,16 +137,37 @@ export class Hud {
     if (this.floats.length > 12) this.floats.shift()!.el.remove();
   }
 
-  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean): void {
+  /** `melee`: the elimination was a Chanclazo or a Revés (named next to the chancla). */
+  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean, melee = false): void {
     const row = document.createElement('div');
     row.className = `kf${mine ? ' me' : ''}`;
     const a = document.createElement('span'); a.className = aTeam === 0 ? 's' : 'l'; a.textContent = attacker;
     const w = document.createElement('span'); w.className = 'w'; w.style.backgroundImage = svgUrl(weapon === 0 ? chanclaSVG(-15) : pesadaIcon);
     const v = document.createElement('span'); v.className = vTeam === 0 ? 's' : 'l'; v.textContent = victim;
-    row.append(a, w, v);
+    row.append(a, w);
+    if (melee) { const m = document.createElement('span'); m.className = 'kf-melee'; m.textContent = t(weapon === 1 ? 'melee.reves' : 'melee.chanclazo'); row.append(m); }
+    row.append(v);
     this.el.killfeed.prepend(row);
     while (this.el.killfeed.children.length > 5) this.el.killfeed.lastElementChild!.remove();
     setTimeout(() => row.remove(), 6000);
+  }
+
+  /**
+   * The elimination replay's overlay: "REPLAY", who eliminated you (with
+   * her team's icon, colour and name) and with what. null hides it.
+   */
+  killcam(info: { name: string; team: number | null; w: 0 | 1; melee: boolean } | null): void {
+    const root = document.getElementById('killcam');
+    this.el.root.classList.toggle('killcam-on', !!info);
+    document.body.classList.toggle('killcam-on', !!info); // the subtitles live outside the HUD
+    if (!root) return;
+    root.hidden = !info;
+    if (!info) return;
+    const name = document.getElementById('kc-name')!;
+    const team = info.team === 0 || info.team === 1 ? info.team : null;
+    name.className = `kc-name${team === null ? '' : team === 0 ? ' sol' : ' luna'}`;
+    name.textContent = team === null ? info.name : `${teamIcon(team)} ${info.name} (${teamName(team)})`;
+    document.getElementById('kc-attack')!.textContent = t(attackKey(info.w, info.melee));
   }
 
   connection(text: string | null): void {
@@ -140,6 +176,7 @@ export class Hud {
 
   update(f: HudFrame, dt: number, myYaw: number): void {
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) this.el.hitmarker.classList.remove('on');
+    if (this.missT > 0 && (this.missT -= dt) <= 0) this.el.missmarker?.classList.remove('on');
     if (this.hurtT > 0 && (this.hurtT -= dt) <= 0) this.el.vigHurt.classList.remove('on');
     if (this.centerT > 0 && (this.centerT -= dt) <= 0) this.el.center.hidden = true;
     if (this.subT > 0 && (this.subT -= dt) <= 0) this.el.sub.hidden = true;
@@ -181,7 +218,9 @@ export class Hud {
     this.set('prot', String(f.protectedMs > 0 && f.alive), () => (this.el.protect.hidden = !(f.protectedMs > 0 && f.alive)));
     this.set('weapon', `${f.weapon}`, () => this.el.slots.forEach((s, i) => s.classList.toggle('on', i === f.weapon)));
     const def = WEAPONS[f.weapon]!;
-    const readyK = f.switchMs > 0 ? 0 : 1 - f.cooldownMs / def.cooldownMs;
+    // Ready when neither a throw nor a swing is recovering.
+    const meleeK = f.meleeMs && f.meleeMs > 0 ? 1 - f.meleeMs / (MELEE[f.weapon]!.cycleMs + MELEE[f.weapon]!.whiffMs) : 1;
+    const readyK = f.switchMs > 0 ? 0 : Math.min(1 - f.cooldownMs / def.cooldownMs, meleeK);
     const ring = 138.2 * (readyK >= 1 ? 1 : readyK);
     this.set('cd', ring.toFixed(0), () => (this.el.cd.style.strokeDashoffset = (readyK >= 1 ? 138.2 : 138.2 - ring).toFixed(1)));
     this.el.slots.forEach((s, i) => {

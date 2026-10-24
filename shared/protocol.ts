@@ -75,13 +75,15 @@ export interface RoomView {
 }
 
 // Per-player state in a snapshot:
-// [id, x, y, z, yaw, pitch, vx, vz, flags, hp, weapon, msSinceThrow, msSinceHit]
+// [id, x, y, z, yaw, pitch, vx, vz, flags, hp, weapon, msSinceThrow, msSinceHit, msSinceMelee, ruleros]
 // flags: 1 alive, 2 crouched, 4 on ground, 8 spawn-protected, 16 connected
-export type PlayerTuple = [number, number, number, number, number, number, number, number, number, number, number, number, number];
+// ruleros: bit i set while roller i is still on her head
+export type PlayerTuple = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 
 // Full state for the receiving player, used for prediction reconciliation:
-// [x, y, z, vx, vy, vz, flags, hp, cooldownMs, switchMs, weapon, respawnInMs, protectedMs]
-export type SelfTuple = [number, number, number, number, number, number, number, number, number, number, number, number, number];
+// [x, y, z, vx, vy, vz, flags, hp, cooldownMs, switchMs, weapon, respawnInMs, protectedMs, meleeMs]
+// flags: 1 alive, 2 crouched, 4 on ground, 8 a melee press is queued
+export type SelfTuple = [number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 
 export interface Snapshot {
   t: 'snap';
@@ -140,7 +142,7 @@ function validInput(d: unknown): d is InputTuple {
   if (!Array.isArray(d) || d.length !== 7) return false;
   const [seq, mx, mz, yaw, pitch, b, w] = d as unknown[];
   return isNum(seq) && Number.isInteger(seq) && seq > 0 && isNum(mx) && Math.abs(mx) <= 1.001 && isNum(mz) && Math.abs(mz) <= 1.001 &&
-    isNum(yaw) && Math.abs(yaw) < 100 && isNum(pitch) && Math.abs(pitch) < 3 && isNum(b) && Number.isInteger(b) && b >= 0 && b < 8 && (w === 0 || w === 1);
+    isNum(yaw) && Math.abs(yaw) < 100 && isNum(pitch) && Math.abs(pitch) < 3 && isNum(b) && Number.isInteger(b) && b >= 0 && b < 16 && (w === 0 || w === 1);
 }
 
 export function parseClientMsg(raw: unknown): ClientMsg | null {

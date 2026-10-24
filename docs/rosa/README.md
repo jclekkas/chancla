@@ -157,6 +157,11 @@ screens a short nudge of the melee button. A late event fades the hand's
 motion out (full up to 150 ms after the contact window, none after
 450 ms; the mark up to 650 ms); an event that cannot be the swing in hand
 (a newer swing started, another chancla, or a stale replay) shows nothing.
+Each miss is tied to the swing it came from: your local swings are matched
+in order to the server's `swing` events and the `whiff` names that swing's
+id, so a delayed miss of an older swing never shows on a newer one; any
+uncertain correspondence is suppressed, and death, respawn, a new round
+or a weapon switch ends a running cue.
 No contact effect, damage cue or sound on a miss; attack timing and the
 network are unchanged. Clips: [clip-crouch-and-misses.mp4](clip-crouch-and-misses.mp4),
 [clip-touch-misses.mp4](clip-touch-misses.mp4). Limitation: El Chanclazo

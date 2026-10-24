@@ -621,7 +621,7 @@ body.touch-input .wslot .wcd { width: 34px; }
 .ft-melee .ft-mlbl { font-size: 10px; letter-spacing: 0.02em; margin-top: 3px; font-weight: 800; white-space: nowrap; }
 .ft-melee.cooling { opacity: 0.6; }
 /* Your own confirmed miss: a short sideways nudge and a cool rim (a hit gets nothing here). */
-.ft-melee.miss { border-color: #bfe3ff; animation: ft-miss 0.3s ease-out; }
+.ft-melee.miss, .ft-melee.miss.cooling { opacity: 1; border-color: #d6eeff; box-shadow: 0 0 0 3px rgba(190, 228, 255, 0.85), 0 0 10px rgba(190, 228, 255, 0.6); animation: ft-miss 0.3s ease-out; }
 @keyframes ft-miss { 0% { transform: translateX(0); } 30% { transform: translateX(-5px); } 65% { transform: translateX(3px); } 100% { transform: translateX(0); } }
 body.reduced-motion .ft-melee.miss { animation: none; }
 body.touch-input .ft-melee { width: 62px; height: 62px; right: calc(100px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); }

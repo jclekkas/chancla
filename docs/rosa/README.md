@@ -123,7 +123,7 @@ three runs), touch 35/35.
 ## Known limitations
 
 - Straw hat brim and rebozo back extend past the head hit sphere, as the
-  old hat did; skirt is rigid with the hips (knees show in a deep crouch).
+  old hat did.
 - La Pesada's heel is wider than the fist; on Low the left hand is baked
   to the forearm.
 - The whole body brightens on a hit (one material).
@@ -132,6 +132,36 @@ three runs), touch 35/35.
 - Remote motion that stalls or snaps can drag a planted foot.
 - The campaign finale's existing `toonify` still whitens the chancla on
   guest avatars (pre-existing).
+
+## Corrections after ec62b1a
+
+**Crouch clipping.** Crouched and crouch-walking, the knees came through
+the front and sides of the skirt (11-12 cm outside it when crouched still,
+measured against the skirt geometry). The crouch now drapes the skirt
+forward over the knees (a forward tilt and more depth than width, applied
+to the existing skirt pivot), splays the knees less and takes shorter,
+lower steps; the thigh and knee cap wear the skirt's lining colour, so a
+knee brushing the hem mid-step reads as cloth. Now 7-8 cm inside when
+crouched still and at most 2 cm (3.5 cm strafing) at the surface while
+crouch-walking, at High, Medium and Low (`tests/rosa-anim.test.ts`).
+Collision, crouch height, movement and hit regions are unchanged; the
+geometry and draw counts are unchanged (no new cost run).
+
+**Your own misses.** The server's `whiff` for your own swing was ignored.
+A confirmed miss (never the prediction) now shows, on top of the swing in
+progress: the hand pushes past the end of the swing and swings back into
+view off balance with the chancla wobbling; two pale air arcs at the
+crosshair on the side the swing finished (left for El Chanclazo, right for
+El Revés; no X and no colour, so it never looks like a hit); and on touch
+screens a short nudge of the melee button. A late event fades the hand's
+motion out (full up to 150 ms after the contact window, none after
+450 ms; the mark up to 650 ms); an event that cannot be the swing in hand
+(a newer swing started, another chancla, or a stale replay) shows nothing.
+No contact effect, damage cue or sound on a miss; attack timing and the
+network are unchanged. Clips: [clip-crouch-and-misses.mp4](clip-crouch-and-misses.mp4),
+[clip-touch-misses.mp4](clip-touch-misses.mp4). Limitation: El Chanclazo
+ends with the hand low and partly off screen, so its miss reads mostly
+from the crosshair arcs and the wobble as the hand returns.
 
 ## Mac and phone review checklist
 
@@ -143,11 +173,14 @@ Mac (Safari and Chrome), High then Low:
 3. V with La Chancla (¡ZAS!) and La Pesada (¡PAF!, a roller flies) at close
    range; a swing out of reach shows only an air swish.
 4. Get hit: the hit brightening is brief and nothing covers the view.
-5. Esc, wait, Resume during a fight: nothing advances while paused.
-6. Note frame rate and any stutter when several Rosas fight.
+5. Miss on purpose with V (both chanclas): air arcs at the crosshair and a
+   wobble of the hand, nothing like a hit; crouch-walk and watch a bot crouch.
+6. Esc, wait, Resume during a fight: nothing advances while paused.
+7. Note frame rate and any stutter when several Rosas fight.
 
 Phone (landscape, Low and Auto):
-1. Team read at 5-10 m, the Chanclazo button, a throw, a Revés hit.
+1. Team read at 5-10 m, the Chanclazo button, a throw, a Revés hit, and a
+   miss (the button nudges).
 2. Effects stay small and clear the crosshair quickly.
 3. Rotate, background and return: characters and ruleros intact.
 4. Note heat and frame rate over a full match.

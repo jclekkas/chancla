@@ -27,7 +27,7 @@ export const FOCAL_MATS: ReadonlySet<string> = new Set(['fountain', 'statue', 'k
 const C = {
   stone: 0xe4d2b0, stoneWarm: 0xd6bf98, stoneDark: 0xa98e6c, coping: 0xf0e2c4, basin: 0x2f8f9a,
   ironDark: 0x3a2a3c, cream: 0xf4e6c8, roof: 0xc4553a, roofDark: 0x9a3b2a, paper: 0xf2ece0, ink: 0x4b2a6b,
-  corn: 0xf2c94a, husk: 0x9cbf5a, brass: 0xd9a441,
+  corn: 0xf2c94a, husk: 0x9cbf5a, brass: 0xd9a441, bronze: 0xc8954a,
 } as const;
 /** Kiosk paint by sign (the arena's colours, kept). */
 const KIOSK_PAINT: Record<string, number> = { ELOTES: 0xf0c64a, 'PERIÓDICOS': 0x3f8f6a, 'AGUAS FRESCAS': 0x3fa9b5 };
@@ -135,7 +135,7 @@ function fountain(bk: Bucket, b: MapBox, q: Quality, ripples: THREE.Vector2[]): 
       const tube = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), seg, 0.032, q === 'high' ? 6 : 4, false);
       bk.add('water', tube, 0x8fe3ea, 0.78);
       // A small bronze spout where each arc leaves the pedestal.
-      bk.add('bronze', new THREE.CylinderGeometry(0.045, 0.06, 0.16, 8).rotateZ(Math.PI / 2).rotateY(dx ? 0 : Math.PI / 2), 0xffffff, 1, new THREE.Matrix4().makeTranslation(cx + dx * 0.74, 1.42, cz + dz * 0.74));
+      bk.add('bronze', new THREE.CylinderGeometry(0.045, 0.06, 0.16, 8).rotateZ(Math.PI / 2).rotateY(dx ? 0 : Math.PI / 2), C.bronze, 1, new THREE.Matrix4().makeTranslation(cx + dx * 0.74, 1.42, cz + dz * 0.74));
       ripples.push(new THREE.Vector2(p2.x, p2.z));
     }
   }
@@ -183,7 +183,7 @@ function statue(bk: Bucket, b: MapBox, q: Quality): void {
     const col = g.getAttribute('color');
     if (col) for (let i = 0; i < col.count; i++) {
       const l = 0.3 * col.getX(i) + 0.55 * col.getY(i) + 0.15 * col.getZ(i), t = 0.5 + 0.5 * l;
-      col.setXYZ(i, 0.92 * t, 0.6 * t, 0.2 * t);
+      col.setXYZ(i, 0.8 * t, 0.5 * t, 0.16 * t); // a little deeper than paint: the highlight and rim carry the metal
     }
     monument[detail] = g;
   }
@@ -266,7 +266,51 @@ function kiosk(bk: Bucket, b: MapBox, q: Quality): void {
   roof.translate(0, roofY + rise / 2, 0);
   bk.add('flat', roof, C.roof, 1, at);
   cuboid(bk, 'flat', at, 0, roofY + 0.02, 0, w + eave * 2, 0.05, d + eave * 2, C.roofDark, 1, 63 & ~4);
-  bk.add('bronze', new THREE.SphereGeometry(0.07, 8, 6), 0xffffff, 1, new THREE.Matrix4().makeTranslation(cx, roofY + rise + 0.04, cz));
+  bk.add('bronze', new THREE.SphereGeometry(0.07, 8, 6), C.bronze, 1, new THREE.Matrix4().makeTranslation(cx, roofY + rise + 0.04, cz));
+}
+
+// ------------------------------------------------------------------ bronze
+
+/**
+ * Bronze on the toon look: the same three-band diffuse, a little darker
+ * (metal is mostly reflection), plus one hard-edged specular band from the
+ * sun (gated by its shadow, so a shaded face never sparkles) and a soft rim
+ * toward grazing angles in the sky's colour. No environment map, no new
+ * pipeline: a patch on the toon program, one material as before.
+ */
+export const BRONZE = { spec: 0.55, specEdge: [0.9, 0.93] as const, rim: 0.45, rimEdge: [0.5, 0.8] as const };
+export function bronzeMaterial(): THREE.MeshToonMaterial {
+  const m = noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: toonRamp(), vertexColors: true, emissive: 0x2a1a04 }));
+  const base = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    base.call(m, sh, r);
+    const pars = THREE.ShaderChunk.lights_toon_pars_fragment;
+    if (!pars.includes('RE_Direct_Toon')) return; // three.js changed the chunk: plain toon bronze
+    // A direct-light term that adds the specular band to the toon diffuse.
+    const spec = `
+void RE_Direct_Bronze( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in ToonMaterial material, inout ReflectedLight reflectedLight ) {
+  RE_Direct_Toon( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+  vec3 h = normalize( directLight.direction + geometryViewDir );
+  float band = smoothstep( ${BRONZE.specEdge[0].toFixed(3)}, ${BRONZE.specEdge[1].toFixed(3)}, dot( geometryNormal, h ) ) * step( 0.0, dot( geometryNormal, directLight.direction ) );
+  // The highlight takes the metal's own hue, lifted toward the light's: bronze, not plastic.
+  reflectedLight.directDiffuse += directLight.color * band * ${BRONZE.spec.toFixed(3)} * mix( material.diffuseColor, vec3( 1.0 ), 0.3 );
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Bronze
+`;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_toon_pars_fragment>', '#include <lights_toon_pars_fragment>' + spec)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+  {
+    float rim = smoothstep( ${BRONZE.rimEdge[0].toFixed(3)}, ${BRONZE.rimEdge[1].toFixed(3)}, 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ) );
+    vec3 sky = vec3( 0.6 );
+    #if NUM_HEMI_LIGHTS > 0
+      sky = hemisphereLights[ 0 ].skyColor;
+    #endif
+    reflectedLight.indirectDiffuse += sky * rim * ${BRONZE.rim.toFixed(3)} * mix( diffuseColor.rgb, vec3( 1.0 ), 0.3 );
+  }`);
+  };
+  m.customProgramCacheKey = () => 'toon-bronze';
+  return m;
 }
 
 function shadeHex(hex: number, k: number): number { return new THREE.Color(hex).multiplyScalar(k).getHex(); }
@@ -342,11 +386,10 @@ export function buildFocal(boxes: readonly MapBox[], quality: Quality): Focal {
     else if (b.mat === 'kiosk') { kiosk(bk, b, quality); contactShadow(bk, b, 0.35, 0.32); }
   }
   const kit = kitMaterials(quality);
-  const ramp = toonRamp();
   const water = waterMaterial(quality, ripples);
   const mats: Record<MatKey, THREE.Material> = {
     cantera: kit.cantera, talavera: kit.talavera, flat: kit.flat, wood: kit.wood, water: water.mat,
-    bronze: noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: ramp, vertexColors: true, emissive: 0x3a2400 })),
+    bronze: bronzeMaterial(),
     shadow: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
   };
   const group = new THREE.Group();

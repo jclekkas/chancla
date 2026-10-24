@@ -62,52 +62,114 @@ function mottle(c: CanvasRenderingContext2D, size: number, seed: number, count: 
 }
 
 /**
- * Lime plaster (1 texture = 2 m): two scales of faint clouding plus a few
- * paler patches. No streaks, cracks or base grime (the texture repeats every
- * 2 m vertically, so a base band would repeat up the wall).
+ * Lime plaster (1 texture = 2 m): broad clouding at two scales, a few warm
+ * and cool washes (lime dries unevenly), soft trowel sweeps and a handful of
+ * paler patched repairs. All soft-edged and within a few per cent of white,
+ * so the wall colour stays the wall colour. No streaks, cracks or base grime
+ * (the texture repeats every 2 m vertically, so a base band would repeat up
+ * the wall).
  */
 function plasterTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 256 * SCALE[quality], k = S / 256;
   return q(tex(`plaster${S}-${quality}`, S, S, (c) => {
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, S, S);
-    mottle(c, S, 11, 26, 60 * k, 110 * k, (r) => { const g = 232 + Math.floor(r() * 14); return [g, g - 6, g - 16, 0.1 + r() * 0.08]; });
-    mottle(c, S, 12, 60, 18 * k, 46 * k, (r) => { const g = 226 + Math.floor(r() * 20); return [g, g - 5, g - 13, 0.08 + r() * 0.08]; });
+    mottle(c, S, 11, 26, 60 * k, 110 * k, (r) => { const g = 228 + Math.floor(r() * 16); return [g, g - 7, g - 18, 0.12 + r() * 0.1]; });
+    // Warm and cool washes: the lime's own unevenness, a hue shift more than a value one.
+    mottle(c, S, 13, 8, 70 * k, 120 * k, (r) => (r() < 0.5 ? [236, 214, 190, 0.12 + r() * 0.06] : [208, 214, 222, 0.1 + r() * 0.06]));
+    mottle(c, S, 12, 60, 18 * k, 46 * k, (r) => { const g = 222 + Math.floor(r() * 22); return [g, g - 6, g - 15, 0.1 + r() * 0.08]; });
+    // Trowel sweeps: long, soft, faint arcs (wrapped so the texture still tiles).
+    const r = rng(14);
+    for (let i = 0; i < 14; i++) {
+      const x = r() * S, y = r() * S, len = (40 + r() * 50) * k, w = (6 + r() * 6) * k, a = (r() - 0.5) * 0.9;
+      const light = r() < 0.5, al = 0.07 + r() * 0.05;
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        const cx = x + ox, cy = y + oy;
+        if (cx + len < 0 || cx - len > S || cy + len < 0 || cy - len > S) continue;
+        c.save(); c.translate(cx, cy); c.rotate(a); c.scale(1, w / len);
+        const g = c.createRadialGradient(0, 0, 0, 0, 0, len);
+        const col = light ? '255,252,244' : '196,180,160';
+        g.addColorStop(0, `rgba(${col},${al})`); g.addColorStop(1, `rgba(${col},0)`);
+        c.fillStyle = g; c.fillRect(-len, -len, len * 2, len * 2);
+        c.restore();
+      }
+    }
+    // Patched repairs: a few paler, slightly cleaner soft rectangles.
+    for (let i = 0; i < 3; i++) {
+      const x = r() * S, y = r() * S, w = (26 + r() * 30) * k, h = (18 + r() * 22) * k;
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        const cx = x + ox, cy = y + oy;
+        if (cx + w < 0 || cx > S || cy + h < 0 || cy > S) continue;
+        c.fillStyle = 'rgba(255,253,248,0.1)';
+        c.beginPath(); c.roundRect(cx, cy, w, h, 8 * k); c.fill();
+        c.strokeStyle = 'rgba(170,150,128,0.06)'; c.lineWidth = 4 * k; c.stroke();
+      }
+    }
   }), quality);
 }
 
-/** Cantera stone: soft, low-contrast speckle for steps, caps and the threshold (no pixel grain). */
+/**
+ * Cantera stone: soft clouding, faint sedimentary banding along the bed and
+ * scattered small pores, all low-contrast (steps, caps, sills, the threshold).
+ */
 function canteraTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 128 * SCALE[quality], k = S / 128;
   return q(tex(`cantera${S}-${quality}`, S, S, (c) => {
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, S, S);
-    mottle(c, S, 22, 10, 30 * k, 56 * k, (r) => { const g = 226 + Math.floor(r() * 16); return [g, g - 8, g - 20, 0.1 + r() * 0.08]; });
-    mottle(c, S, 23, 70, 4 * k, 10 * k, (r) => { const g = 218 + Math.floor(r() * 26); return [g, g - 8, g - 20, 0.14 + r() * 0.12]; });
+    mottle(c, S, 22, 10, 30 * k, 56 * k, (r) => { const g = 222 + Math.floor(r() * 16); return [g, g - 9, g - 22, 0.12 + r() * 0.08]; });
+    // Bedding: a few soft horizontal bands, gently wavy, wrapping in x.
+    const r = rng(24);
+    for (let i = 0; i < 5; i++) {
+      const y0 = r() * S, h = (5 + r() * 9) * k, amp = (2 + r() * 3) * k, ph = r() * 6, dark = r() < 0.6;
+      c.fillStyle = dark ? `rgba(150,112,76,${0.07 + r() * 0.05})` : `rgba(255,246,226,${0.12 + r() * 0.06})`;
+      for (const oy of [-S, 0, S]) {
+        c.beginPath();
+        for (let x = 0; x <= S; x += 4 * k) c.lineTo(x, oy + y0 + Math.sin((x / S) * Math.PI * 2 + ph) * amp);
+        for (let x = S; x >= 0; x -= 4 * k) c.lineTo(x, oy + y0 + h + Math.sin((x / S) * Math.PI * 2 + ph + 0.7) * amp);
+        c.closePath(); c.fill();
+      }
+    }
+    mottle(c, S, 23, 70, 4 * k, 10 * k, (rr) => { const g = 214 + Math.floor(rr() * 26); return [g, g - 9, g - 22, 0.14 + rr() * 0.12]; });
+    // Pores: small, soft and sparse (about 2 cm at the stone's scale).
+    mottle(c, S, 25, 26, 2.2 * k, 3.2 * k, () => [120, 92, 66, 0.28]);
   }), quality);
 }
 
 /**
  * Talavera-style tiles: muted cobalt and ochre on cream, exactly 4×4 tiles per
  * texture (tilePanel fits whole tiles to panels). Each tile's glaze is a touch
- * different, as hand-made tiles are.
+ * different, as hand-made tiles are: a soft sheen toward one corner, a glaze
+ * that pools a little darker at the rim, the cobalt brushed with a deeper
+ * edge. The grout stays a mid warm grey, never a bright grid.
  */
 function talaveraTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 256 * SCALE[quality], s = S / 4, k = s / 64;
   return q(tex(`talavera${S}-${quality}`, S, S, (c) => {
     const r = rng(31);
+    c.fillStyle = '#b9ab90'; c.fillRect(0, 0, S, S); // grout
     for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
-      const x = tx * s, y = ty * s, v = Math.floor((r() - 0.5) * 10);
-      c.fillStyle = `rgb(${240 + v},${231 + v},${211 + v})`; c.fillRect(x, y, s, s);
-      c.strokeStyle = '#cdbfa3'; c.lineWidth = 3 * k; c.strokeRect(x + 1.5 * k, y + 1.5 * k, s - 3 * k, s - 3 * k);
+      const x = tx * s, y = ty * s, v = Math.floor((r() - 0.5) * 12), g0 = 2 * k;
+      c.fillStyle = `rgb(${238 + v},${228 + v},${206 + v})`; c.fillRect(x + g0, y + g0, s - 2 * g0, s - 2 * g0);
       const cx = x + s / 2, cy = y + s / 2;
-      const blue = `rgb(${76 + v},${102 + v},${158 + v})`;
+      const blue = `rgb(${72 + v},${98 + v},${156 + v})`, deep = `rgb(${50 + v},${70 + v},${126 + v})`;
+      c.lineWidth = 2 * k; c.strokeStyle = deep;
       c.fillStyle = blue;
       for (let i = 0; i < 4; i++) {
         const a = i * Math.PI / 2 + Math.PI / 4;
-        c.beginPath(); c.ellipse(cx + Math.cos(a) * 13 * k, cy + Math.sin(a) * 13 * k, 11 * k, 5 * k, a, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(cx + Math.cos(a) * 13 * k, cy + Math.sin(a) * 13 * k, 11 * k, 5 * k, a, 0, Math.PI * 2); c.fill(); c.stroke();
       }
       c.fillStyle = '#d6a44c'; c.beginPath(); c.arc(cx, cy, 6 * k, 0, Math.PI * 2); c.fill();
-      c.fillStyle = blue;
-      for (const [qx, qy] of [[x, y], [x + s, y], [x, y + s], [x + s, y + s]] as const) { c.beginPath(); c.arc(qx, qy, 9 * k, 0, Math.PI * 2); c.fill(); }
+      c.strokeStyle = 'rgba(150,104,40,0.7)'; c.stroke();
+      c.fillStyle = blue; c.strokeStyle = deep;
+      for (const [qx, qy] of [[x, y], [x + s, y], [x, y + s], [x + s, y + s]] as const) {
+        c.save(); c.beginPath(); c.rect(x + g0, y + g0, s - 2 * g0, s - 2 * g0); c.clip();
+        c.beginPath(); c.arc(qx, qy, 9 * k, 0, Math.PI * 2); c.fill(); c.stroke();
+        c.restore();
+      }
+      // Glaze: a soft sheen toward the upper left, pooling darker at the rim.
+      const hx = x + s * (0.3 + r() * 0.15), hy = y + s * (0.3 + r() * 0.15);
+      const gl = c.createRadialGradient(hx, hy, 2 * k, x + s / 2, y + s / 2, s * 0.72);
+      gl.addColorStop(0, 'rgba(255,252,240,0.2)'); gl.addColorStop(0.55, 'rgba(255,252,240,0)'); gl.addColorStop(1, 'rgba(120,96,64,0.16)');
+      c.fillStyle = gl; c.fillRect(x + g0, y + g0, s - 2 * g0, s - 2 * g0);
     }
   }), quality);
 }
@@ -123,8 +185,9 @@ function louverTexture(quality: Quality): THREE.CanvasTexture | null {
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
     for (let i = 0; i < n; i++) {
       const y = i * p, g = c.createLinearGradient(0, y, 0, y + p);
-      g.addColorStop(0, 'rgba(60,40,30,0)'); g.addColorStop(0.55, 'rgba(60,40,30,0.08)');
-      g.addColorStop(0.8, 'rgba(60,40,30,0.42)'); g.addColorStop(1, 'rgba(60,40,30,0.2)');
+      // Lit top edge of each slat, its face, then the shadow the slat above casts on it.
+      g.addColorStop(0, 'rgba(255,250,236,0.22)'); g.addColorStop(0.18, 'rgba(60,40,30,0)'); g.addColorStop(0.55, 'rgba(60,40,30,0.1)');
+      g.addColorStop(0.8, 'rgba(60,40,30,0.46)'); g.addColorStop(1, 'rgba(60,40,30,0.24)');
       c.fillStyle = g; c.fillRect(0, y, W, p);
     }
   }), quality);
@@ -147,25 +210,48 @@ function glassTexture(quality: Quality): THREE.CanvasTexture | null {
 /**
  * Door wood (1 texture = 0.6 m): vertical grain in soft bands a few
  * centimetres wide, gently wavy, near-white so the material colour carries
- * the hue. No 1 px lines (the production wood read as stripes at 4+ m).
+ * the hue; over them, finer grain lines (2 px soft strokes, never 1 px: the
+ * production wood read as stripes at 4+ m) that bend round a small knot.
  */
 function woodTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 128 * SCALE[quality], k = S / 128;
   return q(tex(`wood${S}-${quality}`, S, S, (c) => {
     const r = rng(53);
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, S, S);
+    const knot = { x: S * 0.68, y: S * 0.3, r: 5 * k };
+    /** x offset of the grain at (x0, y): a wave plus the bend round the knot. */
+    const bend = (x0: number, y: number) => {
+      const dy = (y - knot.y) / (knot.r * 3.2), dx = x0 - knot.x;
+      return Math.exp(-dy * dy) * Math.sign(dx || 1) * Math.max(0, knot.r * 2.4 - Math.abs(dx)) * 0.7;
+    };
     const band = (x0: number, w: number, a: number, dark: boolean, amp: number, waves: number, ph: number) => {
       c.fillStyle = dark ? `rgba(92,56,32,${a})` : `rgba(255,246,228,${a})`;
       for (const ox of [-S, 0, S]) {
         c.beginPath();
-        for (let y = 0; y <= S; y += 4 * k) c.lineTo(ox + x0 + Math.sin((y / S) * Math.PI * 2 * waves + ph) * amp, y);
-        for (let y = S; y >= 0; y -= 4 * k) c.lineTo(ox + x0 + w + Math.sin((y / S) * Math.PI * 2 * waves + ph + 0.4) * amp, y);
+        for (let y = 0; y <= S; y += 4 * k) c.lineTo(ox + x0 + Math.sin((y / S) * Math.PI * 2 * waves + ph) * amp + bend(x0, y), y);
+        for (let y = S; y >= 0; y -= 4 * k) c.lineTo(ox + x0 + w + Math.sin((y / S) * Math.PI * 2 * waves + ph + 0.4) * amp + bend(x0 + w, y), y);
         c.closePath(); c.fill();
       }
     };
-    for (let i = 0; i < 9; i++) band(r() * S, (6 + r() * 14) * k, 0.08 + r() * 0.07, true, (1.5 + r() * 3) * k, 1 + Math.floor(r() * 2), r() * 6);
-    for (let i = 0; i < 5; i++) band(r() * S, (3 + r() * 4) * k, 0.1 + r() * 0.06, true, (1 + r() * 2) * k, 1, r() * 6);
+    for (let i = 0; i < 9; i++) band(r() * S, (6 + r() * 14) * k, 0.09 + r() * 0.08, true, (1.5 + r() * 3) * k, 1 + Math.floor(r() * 2), r() * 6);
+    for (let i = 0; i < 5; i++) band(r() * S, (3 + r() * 4) * k, 0.1 + r() * 0.07, true, (1 + r() * 2) * k, 1, r() * 6);
     for (let i = 0; i < 4; i++) band(r() * S, (8 + r() * 10) * k, 0.12, false, 2 * k, 1, r() * 6);
+    // Fine grain: thin soft strokes (2 px at full size), faint.
+    c.lineWidth = Math.max(1, 2 * k); c.lineCap = 'round';
+    for (let i = 0; i < 16; i++) {
+      const x0 = r() * S, amp = (1 + r() * 2.5) * k, ph = r() * 6, waves = 1 + Math.floor(r() * 2);
+      c.strokeStyle = `rgba(84,50,28,${0.1 + r() * 0.08})`;
+      for (const ox of [-S, 0, S]) {
+        c.beginPath();
+        for (let y = 0; y <= S; y += 4 * k) c.lineTo(ox + x0 + Math.sin((y / S) * Math.PI * 2 * waves + ph) * amp + bend(x0, y), y);
+        c.stroke();
+      }
+    }
+    // The knot: a soft dark eye with a lighter ring.
+    const kg = c.createRadialGradient(knot.x, knot.y, 0, knot.x, knot.y, knot.r * 1.8);
+    kg.addColorStop(0, 'rgba(80,44,22,0.42)'); kg.addColorStop(0.45, 'rgba(80,44,22,0.22)'); kg.addColorStop(0.7, 'rgba(255,240,214,0.12)'); kg.addColorStop(1, 'rgba(255,240,214,0)');
+    c.fillStyle = kg; c.save(); c.translate(knot.x, knot.y); c.scale(0.7, 1.4); c.translate(-knot.x, -knot.y);
+    c.fillRect(knot.x - knot.r * 2, knot.y - knot.r * 2, knot.r * 4, knot.r * 4); c.restore();
   }), quality);
 }
 
@@ -181,10 +267,16 @@ function paverTexture(quality: Quality): THREE.CanvasTexture | null {
       for (let x = -bw + off; x < S; x += bw) {
         const g = 206 + Math.floor(r() * 22);
         c.fillStyle = `rgb(${g},${g - 10},${g - 25})`;
-        c.fillRect(x + gap, row * rowH + gap, bw - 2 * gap, rowH - 2 * gap);
+        const px = x + gap, py = row * rowH + gap, pw = bw - 2 * gap, ph = rowH - 2 * gap;
+        c.fillRect(px, py, pw, ph);
+        // Worn edges: each stone a touch darker toward its rim, lighter where feet polish it.
+        const d = c.createRadialGradient(px + pw * (0.35 + r() * 0.3), py + ph * 0.5, ph * 0.1, px + pw / 2, py + ph / 2, pw * 0.62);
+        d.addColorStop(0, 'rgba(250,240,222,0.12)'); d.addColorStop(1, 'rgba(96,78,58,0.14)');
+        c.fillStyle = d; c.fillRect(px, py, pw, ph);
       }
     }
     mottle(c, S, 42, 40, 8 * k, 24 * k, (rr) => [120, 100, 80, 0.05 + rr() * 0.06]);
+    mottle(c, S, 43, 40, 2.5 * k, 4 * k, () => [104, 88, 70, 0.2]); // sparse pits
   }), quality);
 }
 
@@ -216,7 +308,16 @@ function pavingTexture(quality: Quality): THREE.CanvasTexture | null {
       d.addColorStop(0, worn ? 'rgba(236,206,182,0.32)' : 'rgba(230,180,150,0.10)');
       d.addColorStop(1, 'rgba(110,60,44,0.12)');
       c.fillStyle = d; c.fillRect(x, y, w, w);
+      // A soft bevel: the edge toward the light a little paler, the far edge a little deeper (about 4 cm).
+      const e = Math.max(3, 6 * k), lit = c.createLinearGradient(x, y, x + e, y + e);
+      lit.addColorStop(0, 'rgba(236,196,168,0.2)'); lit.addColorStop(1, 'rgba(236,196,168,0)');
+      c.fillStyle = lit; c.fillRect(x, y, w - e, e); c.fillRect(x, y + e, e, w - 2 * e);
+      const dk = c.createLinearGradient(x + w, y + w, x + w - e, y + w - e);
+      dk.addColorStop(0, 'rgba(96,52,38,0.2)'); dk.addColorStop(1, 'rgba(96,52,38,0)');
+      c.fillStyle = dk; c.fillRect(x + e, y + w - e, w - e, e); c.fillRect(x + w - e, y + e, e, w - 2 * e);
     }
+    // Sparse pits and a little grit in the fired clay.
+    mottle(c, S, 79, 90, 2.5 * k, 4.5 * k, (rr) => [112, 66, 50, 0.16 + rr() * 0.1]);
     // Broad, faint wear and dust across many tiles.
     mottle(c, S, 78, 18, 50 * k, 120 * k, (rr) => (rr() < 0.5 ? [214, 170, 140, 0.08 + rr() * 0.06] : [110, 64, 48, 0.06 + rr() * 0.05]));
   }), quality);
@@ -224,7 +325,8 @@ function pavingTexture(quality: Quality): THREE.CanvasTexture | null {
 
 export type Kind = 'plaster' | 'cantera' | 'flat' | 'detail' | 'louver' | 'talavera' | 'glass' | 'wood' | 'lamp' | 'pavers' | 'leaf';
 export interface Mat { k: Kind; c: number | null }
-export const TINTED: ReadonlySet<Kind> = new Set<Kind>(['plaster', 'cantera', 'flat', 'detail', 'louver', 'pavers', 'leaf']);
+// Wood and glass carry vertex colours too (white unless tinted): the kit bakes doorway and window-reveal shading into them.
+export const TINTED: ReadonlySet<Kind> = new Set<Kind>(['plaster', 'cantera', 'flat', 'detail', 'louver', 'pavers', 'leaf', 'wood', 'glass']);
 
 /**
  * Foliage ramp: the same three painted bands as the toon ramp, with the
@@ -275,10 +377,12 @@ export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
     detail: toonOf({ vertexColors: true }),
     louver: toonOf({ vertexColors: true, map: louverTexture(quality) }),
     talavera: toonOf({ map: talaveraTexture(quality) }),
-    glass: toonOf({ map: glassTexture(quality) }),
+    glass: toonOf({ vertexColors: true, map: glassTexture(quality) }),
     // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
-    wood: toonOf({ color: 0xb8875a, map: woodTexture(quality) }),
-    lamp: toonOf({ color: 0xffe3a0, emissive: 0xc88a2a }),
+    // Vertex colours are white wherever nothing bakes shading into them (every dressing's wood).
+    wood: toonOf({ color: 0xb8875a, vertexColors: true, map: woodTexture(quality) }),
+    // A lit lantern: the glow (emissive) carries it, the lit colour is kept low so the sun cannot wash it to white.
+    lamp: toonOf({ color: 0x6a4a28, emissive: 0xffa63a, emissiveIntensity: 1.15 }),
     pavers: toonOf({ vertexColors: true, map: paverTexture(quality), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     leaf: toonOf({ vertexColors: true, side: THREE.DoubleSide, gradientMap: leafRamp() }),
   };
@@ -345,18 +449,4 @@ export function patioGround(quality: Quality, ground: { w: number; d: number } =
   geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const material = new THREE.MeshToonMaterial({ gradientMap: toonRamp(), map: patioGroundTexture(quality, ground), vertexColors: true });
   return { geometry, material };
-}
-
-/**
- * El Patio's light, adjusted from its theme. A slightly stronger, warmer sun
- * and a slightly weaker, less orange sky fill give facades clearer lit/shade
- * separation; a lighter, warmer ground bounce keeps faces in shade readable.
- */
-export interface PatioLight { hemi: [number, number, number]; sun: [number, number] } // fog stays the theme's (the engine sets it)
-export function patioLight(base: PatioLight): PatioLight {
-  const mix = (a: number, b: number, t: number) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
-  return {
-    hemi: [mix(base.hemi[0], 0xf2e2d6, 0.35), mix(base.hemi[1], 0xb07a5c, 0.3), base.hemi[2] * 0.9],
-    sun: [mix(base.sun[0], 0xffbe84, 0.4), base.sun[1] * 1.1],
-  };
 }

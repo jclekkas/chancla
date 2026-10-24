@@ -53,9 +53,10 @@
         <div class="hud-ident">
           <div class="team-chip" id="team-chip" hidden><span class="tc-icon" id="team-chip-icon" aria-hidden="true"></span><span id="team-chip-text"></span></div>
           <div class="hud-practice" id="hud-practice" hidden data-t="hud.practice"></div>
+          <div class="hud-rules" id="hud-rules" hidden><span class="wicon w0 mode-ico" aria-hidden="true"></span><span data-t="mode.chip"></span></div>
           <div class="mode-chip" data-t="hud.modeStory"></div>
         </div>
-        <div class="spawn-banner" id="spawn-banner" hidden role="status"><span class="sbn-icon" id="spawn-banner-icon" aria-hidden="true"></span><span id="spawn-banner-text"></span></div>
+        <div class="spawn-banner" id="spawn-banner" hidden role="status"><span class="sbn-icon" id="spawn-banner-icon" aria-hidden="true"></span><span id="spawn-banner-text"></span><span class="sbn-rules" id="spawn-banner-rules" hidden></span></div>
         <div class="killfeed" id="killfeed" aria-live="polite"></div>
         <!-- Touch controls (phones, tablets): shown only while touch is the active input. -->
         <div class="fps-touch" id="fps-touch" hidden>
@@ -212,6 +213,12 @@
           <h2 id="online-title" data-t="online.title"></h2>
           <label class="field"><span data-t="online.name"></span><input id="in-name" aria-describedby="name-help" enterkeyhint="done" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" data-t-ph="online.namePh" /></label>
           <p class="note name-help" id="name-help" data-t="online.nameHelp"></p>
+          <div class="field mode-field"><span id="lbl-rmode" data-t="mode.label"></span>
+            <div class="mode-seg" role="radiogroup" aria-labelledby="lbl-rmode">
+              <button type="button" role="radio" data-rrules="classic"><strong data-t="mode.classic"></strong><small data-t="mode.classicDesc"></small></button>
+              <button type="button" role="radio" data-rrules="melee"><strong><span class="wicon w0 mode-ico" aria-hidden="true"></span><span data-t="mode.melee"></span></strong><small data-t="mode.meleeDesc"></small></button>
+            </div>
+          </div>
           <button type="button" class="btn primary" id="btn-create" data-t="online.create"></button>
           <div class="join-row">
             <label class="field grow"><span data-t="online.joinLabel"></span><input id="in-code" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" data-t-ph="online.codePh" /></label>
@@ -228,6 +235,12 @@
         <div class="panel practice-panel">
           <h2 id="practice-title" data-t="practice.title"></h2>
           <p class="note" data-t="practice.note"></p>
+          <div class="field mode-field"><span id="lbl-pmode" data-t="mode.label"></span>
+            <div class="mode-seg" role="radiogroup" aria-labelledby="lbl-pmode">
+              <button type="button" role="radio" data-prules="classic"><strong data-t="mode.classic"></strong><small data-t="mode.classicDesc"></small></button>
+              <button type="button" role="radio" data-prules="melee"><strong><span class="wicon w0 mode-ico" aria-hidden="true"></span><span data-t="mode.melee"></span></strong><small data-t="mode.meleeDesc"></small></button>
+            </div>
+          </div>
           <div class="field map-field"><span id="lbl-map" data-t="map.label"></span>
             <div id="practice-maps" aria-labelledby="lbl-map"></div>
           </div>
@@ -272,7 +285,13 @@
             <div class="team sol"><h3><span aria-hidden="true">☀</span> <span data-t="lobby.teamSol"></span></h3><ul id="team-0"></ul></div>
             <div class="team luna"><h3><span aria-hidden="true">☾</span> <span data-t="lobby.teamLuna"></span></h3><ul id="team-1"></ul></div>
           </div>
-          <p class="rules" data-t="lobby.rules"></p>
+          <p class="rules" id="lobby-rules"></p>
+          <div class="field lobby-map lobby-mode"><span id="lbl-lmode" data-t="mode.label"></span>
+            <div class="seg small" role="radiogroup" aria-labelledby="lbl-lmode">
+              <button type="button" role="radio" data-lrules="classic" data-t="mode.classic"></button>
+              <button type="button" role="radio" data-lrules="melee"><span class="wicon w0 mode-ico" aria-hidden="true"></span><span data-t="mode.melee"></span></button>
+            </div>
+          </div>
           <div class="field lobby-map"><span id="lbl-lmap" data-t="map.label"></span>
             <div class="seg small" role="radiogroup" aria-labelledby="lbl-lmap">
               <button type="button" role="radio" data-lmap="patio" data-t="map.patio"></button>
@@ -379,6 +398,7 @@
         <div class="panel">
           <h2 id="pause-title" data-t="pause.title"></h2>
           <p class="note" id="pause-note"></p>
+          <p class="pause-mode" id="pause-mode" hidden><span class="wicon w0 mode-ico" aria-hidden="true"></span><span id="pause-mode-text"></span></p>
           <p class="note build-note" id="pause-build"></p>
           <button type="button" class="btn primary" id="btn-resume" data-t="pause.resume"></button>
           <button type="button" class="btn" id="btn-pause-settings" data-t="pause.settings"></button>
@@ -443,6 +463,7 @@
       <section id="scr-controls" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="controls-title">
         <div class="panel">
           <h2 id="controls-title" data-t="controls.title"></h2>
+          <p class="note controls-mode" data-t="mode.controls"></p>
           <dl class="controls touch-list">
             <dt data-t="controls.tMove"></dt><dd data-t="controls.move"></dd>
             <dt data-t="controls.tLook"></dt><dd data-t="controls.look"></dd>

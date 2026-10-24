@@ -1,6 +1,6 @@
 // In-match HUD. DOM is only touched when values change.
 import * as THREE from 'three';
-import { MATCH, MELEE, WEAPONS, type WeaponId } from '../../shared/config';
+import { MATCH, MELEE, WEAPONS, type RulesetId, type WeaponId } from '../../shared/config';
 import type { RoomView } from '../../shared/protocol';
 import { t, type Key } from './strings';
 import { attackKey } from './killcam';
@@ -50,6 +50,9 @@ export class Hud {
     scoreSol: document.querySelector<HTMLElement>('.teamscore.sol'), scoreLuna: document.querySelector<HTMLElement>('.teamscore.luna'),
   };
   private bannerT = 0;
+  /** The match's combat rules: melee-only shows its chip, its key hint and a line on the first banner. */
+  private rules: RulesetId = 'classic';
+  private touchHints = false;
   private hitT = 0;
   private missT = 0;
   private hurtT = 0;
@@ -246,11 +249,25 @@ export class Hud {
     this.set('fps', `${f.showStats}:${Math.round(f.fps)}`, () => { this.el.fps.hidden = !f.showStats; this.el.fps.textContent = t('fps', { fps: Math.round(f.fps) }); });
   }
 
-  /** At spawn and respawn: a short reminder of the player's team. */
+  /** Classic shows the HUD as it always was; melee-only adds its chip and turns the swing hint into the primary button. */
+  setRules(rules: RulesetId, touch: boolean): void {
+    this.rules = rules;
+    this.touchHints = touch;
+    const melee = rules === 'melee';
+    $('hud-rules').hidden = !melee;
+    this.el.root.classList.toggle('melee-only', melee);
+    for (const k of this.el.root.querySelectorAll<HTMLElement>('.wmelee kbd')) k.textContent = melee ? t('mode.keys') : 'V';
+  }
+
+  /** At spawn and respawn: a short reminder of the player's team (and, on the first, of melee-only rules). */
   spawnBanner(team: number, first: boolean): void {
-    this.el.banner.className = `spawn-banner ${team === 0 ? 'sol' : 'luna'}${first ? ' first' : ''}`;
+    const rulesLine = first && this.rules === 'melee';
+    this.el.banner.className = `spawn-banner ${team === 0 ? 'sol' : 'luna'}${first ? ' first' : ''}${rulesLine ? ' with-rules' : ''}`;
     this.el.bannerIcon.textContent = teamIcon(team);
     this.el.bannerText.textContent = t('hud.youAre', { team: teamName(team).toUpperCase() });
+    const rl = $('spawn-banner-rules');
+    rl.hidden = !rulesLine;
+    if (rulesLine) rl.textContent = `${t('mode.chip')} · ${t(this.touchHints ? 'mode.introTouch' : 'mode.intro')}`;
     this.el.banner.hidden = false;
     this.bannerT = first ? 2.8 : 1.6;
   }

@@ -10,7 +10,7 @@ import { installDiag, diagProvide, diagLog, diagError, diagCopy, diagText, diagB
 import './fps.css';
 import { SafeStorage } from '../persistence/storage';
 import { audio } from '../audio/audio';
-import { MATCH, WEAPONS, type BotDifficulty } from '../../shared/config';
+import { MATCH, WEAPONS, isRulesetId, rulesetOf, type BotDifficulty, type RulesetId } from '../../shared/config';
 import { isValidCode, normalizeCode, sanitizeName, type ErrorCode, type RoomView } from '../../shared/protocol';
 import type { Team } from '../../shared/map';
 import { GameSession, wsTransport, type ConnState, type TransportFactory } from '../net/session';
@@ -111,6 +111,32 @@ let pauseOpenedAt = -1e9;
 // The map the current (or last) practice match was started on: Restart keeps it,
 // even when the choice was "Random".
 let practiceMapId: MapId = 'patio';
+/**
+ * The suggested arena for ¡Puro Chanclazo!: La Fiesta, where bot-only melee
+ * matches meet most often (about 15.6 eliminations a minute, against 13-14 on
+ * the others; see docs/puro-chanclazo).
+ */
+const MELEE_MAP: MapId = 'fiesta';
+/**
+ * The combat rules in effect: the room's (the host decides; a joined room never
+ * uses this player's saved choice), Classic outside a room and in the campaign.
+ */
+let activeRules: RulesetId = 'classic';
+let appliedRulesKey = '';
+function applyRules(): void {
+  const rules: RulesetId = session && !campaign?.active ? session.rules : 'classic';
+  const touchOn = !!input?.touchMode;
+  const key = `${rules}:${getLang()}:${touchOn}`;
+  touch?.setMeleeOnly(rules === 'melee', t('touch.slap'), t('touch.throw'));
+  if (key === appliedRulesKey) return;
+  const changed = rules !== activeRules;
+  appliedRulesKey = key;
+  activeRules = rules;
+  // A button held across a change of rules must not act under the new ones.
+  if (changed) { input?.release('combat mode changed'); diagLog('match', `combat mode ${rules}`); }
+  document.body.classList.toggle('melee-only', rules === 'melee');
+  hud.setRules(rules, touchOn);
+}
 
 // Dialogue (campaign and multiplayer quips) with subtitles.
 const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
@@ -390,9 +416,12 @@ async function boot(): Promise<void> {
     campaign.tick();
     if (!campaign.active) dialogue.update();
     const s = session;
+    applyRules();
     if (touch?.visible && s) {
       const def = WEAPONS[s.weapon];
-      touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+      const swingReady = s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0;
+      if (activeRules === 'melee') touch.setReady(swingReady ? 1 : 0);
+      else touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
       // The melee button names the attack the chancla in hand makes.
       touch.setMelee(t(s.weapon === 1 ? 'melee.reves' : 'melee.chanclazo'), s.weapon === 1, s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0);
     }
@@ -702,7 +731,9 @@ function startOnline(join: string | null): void {
   practice = false;
   const s = newSession(wsTransport(url));
   s.connect(playerName());
-  s.send(join ? { t: 'join', code: join } : { t: 'create' });
+  // Creating: this player's chosen rules (and, for ¡Puro Chanclazo!, the arena that suits it). Joining: the host's, whatever is saved here.
+  const rules = store.value.roomRules;
+  s.send(join ? { t: 'join', code: join } : rules === 'melee' ? { t: 'create', rules, map: MELEE_MAP } : { t: 'create' });
   retry = () => startOnline(join ?? lastCode);
 }
 
@@ -716,7 +747,7 @@ function startPractice(keepMap = false): void {
   host = h;
   const s = newSession(h.transport(), () => h.now());
   s.connect(sanitizeName(store.value.name, t('online.namePh')));
-  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId });
+  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId, rules: v.practiceRules });
   retry = () => startPractice(true);
 }
 
@@ -880,6 +911,15 @@ function renderLobby(room: RoomView): void {
     b.classList.toggle('on', on);
     b.disabled = !isOwner && !on;
   });
+  // So are the combat rules: everyone sees them, and they hold for the whole match (rematches too).
+  const rules = rulesetOf(room.rules);
+  document.querySelectorAll<HTMLButtonElement>('[data-lrules]').forEach((b) => {
+    const on = b.dataset.lrules === rules;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+    b.disabled = !isOwner && !on;
+  });
+  $('lobby-rules').textContent = t(rules === 'melee' ? 'lobby.rulesMelee' : 'lobby.rules');
   ($('chk-bots') as HTMLInputElement).checked = room.bots.enabled;
   document.querySelectorAll<HTMLButtonElement>('[data-bdiff]').forEach((b) => {
     const on = b.dataset.bdiff === room.bots.difficulty;
@@ -921,7 +961,7 @@ function renderResults(room: RoomView): void {
   $('res-title').textContent = r.winner === -1 ? t('results.tie') : r.winner === 0 ? t('results.sol') : t('results.luna');
   const flavor = r.winner === -1 ? t('results.youTie') : r.winner === myTeam ? t('results.youWin') : t('results.youLose');
   const reason = r.reason === 'score' ? t('results.byScore', { n: MATCH.scoreToWin }) : t('results.byTime');
-  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}`;
+  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}${rulesetOf(room.rules) === 'melee' ? ` · ${t('mode.melee')}` : ''}`;
   ($('btn-res-maps') as HTMLButtonElement).hidden = !room.practice;
   $('res-sol').textContent = String(r.scores[0]);
   $('res-luna').textContent = String(r.scores[1]);
@@ -1001,6 +1041,8 @@ function renderPracticeSetup(): void {
     b.setAttribute('aria-checked', String(on));
     b.classList.toggle('on', on);
   });
+  seg('prules', v.practiceRules);
+  seg('rrules', v.roomRules);
   seg('diff', v.practiceDifficulty);
   seg('allies', String(v.practiceAllies));
   seg('enemies', String(v.practiceEnemies));
@@ -1034,6 +1076,7 @@ function changeLang(lang: 'en' | 'es'): void {
 function openOnline(): void {
   ($('in-name') as HTMLInputElement).value = store.value.name;
   ($('in-code') as HTMLInputElement).value = pendingInviteCode;
+  renderPracticeSetup(); // also marks the Create Room combat mode
   $('online-err').textContent = serverUrl() ? '' : t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing');
   show('online');
   // From an invite: the code is filled in; ask for a name first if there isn't one.
@@ -1059,6 +1102,10 @@ function openPause(): void {
   rb.dataset.t = m ? 'pause.restart' : 'pause.restartMatch';
   rb.textContent = t(rb.dataset.t as Key);
   ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
+  // Match information: the combat rules of this match (not shown for missions).
+  $('pause-mode').hidden = m;
+  $('pause-mode-text').textContent = t('mode.pause', { mode: t(activeRules === 'melee' ? 'mode.melee' : 'mode.classic') });
+  ($('pause-mode').querySelector('.mode-ico') as HTMLElement).hidden = activeRules !== 'melee';
   ($('btn-pause-select') as HTMLButtonElement).hidden = !m;
   const lb = $('btn-pause-leave');
   lb.dataset.t = online ? 'pause.leaveMatch' : 'pause.home';
@@ -1240,6 +1287,20 @@ function bindUi(): void {
     $('lobby-err').textContent = '';
     session?.send({ t: 'team', team: (team === 0 ? 1 : 0) as Team });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-lrules]').forEach((b) => b.addEventListener('click', () => {
+    if (lastRoom?.owner === session?.id && isRulesetId(b.dataset.lrules)) session?.send({ t: 'rules', rules: b.dataset.lrules });
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-prules]').forEach((b) => b.addEventListener('click', () => {
+    const rules = rulesetOf(b.dataset.prules);
+    // Switching to ¡Puro Chanclazo! suggests the arena where fights happen most (any map can still be picked).
+    if (rules === 'melee' && store.value.practiceRules !== 'melee') store.update({ practiceMap: MELEE_MAP });
+    store.update({ practiceRules: rules });
+    renderPracticeSetup();
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-rrules]').forEach((b) => b.addEventListener('click', () => {
+    store.update({ roomRules: rulesetOf(b.dataset.rrules) });
+    renderPracticeSetup();
+  }));
   document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => b.addEventListener('click', () => {
     if (lastRoom?.owner === session?.id && isMapId(b.dataset.lmap)) session?.send({ t: 'map', map: b.dataset.lmap });
   }));
@@ -1385,7 +1446,7 @@ function bindInput(inp: FpsInput): void {
     if (cooldown) { if (inMatch && base === 'none') { render(); toast(t('hud.clickAgain'), 2200); } return; }
     lockFailures++;
     if (lockFailures >= 3 || typeof $('stage').requestPointerLock !== 'function') {
-      if (!inp.fallback) toast(t('hud.dragLook'), 4000);
+      if (!inp.fallback) toast(t(activeRules === 'melee' ? 'mode.dragLook' : 'hud.dragLook'), 4000);
       inp.fallback = true;
     }
     if (inMatch && base === 'none') render();

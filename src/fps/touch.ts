@@ -140,7 +140,9 @@ export class FpsTouch {
       this.throwX = e.clientX;
       this.throwY = e.clientY;
       this.throwBtn.classList.add('held');
-      this.input.setTouchButton('fire', true);
+      // Melee-only: the same big button, one swing per tap (dragging still aims).
+      if (this.meleeOnly) this.input.pressMelee();
+      else this.input.setTouchButton('fire', true);
     });
     this.bag.on<PointerEvent>(this.throwBtn, 'pointermove', (e) => {
       if (e.pointerId !== this.throwId) return;
@@ -221,8 +223,26 @@ export class FpsTouch {
 
   /** The campaign has no melee: the button is hidden there. */
   setMeleeAvailable(on: boolean): void {
-    if (this.meleeBtn.hidden === !on) return;
-    this.meleeBtn.hidden = !on;
+    const show = on && !this.meleeOnly; // melee-only swings from the main button instead
+    if (this.meleeBtn.hidden === !show) return;
+    this.meleeBtn.hidden = !show;
+  }
+
+  private meleeOnly = false;
+  /**
+   * ¡Puro Chanclazo!: the throw button becomes the swing button, in the same
+   * place and size, labelled for what it does; the separate melee button goes.
+   * Classic restores both at once. Any finger on the old button is let go.
+   */
+  setMeleeOnly(on: boolean, label: string, throwLabel: string): void {
+    if (on !== this.meleeOnly && this.throwId !== -1) this.dropThrow();
+    this.meleeOnly = on;
+    this.root.classList.toggle('melee-only', on);
+    const lbl = this.throwBtn.querySelector<HTMLElement>('.ft-lbl');
+    const text = on ? label : throwLabel;
+    if (lbl && lbl.textContent !== text) lbl.textContent = text;
+    this.throwBtn.setAttribute('aria-label', text);
+    this.meleeBtn.hidden = on || this.meleeBtn.hidden;
   }
 
   /** Your own swing missed (confirmed by the server): a short nudge of the melee button. */

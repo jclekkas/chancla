@@ -69,6 +69,8 @@ export class FpsInput {
   onLockError: (() => void) | null = null;
   onScoreboard: ((open: boolean) => void) | null = null;
   onSwitch: (() => void) | null = null;
+  /** Space while a replay shows: skip it (true: the key is used up, it never becomes a held jump). */
+  onSkip: (() => boolean) | null = null;
   lookEvents = 0;
   /** performance.now() when the menu was last requested from the keyboard or a lost lock. */
   lastMenuAt = -1e9;
@@ -169,6 +171,7 @@ export class FpsInput {
       if (this.scoreboard !== down) { this.scoreboard = down; this.onScoreboard?.(down); }
       return;
     }
+    if (e.code === 'Space' && down && !e.repeat && this.onSkip?.()) { e.preventDefault(); return; }
     if (MOVE[e.code] || e.code === 'Space' || e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
       e.preventDefault();
       if (down) this.keys.add(e.code); else this.keys.delete(e.code);

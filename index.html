@@ -74,6 +74,13 @@
           <button type="button" class="ft-btn ft-weapon" id="ft-weapon" data-t-aria="touch.weapon"><span aria-hidden="true">⇄</span><span class="ft-lbl" data-t="touch.weapon"></span></button>
           <button type="button" class="ft-btn ft-score" id="ft-score" data-t-aria="touch.scores"><span aria-hidden="true">≡</span><span class="ft-lbl" data-t="touch.scores"></span></button>
         </div>
+        <!-- Elimination replay: shown over the replayed scene; the live HUD is hidden meanwhile. -->
+        <div class="killcam" id="killcam" hidden>
+          <div class="kc-tag" data-t="killcam.replay"></div>
+          <div class="kc-by" id="kc-by" aria-live="polite"><span data-t="killcam.by"></span> <b class="kc-name" id="kc-name"></b> <span class="kc-dot" aria-hidden="true">·</span> <span id="kc-attack"></span></div>
+          <button type="button" class="kc-skip" id="kc-skip"><span data-t="killcam.skip"></span> <kbd>Space</kbd></button>
+          <button type="button" class="kc-tap" id="kc-tap"><span data-t="killcam.tapSkip"></span></button>
+        </div>
         <div class="hud-tr">
           <div class="net" id="net"><span class="dot" id="net-dot"></span><span id="net-ping"></span></div>
           <div class="fps" id="fps" hidden></div>
@@ -426,6 +433,7 @@
           </div>
           <label class="field check"><input type="checkbox" id="set-hints" /><span data-t="settings.hints"></span></label>
           <p class="note" data-t="settings.voiceNote"></p>
+          <label class="field check"><input type="checkbox" id="set-killcam" /><span data-t="settings.killcam"></span></label>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
         </div>

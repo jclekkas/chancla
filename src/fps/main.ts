@@ -629,7 +629,9 @@ function handlers() {
     state: (s: ConnState, detail?: string) => onState(s, detail),
     room: (room: RoomView) => onRoom(room),
     error: (code: ErrorCode) => onError(code),
-    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); mpDialogue(e); },
+    // Live voice lines wait out a replay (it plays none of its own).
+    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); if (!engine?.replaying) mpDialogue(e); },
+    snapshot: (r: Parameters<Engine['onSnapshot']>[0]) => engine?.onSnapshot(r),
     localThrow: (w: 0 | 1) => engine?.onLocalThrow(w),
     localMelee: (w: 0 | 1) => engine?.onLocalMelee(w),
     impact: (...a: Parameters<Engine['onImpact']>) => engine?.onImpact(...a),
@@ -989,6 +991,7 @@ function renderSettings(): void {
   ($('set-sfx') as HTMLInputElement).value = String(Math.round(v.sfx * 100));
   $('out-sfx').textContent = `${Math.round(v.sfx * 100)}%`;
   ($('set-stats') as HTMLInputElement).checked = v.showStats;
+  ($('set-killcam') as HTMLInputElement).checked = v.killcam;
 }
 
 function renderPracticeSetup(): void {
@@ -1298,6 +1301,9 @@ function bindUi(): void {
   check('set-invert', (v) => store.update({ invertY: v }));
   check('set-motion', (v) => store.update({ reducedMotion: v }));
   check('set-stats', (v) => store.update({ showStats: v }));
+  check('set-killcam', (v) => store.update({ killcam: v }));
+  // The replay's Skip button (mouse, when the pointer is free) and the touch "Tap to skip" layer.
+  for (const id of ['kc-skip', 'kc-tap']) $(id).addEventListener('click', (e) => { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); engine?.skipReplay(); });
   range('set-voice', (v) => store.update({ voice: v / 100 }));
   check('set-banter', (v) => store.update({ banter: v }));
   check('set-hints', (v) => store.update({ campaignHints: v }));

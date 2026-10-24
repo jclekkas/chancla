@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { MATCH, MELEE, WEAPONS, type WeaponId } from '../../shared/config';
 import type { RoomView } from '../../shared/protocol';
 import { t, type Key } from './strings';
+import { attackKey } from './killcam';
 import { chanclaSVG, rosaSVG, svgUrl } from '../ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -149,6 +150,23 @@ export class Hud {
     this.el.killfeed.prepend(row);
     while (this.el.killfeed.children.length > 5) this.el.killfeed.lastElementChild!.remove();
     setTimeout(() => row.remove(), 6000);
+  }
+
+  /**
+   * The elimination replay's overlay: "REPLAY", who eliminated you (with
+   * her team's icon, colour and name) and with what. null hides it.
+   */
+  killcam(info: { name: string; team: number | null; w: 0 | 1; melee: boolean } | null): void {
+    const root = document.getElementById('killcam');
+    this.el.root.classList.toggle('killcam-on', !!info);
+    if (!root) return;
+    root.hidden = !info;
+    if (!info) return;
+    const name = document.getElementById('kc-name')!;
+    const team = info.team === 0 || info.team === 1 ? info.team : null;
+    name.className = `kc-name${team === null ? '' : team === 0 ? ' sol' : ' luna'}`;
+    name.textContent = team === null ? info.name : `${teamIcon(team)} ${info.name} (${teamName(team)})`;
+    document.getElementById('kc-attack')!.textContent = t(attackKey(info.w, info.melee));
   }
 
   connection(text: string | null): void {

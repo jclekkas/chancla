@@ -14,7 +14,7 @@ import { audio } from '../audio/audio';
 import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
 import { CombatFx } from './render/combat-fx';
-import { missFeedback } from './miss-feedback';
+import { OwnSwingLog } from './miss-feedback';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
@@ -347,6 +347,8 @@ export class Engine {
     this.fxQueue = [];
     this.heldRuleros.clear();
     this.lastLocalMelee = -1e9;
+    this.ownSwings.reset();
+    this.vm.cancelMiss();
   }
 
   // Clears per-match bookkeeping for a rematch without leaving match mode.
@@ -391,7 +393,8 @@ export class Engine {
         break;
       case 'swing':
         // Someone else's swing: its swish, in step with her animation.
-        if (e.a !== me) this.later(e.tm, () => { const r = s.remotes.get(e.a); const k = r ? this.near(r) : 0; if (k > 0.05) audio.play(e.w === 1 ? 'swishHeavy' : 'swish', k); });
+        if (e.a === me) this.ownSwings.serverSwing(e.id, e.w, e.tm, performance.now());
+        else this.later(e.tm, () => { const r = s.remotes.get(e.a); const k = r ? this.near(r) : 0; if (k > 0.05) audio.play(e.w === 1 ? 'swishHeavy' : 'swish', k); });
         break;
       case 'hit': {
         if (e.m !== undefined) { this.onMeleeHit(e); break; }
@@ -410,7 +413,7 @@ export class Engine {
         break;
       }
       case 'shielded': {
-        if (e.a === me) { audio.play('shielded'); this.hud.sub(t('hud.protected'), 0.8); }
+        if (e.a === me) { audio.play('shielded'); this.hud.sub(t('hud.protected'), 0.8); if (e.m !== undefined) this.ownSwings.settled(e.m); }
         const v = e.v === me ? null : s.remotes.get(e.v);
         if (v && e.m !== undefined) {
           const show = () => { const r = s.remotes.get(e.v); if (r) this.fx.shielded({ x: r.x, y: r.y + 1.2, z: r.z }); };
@@ -420,7 +423,7 @@ export class Engine {
       }
       case 'whiff': {
         // A swing that touched nobody: the miss reads on the attacker.
-        if (e.a === me) { this.ownWhiff(e.w); break; }
+        if (e.a === me) { this.ownWhiff(e); break; }
         this.later(e.tm, () => {
           const r = s.remotes.get(e.a);
           if (!r) return;
@@ -468,21 +471,27 @@ export class Engine {
   /** Your own swing missed (confirmed): the touch button's nudge (set by main). */
   onOwnMiss: ((weapon: WeaponId) => void) | null = null;
 
-  // Your own confirmed miss (the session has already deduplicated it): shown
-  // on top of the swing in hand, faded by lateness, never by replaying it.
-  private ownWhiff(weapon: WeaponId): void {
-    const f = missFeedback(weapon, this.lastLocalMelee > 0 ? this.localMeleeWeapon : null, performance.now() - this.lastLocalMelee);
-    this.lastOwnMiss = { at: Math.round(performance.now()), weapon, motion: +f.motion.toFixed(2), mark: f.mark };
-    if (f.motion > 0) this.vm.whiff(weapon, f.motion);
-    if (f.mark) { this.hud.missMarker(weapon === 1 ? 1 : -1); this.onOwnMiss?.(weapon); }
+  // Your own confirmed miss (the session has already deduplicated it): tied
+  // to the swing it came from by the server's swing id, shown on top of the
+  // swing in hand, faded by lateness, never by replaying it; suppressed when
+  // the swing it belongs to is not the one in hand, or is uncertain.
+  private ownWhiff(e: Extract<SimEvent, { k: 'whiff' }>): void {
+    const s = this.session;
+    const f = this.ownSwings.miss(e.id, e.w, e.tm, performance.now(), (s?.weapon ?? this.input.weapon) as WeaponId);
+    this.lastOwnMiss = { at: Math.round(performance.now()), id: e.id, weapon: e.w, motion: +f.motion.toFixed(2), mark: f.mark };
+    if (f.motion > 0) this.vm.whiff(e.w, f.motion);
+    if (f.mark) { this.hud.missMarker(e.w === 1 ? 1 : -1); this.onOwnMiss?.(e.w); }
   }
+  /** Your own swings, matched to the server's, so a miss shows only for the swing it came from. */
+  private ownSwings = new OwnSwingLog();
   /** The last own miss and what it showed (diagnostics and tests). */
-  lastOwnMiss: { at: number; weapon: WeaponId; motion: number; mark: boolean } | null = null;
+  lastOwnMiss: { at: number; id: number; weapon: WeaponId; motion: number; mark: boolean } | null = null;
 
   /** Your own swing started (predicted): animation clock and swish. */
   onLocalMelee(weapon: WeaponId): void {
     this.lastLocalMelee = performance.now();
     this.localMeleeWeapon = weapon;
+    this.ownSwings.localStart(weapon, this.lastLocalMelee);
     audio.play(weapon === 1 ? 'swishHeavy' : 'swish');
   }
 
@@ -495,6 +504,7 @@ export class Engine {
   private onMeleeHit(e: Extract<SimEvent, { k: 'hit' }>): void {
     const s = this.session!;
     const me = s.id;
+    if (e.a === me && e.m !== undefined) this.ownSwings.settled(e.m);
     const heavy = e.w === 1;
     const involved = e.a === me || e.v === me;
     const at = e.tm ?? s.renderTime();
@@ -677,6 +687,8 @@ export class Engine {
     const reduced = settings.reducedMotion;
     // Spawn: face the spawn direction the server chose (before ticking,
     // which would overwrite it with the old look direction).
+    // Death and respawn: no miss cue or pending swing carries across either.
+    if (this.wasAlive !== s.alive) { this.ownSwings.reset(); this.vm.cancelMiss(); }
     if (!this.wasAlive && s.alive) {
       this.input.yaw = s.yaw;
       this.input.pitch = 0;

@@ -102,6 +102,28 @@ const watchMark = (p: Page, ms: number) => p.evaluate((ms) => new Promise<string
   const tick = () => { if (el.classList.contains('on')) seen.add(el.classList.contains('r') ? 'right' : 'left'); if (performance.now() < end) requestAnimationFrame(tick); else res([...seen]); };
   tick();
 }), ms);
+/**
+ * One own swing out of reach and what it showed: the miss cues (marks,
+ * overruns, crosshair sides, the touch button) and how late the server's
+ * miss arrived after the contact window. The practice host runs in the page,
+ * so on a slow software renderer its events can come late; past 650 ms the
+ * cue is rightly suppressed as stale, so callers retry for a prompt one.
+ */
+async function missTry(p: Page, press: () => Promise<void>, weapon: 0 | 1) {
+  const o0 = await own(p);
+  const nEv = await p.evaluate(() => (window as any).__ev.length);
+  await press();
+  const watch = p.evaluate(() => new Promise<boolean>((res) => { const b = document.getElementById('ft-melee'), end = performance.now() + 1000; const t = () => { if (b?.classList.contains('miss')) res(true); else if (performance.now() > end) res(false); else requestAnimationFrame(t); }; t(); }));
+  const [seen, btn] = await Promise.all([watchMark(p, 1000), watch]);
+  await sleep(150);
+  const o1 = await own(p);
+  const whiffAt = await p.evaluate(({ n, w }) => { const W = window as any, me = W.__fps.session().id; const e = W.__ev.slice(n).find((x: any) => x.k === 'whiff' && x.a === me && x.w === w); return e ? e.at : null; }, { n: nEv, w: weapon });
+  const late = whiffAt === null ? null : Math.round(whiffAt - o1.pressAt - (weapon === 1 ? 390 : 190));
+  return { late, prompt: late !== null && late <= 600, marks: o1.marks.slice(o0.marks.length), overruns: o1.overruns.slice(o0.overruns.length), seen, btn, hitMarks: o1.hitMarks - o0.hitMarks, fxHits: o1.fxHits - o0.fxHits };
+}
+const STALE_MS = 650;
+/** Every attempt agrees with the timing rule (a cue if and only if the miss came within 650 ms); the last is a prompt one. */
+const consistent = (tries: Array<Awaited<ReturnType<typeof missTry>>>) => tries.every((t) => t.late !== null && ((t.late <= STALE_MS) === (t.marks.length === 1)) && t.marks.length <= 1 && t.overruns.length <= 1);
 const fx = (p: Page) => p.evaluate(() => { const e = (window as any).__fps.engine(); return { active: e.ruleros.active, spawned: e.ruleros.spawned }; });
 const popcount = (n: number) => { let c = 0; while (n) { c += n & 1; n >>= 1; } return c; };
 
@@ -143,29 +165,51 @@ async function desktop(browser: Browser, blocked: string[], errors: string[]): P
   check('a hit shows the hit marker and contact effect, never the miss mark or overrun', oh.marks.length === 0 && oh.overruns.length === 0 && oh.hitMarks >= 1 && oh.fxHits === 1, oh);
 
   // A miss: out of reach.
-  await stage(p, 3.0);
-  const m0 = await foeState(p);
-  const o0 = await own(p);
-  await p.keyboard.press('KeyV');
-  const markSides = await watchMark(p, 900);
-  const m1 = await foeState(p);
+  const ch: Array<Awaited<ReturnType<typeof missTry>>> = [];
+  let m0 = await foeState(p), m1 = m0;
+  for (let i = 0; i < 3 && !ch.at(-1)?.prompt; i++) {
+    await stage(p, 3.0);
+    m0 = await foeState(p);
+    ch.push(await missTry(p, () => p.keyboard.press('KeyV'), 0));
+    m1 = await foeState(p);
+    await sleep(500);
+  }
   const whiffs = await events(p, 'whiff');
   check('a swing out of reach misses: no damage, a whiff from the server', m1.hp === m0.hp && m1.mySwings === m0.mySwings + 1 && whiffs.length >= 1, { hp: m1.hp, whiffs: whiffs.length });
-  const o1 = await own(p);
-  const newMarks = o1.marks.slice(o0.marks.length), newRuns = o1.overruns.slice(o0.overruns.length);
+  const c = ch.at(-1)!;
   check('your own confirmed Chanclazo miss: one overrun of the hand and one mark on the left of the crosshair, never before the contact window ends',
-    newMarks.length === 1 && newMarks[0].side === -1 && newMarks[0].t >= 190 && newRuns.length === 1 && newRuns[0].w === 0 && newRuns[0].k === 1 && markSides.join() === 'left', { marks: newMarks, overruns: newRuns, seen: markSides });
-  check('the miss shows no hit marker and no contact effect', o1.hitMarks === o0.hitMarks && o1.fxHits === o0.fxHits, { hitMarks: o1.hitMarks - o0.hitMarks, fxHits: o1.fxHits - o0.fxHits });
+    consistent(ch) && c.prompt && c.marks.length === 1 && c.marks[0].side === -1 && c.marks[0].t >= 190 && c.overruns.length === 1 && c.overruns[0].w === 0 && c.overruns[0].k > 0 && c.seen.join() === 'left',
+    ch.map((t) => ({ late: t.late, marks: t.marks, overruns: t.overruns, seen: t.seen })));
+  check('the miss shows no hit marker and no contact effect', ch.every((t) => t.hitMarks === 0 && t.fxHits === 0), ch.map((t) => [t.hitMarks, t.fxHits]));
   // The same whiff resent (a duplicate snapshot) is dropped; an old one replayed late shows nothing.
   const dup = await p.evaluate(() => {
     const W = window as any, s = W.__fps.session(), ev = W.__ev.filter((e: any) => e.k === 'whiff' && e.a === s.id).pop();
     const d0 = s.duplicatesDropped; s.onEvent(ev); return { dropped: s.duplicatesDropped - d0 };
   });
   await sleep(1500);
+  const o1 = await own(p);
   await p.evaluate(() => { const W = window as any, s = W.__fps.session(); W.__fps.engine().onEvent({ k: 'whiff', id: 987654, a: s.id, w: 0, tm: s.renderTime() }); });
   await sleep(200);
   const o2 = await own(p);
   const late = await p.evaluate(() => (window as any).__fps.engine().lastOwnMiss);
+  // The counterexample through the engine's real event path: Chanclazo A at
+  // 0 ms, B at 700 ms, A's miss delayed to 1000 ms: nothing; then B's own miss shows.
+  const corr = await p.evaluate(async () => {
+    const W = window as any, e = W.__fps.engine(), me = W.__fps.session().id, tm0 = 9_000_000;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    W.__fps.input().weapon = 0;
+    e.onLocalMelee(0); e.onEvent({ k: 'swing', id: 800001, a: me, w: 0, tm: tm0 });
+    await wait(700);
+    e.onLocalMelee(0); e.onEvent({ k: 'swing', id: 800002, a: me, w: 0, tm: tm0 + 700 });
+    await wait(300);
+    e.onEvent({ k: 'whiff', id: 800001, a: me, w: 0, tm: tm0 + 190 });
+    const a = { ...e.lastOwnMiss };
+    await wait(190);
+    e.onEvent({ k: 'whiff', id: 800002, a: me, w: 0, tm: tm0 + 890 });
+    return { a, b: { ...e.lastOwnMiss } };
+  });
+  check('a delayed miss of an older swing shows nothing for the newer same-chancla swing; the newer one\'s own miss shows', corr.a.mark === false && corr.a.motion === 0 && corr.b.mark === true && corr.b.motion > 0, corr);
+  await sleep(900);
   check('a resent miss is dropped, and a miss arriving long after the swing shows nothing (no late replay)', dup.dropped === 1 && o2.marks.length === o1.marks.length && o2.overruns.length === o1.overruns.length && late.mark === false && late.motion === 0, { dup, late });
 
   // A held V never repeats.
@@ -196,14 +240,16 @@ async function desktop(browser: Browser, blocked: string[], errors: string[]): P
   await sleep(600);
   const label2 = await p.evaluate(() => document.querySelector('.wslot.on .wmelee')?.textContent?.trim() ?? '');
   check('with La Pesada in hand the slot says Revés', /Rev/.test(label2), label2);
-  await stage(p, 3.0);
-  const q0 = await own(p);
-  await p.keyboard.press('KeyV');
-  const revSides = await watchMark(p, 1000);
-  const q1 = await own(p);
-  const rMarks = q1.marks.slice(q0.marks.length), rRuns = q1.overruns.slice(q0.overruns.length);
+  const rv: Array<Awaited<ReturnType<typeof missTry>>> = [];
+  for (let i = 0; i < 3 && !rv.at(-1)?.prompt; i++) {
+    await stage(p, 3.0);
+    rv.push(await missTry(p, () => p.keyboard.press('KeyV'), 1));
+    await sleep(900);
+  }
+  const r = rv.at(-1)!;
   check('your own confirmed Revés miss: one overrun and one mark on the right, after the contact window (300-390 ms)',
-    rMarks.length === 1 && rMarks[0].side === 1 && rMarks[0].t >= 390 && rRuns.length === 1 && rRuns[0].w === 1 && rRuns[0].k === 1 && revSides.join() === 'right' && q1.fxHits === q0.fxHits, { marks: rMarks, overruns: rRuns, seen: revSides });
+    consistent(rv) && r.prompt && r.marks.length === 1 && r.marks[0].side === 1 && r.marks[0].t >= 390 && r.overruns.length === 1 && r.overruns[0].w === 1 && r.overruns[0].k > 0 && r.seen.join() === 'right' && rv.every((t) => t.fxHits === 0),
+    rv.map((t) => ({ late: t.late, marks: t.marks, overruns: t.overruns, seen: t.seen })));
   await sleep(1300);
   await stage(p, 1.3, { hp: 100 });
   const r0 = await foeState(p);
@@ -283,13 +329,15 @@ async function phone(browser: Browser, blocked: string[], errors: string[]): Pro
   check('one tap on melee, with the stick and a look drag held, makes exactly one swing', presses1 === presses0 + 1 && s1.mySwings === s0.mySwings + 1, { presses: presses1 - presses0, swings: s1.mySwings - s0.mySwings });
   // A tap out of reach: the confirmed miss nudges the melee button and marks the crosshair.
   await sleep(900);
-  await stage(p, 3.0);
-  const tm0 = await own(p);
-  await touch('touchStart', [{ x: melee.x, y: melee.y, id: 7 }]); await sleep(40); await touch('touchEnd', []);
-  const btnMiss = await p.evaluate(() => new Promise<boolean>((res) => { const b = document.getElementById('ft-melee')!, end = performance.now() + 900; const t = () => { if (b.classList.contains('miss')) res(true); else if (performance.now() > end) res(false); else requestAnimationFrame(t); }; t(); }));
-  await sleep(300);
-  const tm1 = await own(p);
-  check('touch: your own confirmed miss nudges the melee button and marks the crosshair once', btnMiss && tm1.marks.length === tm0.marks.length + 1 && tm1.overruns.length === tm0.overruns.length + 1, { btnMiss, marks: tm1.marks.length - tm0.marks.length });
+  const tt: Array<Awaited<ReturnType<typeof missTry>>> = [];
+  for (let i = 0; i < 3 && !tt.at(-1)?.prompt; i++) {
+    await stage(p, 3.0);
+    tt.push(await missTry(p, async () => { await touch('touchStart', [{ x: melee.x, y: melee.y, id: 7 }]); await sleep(40); await touch('touchEnd', []); }, 0));
+    await sleep(700);
+  }
+  const tl = tt.at(-1)!;
+  check('touch: your own confirmed miss nudges the melee button and marks the crosshair once', consistent(tt) && tl.prompt && tl.btn && tl.marks.length === 1 && tl.overruns.length === 1,
+    tt.map((t) => ({ late: t.late, btn: t.btn, marks: t.marks.length })));
   await sleep(700);
   // Throw and jump still work with the stick held.
   await touch('touchStart', [{ ...stick, id: 1 }]);

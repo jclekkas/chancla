@@ -37,3 +37,58 @@ export function missFeedback(weapon: WeaponId, swingWeapon: WeaponId | null, sin
   const motion = late <= MISS_FULL_MS ? 1 : Math.max(0, 1 - (late - MISS_FULL_MS) / (MISS_MOTION_MAX_MS - MISS_FULL_MS));
   return { motion, mark: true };
 }
+
+/** A server swing event further than this from the local press it would match is not that press (ms). */
+export const MATCH_MAX_MS = 1000;
+/** Slack allowed between the server's contact-window end and its 'whiff' time (ms, tick rounding). */
+const WINDOW_SLACK_MS = 40;
+
+/**
+ * Ties your own confirmed misses to the swings they came from. Each swing
+ * you start locally (predicted) is matched, in order, to the server's
+ * 'swing' event for you (same chancla); the 'whiff' names the server swing
+ * id, so it finds exactly that local swing. Feedback shows only for the
+ * latest local swing, timed from its own start; whenever the
+ * correspondence is uncertain (no match, a different chancla, a newer
+ * swing, timestamps that disagree) the cosmetic cue is suppressed.
+ */
+export class OwnSwingLog {
+  private pending: Array<{ weapon: WeaponId; at: number; k: number }> = [];
+  private byId = new Map<number, { weapon: WeaponId; at: number; k: number; tm: number }>();
+  private n = 0;
+
+  /** You started a swing (predicted) at local time `at`. */
+  localStart(weapon: WeaponId, at: number): void {
+    this.n++;
+    this.pending.push({ weapon, at, k: this.n });
+    if (this.pending.length > 8) this.pending.shift();
+  }
+
+  /** The server says your swing `id` started (server time `tm`); it arrived at local time `at`. */
+  serverSwing(id: number, weapon: WeaponId, tm: number, at: number): void {
+    while (this.pending.length && at - this.pending[0]!.at > MATCH_MAX_MS) this.pending.shift(); // never confirmed
+    const head = this.pending[0];
+    if (!head || head.weapon !== weapon || head.at > at) { this.pending.length = 0; return; } // out of step: match nothing
+    this.pending.shift();
+    this.byId.set(id, { weapon: head.weapon, at: head.at, k: head.k, tm });
+    if (this.byId.size > 16) this.byId.delete(this.byId.keys().next().value!);
+  }
+
+  /** Swing `id` hit or was absorbed: it can no longer miss. */
+  settled(id: number): void { this.byId.delete(id); }
+
+  /** The server says swing `id` missed (server time `tm`), arriving at local time `at`: what to show. */
+  miss(id: number, weapon: WeaponId, tm: number, at: number, inHand: WeaponId): MissFeedback {
+    const s = this.byId.get(id);
+    this.byId.delete(id);
+    if (!s || s.weapon !== weapon || inHand !== weapon || s.k !== this.n) return NONE;
+    const def = MELEE[weapon]!, window = def.windupMs + def.activeMs;
+    if (Number.isFinite(tm) && Number.isFinite(s.tm) && Math.abs(tm - s.tm - window) > WINDOW_SLACK_MS) return NONE;
+    // The swing is known by its id, so a miss arriving "early" (the local
+    // swing was registered a frame after the server started it) is prompt.
+    return missFeedback(weapon, s.weapon, Math.max(at - s.at, window));
+  }
+
+  /** Death, respawn, a new round or match: nothing carries over. */
+  reset(): void { this.pending.length = 0; this.byId.clear(); }
+}

@@ -179,9 +179,14 @@ export class ViewModel {
     this.miss.t = 0; this.miss.k = Math.min(1, strength); this.miss.weapon = weapon;
   }
 
+  /** Ends a miss cue at once (death, respawn, a new round). */
+  cancelMiss(): void { this.miss.t = 1e9; }
+
   update(s: ViewState, dt: number, reducedMotion: boolean): void {
     this.root.visible = s.alive;
-    if (!s.alive) return;
+    if (!s.alive) { this.cancelMiss(); return; }
+    // A miss cue belongs to the chancla that missed: switching ends it.
+    if (s.weapon !== this.miss.weapon) this.cancelMiss();
     const def = WEAPONS[s.weapon]!;
     if (!this.wasGround && s.onGround) this.landing = 1;
     this.wasGround = s.onGround;

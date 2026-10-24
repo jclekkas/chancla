@@ -189,6 +189,9 @@ const LLX = 28, LLY = 29, LLZ = 30, SLX = 31, LRX = 32, LRY = 33, LRZ = 34, SRX 
 
 let seedCounter = 0;
 
+/** How far a crouch drapes the skirt: forward tilt (rad), side, front-to-back and vertical scale. */
+export const CROUCH_SKIRT = { tilt: 0.34, wide: 0.36, deep: 0.72, drop: 0.1 } as const;
+
 export class RosaAnimator {
   private time = 0;
   private readonly seed: number;
@@ -359,12 +362,12 @@ export class RosaAnimator {
     // Gait from speed: the stride (two steps) grows with speed, and each
     // foot's share on the ground shrinks into a run.
     // (Never more than about 3.3 strides a second: a frantic patter reads as a glitch.)
-    const D = Math.max((0.55 + 0.27 * speed) * (1 - 0.15 * cr) * (1 - 0.3 * side) * (this.backMode ? 0.8 : 1), speed / 3.3);
+    const D = Math.max((0.55 + 0.27 * speed) * (1 - 0.3 * cr) * (1 - 0.3 * side) * (this.backMode ? 0.8 : 1), speed / 3.3);
     const beta = clamp((0.56 + 0.15 * cr) / D, 0.3, 0.64);
     const E = beta * D;
     const freq = Math.max(speed / D, 1.1);
     const W = STANCE_W + 0.04 * cr + 0.07 * side;
-    const H = Math.min(0.17, 0.06 + 0.02 * speed) * (1 - 0.35 * cr);
+    const H = Math.min(0.17, 0.06 + 0.02 * speed) * (1 - 0.7 * cr); // crouched: short, low steps that stay under the skirt
 
     // ---- Actions, each on its own clock ----
     const def = WEAPONS[s.weapon]!, mdef = MELEE[s.weapon]!;
@@ -494,7 +497,7 @@ export class RosaAnimator {
     for (let i = HY; i <= HRZ; i++) o[i] = raw[i]! + this.off[i]!;
 
     // ---- Legs: IK to the feet ----
-    this.splay = 0.5 * cr;
+    this.splay = 0.22 * cr; // more and the knees push out through the sides of the skirt
     this.solveLeg(ft[0], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LLX);
     this.solveLeg(ft[1], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LRX);
     for (let i = LLX; i <= SRX; i++) o[i] = raw[i]! + this.off[i]!;
@@ -881,9 +884,10 @@ export class RosaAnimator {
     const k = rm ? 0.4 : 1;
     const px = this.extX.to(clamp(aF * 0.004, -0.15, 0.15) * k, 10, dt), pz = this.extZ.to(clamp(-aR * 0.004, -0.12, 0.12) * k, 10, dt);
     for (let bi = 0; bi < this.extrasBase.length; bi++) { const b = this.extrasBase[bi]!;
-      b.o.rotation.set(b.rx + px * b.g, b.ry, b.rz + pz * b.g);
-      // A crouch spreads the skirt instead of pushing it into the paving.
-      if (b.skirt) b.o.scale.set(b.sx * (1 + 0.12 * cr), b.sy * (1 - 0.22 * cr), b.sz * (1 + 0.12 * cr));
+      // A crouch drapes the skirt forward over the knees (they travel about
+      // 0.4 m ahead of the hips) instead of pushing it into the paving.
+      b.o.rotation.set(b.rx + px * b.g + (b.skirt ? CROUCH_SKIRT.tilt * cr : 0), b.ry, b.rz + pz * b.g);
+      if (b.skirt) b.o.scale.set(b.sx * (1 + CROUCH_SKIRT.wide * cr), b.sy * (1 - CROUCH_SKIRT.drop * cr), b.sz * (1 + CROUCH_SKIRT.deep * cr));
     }
   }
 

@@ -359,14 +359,18 @@ function buildHand(right: boolean, d: Detail, p: Parts, m = new THREE.Matrix4())
   thumb.dispose();
 }
 
+// The thigh and the knee cap are only ever seen under or against the skirt
+// (standing, the knee is about 0.1 m above the hem), so they wear the
+// skirt's lining colour: a knee that meets the hem in a crouch-walk reads
+// as cloth pushed forward, not as a hole in the skirt.
 function buildLeg(d: Detail, p: Parts): void {
   const g = limb(new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(0, -0.41, 0), 0.072, 0.058, Math.min(8, d.limb));
-  p.add(g, S.skin);
+  p.add(g, S.skirtDeep);
   g.dispose();
 }
 
 function buildShin(d: Detail, p: Parts): void {
-  const rings: Ring[] = [{ y: 0.045, r: 0, c: S.skin }, { y: 0.035, r: 0.045, c: S.skin }, { y: 0, r: 0.058, c: S.skin }, { y: -0.1, r: 0.06, c: S.skin }, { y: -0.2, r: 0.052, c: S.skin }, { y: -0.29, r: 0.043, c: S.skin },
+  const rings: Ring[] = [{ y: 0.045, r: 0, c: S.skirtDeep }, { y: 0.035, r: 0.045, c: S.skirtDeep }, { y: 0, r: 0.058, c: S.skirtDeep }, { y: -0.06, r: 0.06, c: S.skin }, { y: -0.1, r: 0.06, c: S.skin }, { y: -0.2, r: 0.052, c: S.skin }, { y: -0.29, r: 0.043, c: S.skin },
     { y: -0.36, r: 0.039, c: S.skin }, { y: -0.39, r: 0.04, c: S.skin }, { y: -0.408, r: 0, c: S.skin }];
   p.loft(rings, d.limb, {}, d.inkLimb, { step: 2 });
 }

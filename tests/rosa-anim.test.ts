@@ -321,3 +321,54 @@ describe('Rosa animation: robustness', () => {
     g(); expect(process.memoryUsage().heapUsed - before).toBeLessThan(50_000);
   });
 });
+
+describe('crouching inside the skirt', () => {
+  /**
+   * How far each knee (the shin pivot) sits outside the skirt, in metres
+   * (negative: inside), measured in the skirt's own frame against its
+   * geometry at the knee's height and bearing, so the crouch drape (tilt
+   * and scale) counts. The worst over a sequence is returned.
+   */
+  function kneeClearance(rig: RosaRig, anim: RosaAnimator, secs: number, at: (t: number) => At): number {
+    const skirt = rig.extras.skirt as THREE.Mesh;
+    const pos = skirt.geometry.getAttribute('position');
+    const k = new THREE.Vector3();
+    let worst = -Infinity, prev = at(0);
+    for (let i = 0; i <= Math.round(secs / DT); i++) {
+      const t = i * DT, p = at(t), yaw = p.yaw ?? -Math.PI / 2;
+      const vx = i === 0 ? 0 : (p.x - prev.x) / DT, vz = i === 0 ? 0 : (p.z - prev.z) / DT;
+      prev = p;
+      rig.root.position.set(p.x, 0, p.z); rig.root.rotation.y = yaw;
+      anim.update(moveState(vx, vz, yaw, p.s), DT, false);
+      rig.root.updateMatrixWorld(true);
+      if (t < 0.6) continue; // the crouch settles
+      for (const shin of [rig.shinL, rig.shinR]) {
+        skirt.worldToLocal(shin.getWorldPosition(k));
+        const r = Math.hypot(k.x, k.z), a = Math.atan2(k.z, k.x);
+        let R = 0;
+        for (let v = 0; v < pos.count; v++) {
+          if (Math.abs(pos.getY(v) - k.y) > 0.04) continue;
+          const d = Math.abs(((Math.atan2(pos.getZ(v), pos.getX(v)) - a + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+          if (d < 0.35) R = Math.max(R, Math.hypot(pos.getX(v), pos.getZ(v)));
+        }
+        if (R > 0) worst = Math.max(worst, r - R);
+      }
+    }
+    return worst;
+  }
+
+  for (const quality of ['high', 'medium', 'low'] as const) {
+    it(`keeps the knees under the skirt crouched and crouch-walking (${quality})`, () => {
+      const crouched = { crouched: true };
+      const still = (() => { const rig = buildRosaModel(0, { quality }); return kneeClearance(rig, new RosaAnimator(rig), 2, () => ({ x: 0, z: 0, s: crouched })); })();
+      const walks = [[0, -1], [1, 0], [0, 1], [-0.7, -0.7]].map(([dx, dz]) => {
+        const rig = buildRosaModel(1, { quality });
+        return kneeClearance(rig, new RosaAnimator(rig), 3, (t) => ({ x: dx! * 3 * Math.max(0, t - 0.6), z: dz! * 3 * Math.max(0, t - 0.6), yaw: 0, s: crouched }));
+      });
+      // Still: well inside. Walking: the knee may brush the cloth (its cap
+      // wears the skirt's lining colour); strafing turns the hips the most.
+      expect(still).toBeLessThan(-0.04);
+      walks.forEach((w, i) => expect(w).toBeLessThan(i === 1 ? 0.035 : 0.02));
+    });
+  }
+});

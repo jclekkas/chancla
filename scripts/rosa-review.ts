@@ -97,9 +97,10 @@ async function stage(p: Page, o: { me: [number, number]; look: [number, number, 
 /**
  * Drives a bot like a player: from now on, every host tick gets this input
  * (move in its own frame: mz forward, mx right; facing `face` or `yaw`).
- * `press` buttons go out once (1 throw, 2 jump, 8 melee).
+ * `press` buttons go out once (1 throw, 2 jump, 8 melee); `hold` buttons go
+ * out every tick (4 crouch).
  */
-async function drive(p: Page, who: Who, d: { mx?: number; mz?: number; face?: [number, number, number]; yaw?: number; press?: number; weapon?: 0 | 1 } | null): Promise<void> {
+async function drive(p: Page, who: Who, d: { mx?: number; mz?: number; face?: [number, number, number]; yaw?: number; press?: number; hold?: number; weapon?: 0 | 1 } | null): Promise<void> {
   await p.evaluate(({ who, d }) => {
     const W = window as any;
     if (!W.__driver) {
@@ -115,7 +116,7 @@ async function drive(p: Page, who: Who, d: { mx?: number; mz?: number; face?: [n
             yaw = Math.atan2(-dx, -dz); pitch = Math.atan2(c.face[1] - (q.body.y + 1.58), Math.hypot(dx, dz));
           }
           q.__seq = Math.max(q.__seq ?? 0, q.lastSeq) + 1;
-          room.sim.queueInput(q.id, { seq: q.__seq, mx: c.mx ?? 0, mz: c.mz ?? 0, yaw, pitch, buttons: c.press ?? 0, weapon: c.weapon ?? q.weapon });
+          room.sim.queueInput(q.id, { seq: q.__seq, mx: c.mx ?? 0, mz: c.mz ?? 0, yaw, pitch, buttons: (c.press ?? 0) | (c.hold ?? 0), weapon: c.weapon ?? q.weapon });
           c.press = 0;
         }
       }, 1000 / 60);
@@ -247,6 +248,23 @@ async function desktop(p: Page): Promise<void> {
     await shot(p, 'atk-throw-impact', 'A throw, the impact on the target');
     await drive(p, 'ally', null);
     await run(p, 800);
+  }
+  // Crouching and crouch-walking, third person (own hand hidden), 3 m: side, three-quarter and front.
+  if (want('crouch')) {
+    const at: [number, number] = [7.5, LANE_Z];
+    for (const [view, me] of [['side', [7.5, -2.6]], ['3q', [9.6, -3.4]], ['front', [5.0, LANE_Z + 0.4]]] as const) {
+      await stage(p, { me: me as [number, number], look: [at[0], 0.7, at[1]], spectate: true, bots: { foe: { at, face: [4, LANE_Z] } } });
+      await drive(p, 'foe', { hold: 4, yaw: Math.PI / 2 });
+      await run(p, 500);
+      await shot(p, `crouch-still-${view}`, `Crouched, standing still (${view})`);
+      await drive(p, 'foe', { hold: 4, mz: 1, yaw: Math.PI / 2 });
+      await run(p, 260);
+      await shot(p, `crouch-walk-${view}-a`, `Crouch-walking (${view})`);
+      await run(p, 130);
+      await shot(p, `crouch-walk-${view}-b`, `Crouch-walking, 130 ms later (${view})`);
+      await drive(p, 'foe', null);
+      await run(p, 600);
+    }
   }
   // First person: your own Revés to the face.
   if (want('fp')) {

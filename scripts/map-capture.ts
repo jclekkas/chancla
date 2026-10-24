@@ -49,7 +49,7 @@ export const VIEWS: Record<string, ReadonlyArray<readonly [string, number, numbe
     ['stalls-east', 15, -2, 11.3, 1.1, -5.8],
   ],
   fiesta: [
-    ['tables-west', -16.5, 5, 6, 1.6, -1.5],
+    ['tables-west', -14.8, 5.2, 6, 1.6, -1.5],
     ['pinata', -5, 5.5, 0, 3.4, 0],
     ['stage-north', -1, -5, 0, 1.5, -11],
     ['hedges-east', 16, 4.5, 4, 1.4, 7.3],
@@ -65,7 +65,11 @@ async function waitHttp(url: string, ms = 20000): Promise<boolean> {
 async function browser(): Promise<Browser> {
   if (!GPU) return launch();
   // A real GPU: the installed Chrome, in a window (headless Chrome may fall back to software).
-  return chromium.launch({ channel: 'chrome', headless: false, args: ['--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'] });
+  // CHROMIUM_PATH picks another Chromium-based browser instead of Google Chrome.
+  const args = ['--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'];
+  return process.env.CHROMIUM_PATH
+    ? chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: false, args })
+    : chromium.launch({ channel: 'chrome', headless: false, args });
 }
 
 async function open(b: Browser, map: string, quality: string, phone: boolean): Promise<Page> {
@@ -133,11 +137,14 @@ async function main(): Promise<void> {
   }
   const b = await browser();
   const costs: Record<string, Cost> = {};
+  let glRenderer = '';
   const sampleMs = GPU ? 2000 : 600; // software rendering: the counts are exact, the times are not evidence
   try {
     for (const map of MAPS) {
       for (const q of QUALITIES) {
         const p = await open(b, map, q, false);
+        // What actually rendered (on a Mac: the Apple GPU through ANGLE/Metal; here: SwiftShader).
+        if (!glRenderer) glRenderer = await p.evaluate(() => { const gl = (window as any).__fps.engine().renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); });
         for (const v of VIEWS[map] ?? []) {
           costs[`${map}/${v[0]}-${q}`] = await view(p, v, sampleMs);
           await p.screenshot({ path: path.join(OUT, `${map}-${v[0]}-${q}.png`), timeout: 120000 });
@@ -157,7 +164,7 @@ async function main(): Promise<void> {
     await b.close();
     preview?.kill();
   }
-  const env = { gpu: GPU, renderer: GPU ? 'system Chrome, hardware' : 'Chromium, SwiftShader (software)', host: `${os.platform()} ${os.arch()} ${os.cpus()[0]?.model ?? ''}`, at: new Date().toISOString() };
+  const env = { gpu: GPU, webgl: glRenderer, renderer: GPU ? 'system Chrome, hardware' : 'Chromium, SwiftShader (software)', host: `${os.platform()} ${os.arch()} ${os.cpus()[0]?.model ?? ''}`, at: new Date().toISOString() };
   fs.writeFileSync(path.join(OUT, 'costs.json'), JSON.stringify({ env, costs }, null, 1));
   console.log(`wrote ${Object.keys(costs).length} views to ${OUT}`);
 }

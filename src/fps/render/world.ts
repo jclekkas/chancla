@@ -12,7 +12,7 @@ import { FOCAL_MATS, buildFocal } from './patio-focal';
 import type { DressingModule } from './map-dressing';
 import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
-import { patioGround, patioLight } from './patio-materials';
+import { GROUND_ZONES, patioGround, patioLight } from './patio-materials';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -147,7 +147,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // El Patio: one repeating paving texture, with production's ground zones
   // (streets, team courts) kept as vertex tints, and the fountain's path
   // rings as a flat mesh (they were painted into production's ground canvas).
-  const pg = kit ? patioGround(quality, decor.ground, patioKit) : null;
+  const pg = kit ? patioGround(quality, decor.ground, GROUND_ZONES[map.id ?? 'patio'] ?? false) : null;
   const ground = pg
     ? new THREE.Mesh(pg.geometry, pg.material)
     : new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18) }));

@@ -30,7 +30,7 @@ const C = {
   corn: 0xf2c94a, husk: 0x9cbf5a, brass: 0xd9a441,
 } as const;
 /** Kiosk paint by sign (the arena's colours, kept). */
-const KIOSK_PAINT: Record<string, number> = { ELOTES: 0xf0c64a, 'PERIÓDICOS': 0x3f8f6a };
+const KIOSK_PAINT: Record<string, number> = { ELOTES: 0xf0c64a, 'PERIÓDICOS': 0x3f8f6a, 'AGUAS FRESCAS': 0x3fa9b5 };
 
 type MatKey = 'cantera' | 'talavera' | 'flat' | 'wood' | 'bronze' | 'water' | 'shadow';
 

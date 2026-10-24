@@ -304,10 +304,23 @@ export function patioGroundTexture(quality: Quality, ground: { w: number; d: num
  * middle, a sand-toned court at Sol's spawn and a cool grey one at Luna's,
  * and a faint darkening toward the arena edge.
  * One vertex every two tiles (~1.2k vertices, 2.2k triangles on El Patio), same single draw call.
- * Zones follow El Patio's map (production groundTexture); other maps get the
- * edge darkening only.
+ * Zones follow each map's layout (GROUND_ZONES; El Patio's match production's
+ * groundTexture); a map without zones gets the edge darkening only.
  */
-export function patioGround(quality: Quality, ground: { w: number; d: number } = { w: 54, d: 38 }, zones = true): { geometry: THREE.BufferGeometry; material: THREE.MeshToonMaterial } {
+/** A map's floor zones: the spawn courts (minX, minZ, maxX, maxZ) and the open square; everything else is street. */
+export interface GroundZones { sol: readonly number[]; luna: readonly number[]; plaza: readonly number[] }
+
+/** Floor zones by arena map, following each layout (spawn courts, the central square, the lanes and walkways around it). */
+export const GROUND_ZONES: Record<string, GroundZones> = {
+  patio: { sol: [-26, -6.4, -21, 6.4], luna: [21, -6.4, 26, 6.4], plaza: [-17, -8, 17, 8] },
+  // The market square inside the arcades; the arcade walkways and the outer lanes are street.
+  plaza: { sol: [-30, -7.5, -23.6, 7.5], luna: [23.6, -7.5, 30, 7.5], plaza: [-23, -10, 23, 10] },
+  // The party courtyard between the hedge lines; the two lanes beyond them are street.
+  fiesta: { sol: [-21, -6.4, -15.8, 6.4], luna: [15.8, -6.4, 21, 6.4], plaza: [-15.8, -7, 15.8, 7] },
+};
+
+export function patioGround(quality: Quality, ground: { w: number; d: number } = { w: 54, d: 38 }, zones: boolean | GroundZones = true): { geometry: THREE.BufferGeometry; material: THREE.MeshToonMaterial } {
+  const zn = zones === true ? GROUND_ZONES.patio! : zones || null;
   const seg = GROUND_TILE_M * 2, nx = Math.max(1, Math.round(ground.w / seg)), nz = Math.max(1, Math.round(ground.d / seg));
   const geometry = new THREE.PlaneGeometry(ground.w, ground.d, nx, nz);
   geometry.rotateX(-Math.PI / 2); // lies in XZ; the caller must not rotate it again
@@ -319,10 +332,11 @@ export function patioGround(quality: Quality, ground: { w: number; d: number } =
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
     let m = PLAZA;
-    if (zones) {
-      if (inBox(x, z, -26, -6.4, -21, 6.4)) m = SOL;
-      else if (inBox(x, z, 21, -6.4, 26, 6.4)) m = LUNA;
-      else if (!inBox(x, z, -17, -8, 17, 8)) m = STREET;
+    if (zn) {
+      const at = (r: readonly number[]) => inBox(x, z, r[0]!, r[1]!, r[2]!, r[3]!);
+      if (at(zn.sol)) m = SOL;
+      else if (at(zn.luna)) m = LUNA;
+      else if (!at(zn.plaza)) m = STREET;
     }
     const e = Math.min(1, Math.max(0, (Math.hypot(x / (ground.w / 2), z / (ground.d / 2)) - 0.55) / 0.6));
     const dim = 1 - 0.14 * e;

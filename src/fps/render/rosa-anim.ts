@@ -559,11 +559,14 @@ export class RosaAnimator {
     const inHand = swinging || tThrow > def.cooldownMs * 0.55 || tThrow < (s.weapon === 1 ? 160 : 90);
     r.weapons[0]!.visible = s.weapon === 0 && inHand;
     r.weapons[1]!.visible = s.weapon === 1 && inHand;
-    // Hit flash (playful, brief, not graphic): a quick warm glow. The model
+    // Hit flash (playful, brief, not graphic): a faint warm glow. The model
     // has one material for the whole body (dark skirt and hair included), so
-    // a strong neutral flash would wash her out to grey.
-    const hk = s.msSinceHit < 170 ? 1 - s.msSinceHit / 170 : 0, hitK = hk * hk;
-    for (let mi = 0; mi < r.flashMats.length; mi++) { const m = r.flashMats[mi]!; m.emissive.setRGB(hitK * 0.34, hitK * 0.2, hitK * 0.08); }
+    // anything stronger washes her out to grey; the contact effect and the
+    // flinch carry the hit.
+    // msSinceHit can be slightly negative for remotes (the delayed render
+    // timeline has not reached the hit yet): no flash until it has.
+    const hk = s.msSinceHit >= 0 && s.msSinceHit < 140 ? 1 - s.msSinceHit / 140 : 0, hitK = hk * hk;
+    for (let mi = 0; mi < r.flashMats.length; mi++) { const m = r.flashMats[mi]!; m.emissive.setRGB(hitK * 0.16, hitK * 0.08, hitK * 0.03); }
     r.bubble.visible = s.protected;
     if (s.protected) (r.bubble.material as THREE.MeshBasicMaterial).opacity = 0.14 + Math.sin(this.time * 10) * 0.05;
     // Respawn pop: a springy grow with a little stretch.

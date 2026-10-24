@@ -104,11 +104,32 @@ describe('own miss correlation (swing ids)', () => {
     c.localStart(0, 0);
     c.serverSwing(1, 0, TM0, 50);
     expect(c.miss(1, 0, TM0 + win(0) + 400, 300, 0)).toEqual({ motion: 0, mark: false }); // whiff time not at the window's end
+    // A press that expired unconfirmed (rejected, or its confirmation is
+    // very late): the next server swing is not assumed to be the later
+    // press; that one swing goes without a cue, and the log starts afresh.
     const d = new OwnSwingLog();
-    d.localStart(0, 0); // never confirmed (a rejected press)...
+    d.localStart(0, 0);
     d.localStart(0, 1500);
-    d.serverSwing(1, 0, TM0, 1550); // ...so the server swing matches the later press
-    expect(d.miss(1, 0, TM0 + win(0), 1550 + win(0), 0)).toEqual({ motion: 1, mark: true });
+    d.serverSwing(1, 0, TM0, 1550);
+    expect(d.miss(1, 0, TM0 + win(0), 1550 + win(0), 0)).toEqual({ motion: 0, mark: false });
+    d.localStart(0, 3000);
+    d.serverSwing(2, 0, TM0 + 3000, 3040);
+    expect(d.miss(2, 0, TM0 + 3000 + win(0), 3040 + win(0), 0)).toEqual({ motion: 1, mark: true });
+  });
+
+  it('expiry boundary: A at 0 ms, B at 700 ms, A\'s confirmation at 1050 ms and its miss at 1100 ms: nothing, for A or B', () => {
+    const log = new OwnSwingLog();
+    log.localStart(0, 0); // A
+    log.localStart(0, 700); // B
+    log.serverSwing(1, 0, TM0, 1050); // A's, late: A has expired
+    expect(log.miss(1, 0, TM0 + win(0), 1100, 0)).toEqual({ motion: 0, mark: false });
+    // B's own confirmation then finds nothing to match (the log started afresh): no cue rather than a guess.
+    log.serverSwing(2, 0, TM0 + 700, 1120);
+    expect(log.miss(2, 0, TM0 + 700 + win(0), 1150, 0)).toEqual({ motion: 0, mark: false });
+    // Normal feedback resumes with the next press.
+    log.localStart(0, 2000);
+    log.serverSwing(3, 0, TM0 + 2000, 2040);
+    expect(log.miss(3, 0, TM0 + 2000 + win(0), 2040 + win(0), 0)).toEqual({ motion: 1, mark: true });
   });
 
   it('a newly equipped chancla gets no cue from the old one', () => {

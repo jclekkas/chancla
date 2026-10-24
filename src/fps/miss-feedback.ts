@@ -50,7 +50,8 @@ const WINDOW_SLACK_MS = 40;
  * id, so it finds exactly that local swing. Feedback shows only for the
  * latest local swing, timed from its own start; whenever the
  * correspondence is uncertain (no match, a different chancla, a newer
- * swing, timestamps that disagree) the cosmetic cue is suppressed.
+ * swing, an expired press, timestamps that disagree) the cosmetic cue is
+ * suppressed.
  */
 export class OwnSwingLog {
   private pending: Array<{ weapon: WeaponId; at: number; k: number }> = [];
@@ -66,7 +67,11 @@ export class OwnSwingLog {
 
   /** The server says your swing `id` started (server time `tm`); it arrived at local time `at`. */
   serverSwing(id: number, weapon: WeaponId, tm: number, at: number): void {
-    while (this.pending.length && at - this.pending[0]!.at > MATCH_MAX_MS) this.pending.shift(); // never confirmed
+    // A press older than MATCH_MAX_MS has expired: it was either rejected or
+    // its confirmation is this very event, arriving late. The two cannot be
+    // told apart, so the confirmation must not shift onto a newer press:
+    // match nothing and start afresh.
+    if (this.pending.length && at - this.pending[0]!.at > MATCH_MAX_MS) { this.pending.length = 0; return; }
     const head = this.pending[0];
     if (!head || head.weapon !== weapon || head.at > at) { this.pending.length = 0; return; } // out of step: match nothing
     this.pending.shift();

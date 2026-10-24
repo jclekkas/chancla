@@ -2,7 +2,7 @@
 // sockets, no rendering. The server room, the in-browser practice host and
 // the tests all drive it by calling step() at NET.tickRate.
 
-import { MATCH, MELEE, MELEE_BUFFER_MS, MELEE_REWIND_MAX_MS, MOVE, NET, RULEROS, WEAPONS, WEAPON_SWITCH_MS, type MeleeDef, type WeaponId } from './config';
+import { MATCH, MELEE, MELEE_BUFFER_MS, MELEE_REWIND_MAX_MS, MOVE, NET, RULEROS, WEAPONS, WEAPON_SWITCH_MS, rulesetOf, type MeleeDef, type RulesetId, type WeaponId } from './config';
 import { lineOfSight, segmentCapsule, segmentSphere, sweepWorld, type AABB, type WorldHit } from './collision';
 import { World, bodyHeight, eyeHeight, newBody, settle, stepMove, type Body } from './physics';
 import type { MapData, Team } from './map';
@@ -73,6 +73,8 @@ export interface SimPlayer {
   swing: Swing | null;
   /** A press that came just before the recovery ended: starts as soon as it can. */
   meleeQueued: boolean;
+  /** The primary button was down on the last input (so a hold is one press). */
+  fireHeld: boolean;
   lastMeleeAt: number;
   /** Bit i set: roller i is still on her head. */
   ruleros: number;
@@ -205,6 +207,8 @@ export interface SimOptions {
   durationMs?: number;
   scoreToWin?: number;
   countdownMs?: number;
+  /** The combat rules (default Classic). */
+  rules?: RulesetId;
 }
 
 export class MatchSim {
@@ -223,6 +227,10 @@ export class MatchSim {
   events: SimEvent[] = [];
   readonly durationMs: number;
   readonly scoreToWin: number;
+  /** Fixed for the match: in 'melee' no throw is ever launched. */
+  readonly rules: RulesetId;
+  /** Throw inputs refused under melee-only rules (tests and diagnostics). */
+  refusedThrows = 0;
   countdownLeft: number;
   pickups: Array<{ x: number; y: number; z: number; availableAt: number }>;
   private nextProjectile = 1;
@@ -235,6 +243,7 @@ export class MatchSim {
     this.rng = new Rng(opts.seed ?? 1);
     this.durationMs = opts.durationMs ?? MATCH.durationMs;
     this.scoreToWin = opts.scoreToWin ?? MATCH.scoreToWin;
+    this.rules = rulesetOf(opts.rules);
     this.countdownLeft = opts.countdownMs ?? MATCH.countdownMs;
     if (this.countdownLeft <= 0) this.phase = 'playing';
     this.pickups = map.pickups.map((p) => ({ ...p, availableAt: 0 }));
@@ -250,7 +259,7 @@ export class MatchSim {
       respawnAt: 0, protectedUntil: 0, weapon: 0, switchMs: 0, cooldownMs: 0, lastSeq: 0, queue: [],
       tokens: NET.inputBurst, stats: { kills: 0, deaths: 0, damage: 0, throws: 0, hits: 0, swings: 0, meleeHits: 0 },
       lastThrowAt: -1e9, lastHitAt: -1e9, lastSpawnIdx: -1, active: true,
-      meleeMs: 0, swing: null, meleeQueued: false, lastMeleeAt: -1e9, ruleros: RULEROS_FULL, viewDelayMs: 0,
+      meleeMs: 0, swing: null, meleeQueued: false, fireHeld: false, lastMeleeAt: -1e9, ruleros: RULEROS_FULL, viewDelayMs: 0,
       past: Array.from({ length: HISTORY }, () => ({ tick: -1, x: 0, y: 0, z: 0, crouched: false, alive: false })),
     };
     this.players.set(id, p);
@@ -340,6 +349,11 @@ export class MatchSim {
 
   private applyInput(p: SimPlayer, inp: PlayerInput): void {
     p.lastSeq = inp.seq;
+    // The primary button's press, tracked on every input so a held button never
+    // counts twice (melee-only rules turn the press into a swing).
+    const fireDown = (inp.buttons & BTN.fire) !== 0;
+    const firePress = fireDown && !p.fireHeld;
+    p.fireHeld = fireDown;
     p.yaw = Number.isFinite(inp.yaw) ? wrap(inp.yaw) : p.yaw;
     p.pitch = Number.isFinite(inp.pitch) ? Math.max(-MOVE.maxPitch, Math.min(MOVE.maxPitch, inp.pitch)) : p.pitch;
     if (!p.alive) return;
@@ -357,8 +371,16 @@ export class MatchSim {
     if (frozen) return;
     // Melee first: a press together with a held throw swings, and the throw
     // waits for the swing's recovery like any other.
+    if (this.rules === 'melee') {
+      // ¡Puro Chanclazo!: the primary button swings too. A press of both, or a
+      // throw from a stale or forged client, is still one swing at most, and the
+      // swing's own lockout and buffer apply as always.
+      if (fireDown) this.refusedThrows++;
+      if ((inp.buttons & BTN.melee) !== 0 || firePress) this.pressMelee(p);
+      return;
+    }
     if ((inp.buttons & BTN.melee) !== 0) this.pressMelee(p);
-    if ((inp.buttons & BTN.fire) !== 0 && p.cooldownMs <= 0 && p.switchMs <= 0 && p.meleeMs <= 0) this.fire(p, inp.seq);
+    if (fireDown && p.cooldownMs <= 0 && p.switchMs <= 0 && p.meleeMs <= 0) this.fire(p, inp.seq);
   }
 
   // ---- melee ---------------------------------------------------------------
@@ -447,6 +469,7 @@ export class MatchSim {
   }
 
   private fire(p: SimPlayer, seq: number): void {
+    if (this.rules === 'melee') return; // never, whoever asks
     const def = WEAPONS[p.weapon]!;
     const { p: o, v } = launch(this.world, p.body, p.yaw, p.pitch, p.weapon, this.enemyHitboxes(p.team));
     const pr: Projectile = {

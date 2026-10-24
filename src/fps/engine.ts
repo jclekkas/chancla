@@ -756,6 +756,8 @@ export class Engine {
       this.input.weapon = s.weapon;
       if (s.team !== null) { this.hud.spawnBanner(s.team, !this.spawnedOnce); this.spawnedOnce = true; }
       // Practice: say once how melee works.
+      // Melee-only matches explain the swing everywhere (online too); Classic keeps its practice tip.
+      if (!this.meleeHinted && s.rules === 'melee') { this.meleeHinted = true; this.hud.sub(t(this.input.touchMode ? 'mode.hintTouch' : 'mode.hint'), 6); }
       if (this.practice && !this.meleeHinted) { this.meleeHinted = true; this.hud.sub(t(this.input.touchMode ? 'hud.meleeHintTouch' : 'hud.meleeHint'), 6); }
     }
     this.wasAlive = s.alive;
@@ -765,8 +767,8 @@ export class Engine {
       let n = 0;
       while (this.acc >= DT && n++ < 6) {
         this.acc -= DT;
-        const c = this.inputActive ? this.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, melee: false, weapon: this.input.weapon };
-        s.tick({ mx: c.mx, mz: c.mz, yaw: this.input.yaw, pitch: this.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, melee: c.melee, weapon: c.weapon });
+        const c = this.inputActive ? this.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, melee: false, firePress: false, weapon: this.input.weapon };
+        s.tick({ mx: c.mx, mz: c.mz, yaw: this.input.yaw, pitch: this.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, melee: c.melee, firePress: c.firePress, weapon: c.weapon });
       }
       if (this.acc > DT * 6) this.acc = 0;
       s.flush();

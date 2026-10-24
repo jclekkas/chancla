@@ -39,6 +39,8 @@ export interface Controls {
   fire: boolean;
   /** Melee was pressed since the last sample. */
   melee: boolean;
+  /** The primary button went down since the last sample (however briefly: melee-only rules swing on it). */
+  firePress: boolean;
   weapon: WeaponId;
 }
 
@@ -85,6 +87,7 @@ export class FpsInput {
   touchSensitivity = 1;
   private pendingTouchJump = false;
   private pendingMelee = false;
+  private pendingFirePress = false;
   /** Melee presses seen (tests and diagnostics). */
   meleePresses = 0;
   /** The last time held input was dropped, and why (diagnostics). */
@@ -114,7 +117,7 @@ export class FpsInput {
       if (!this.locked || !this.enabled) return;
       // The click that re-captured the mouse must never also throw.
       if (performance.now() - this.lockedAt < 200) return;
-      if (e.button === 0) this.mouseFire = true;
+      if (e.button === 0) { this.mouseFire = true; this.pendingFirePress = true; }
       else if (e.button === 2) this.toggleWeapon();
     });
     this.bag.on<MouseEvent>(doc, 'mouseup', (e) => { if (e.button === 0) this.mouseFire = false; });
@@ -186,7 +189,7 @@ export class FpsInput {
       if (down) this.keys.add(e.code); else this.keys.delete(e.code);
       return;
     }
-    if (e.code === 'KeyF' || e.code === 'KeyE') { this.keyFire = down; return; }
+    if (e.code === 'KeyF' || e.code === 'KeyE') { if (down && !e.repeat) this.pendingFirePress = true; this.keyFire = down; return; }
     if (!down || e.repeat) return;
     if (e.code === 'KeyV') { this.pressMelee(); return; }
     if (e.code === 'Digit1') this.setWeapon(0);
@@ -213,6 +216,7 @@ export class FpsInput {
 
   setTouchButton(b: 'fire' | 'jump' | 'crouch', down: boolean): void {
     this.touch[b] = down && this.enabled;
+    if (b === 'fire' && down && this.enabled) this.pendingFirePress = true;
     if (b === 'jump' && down && this.enabled) this.pendingTouchJump = true;
   }
 
@@ -254,6 +258,8 @@ export class FpsInput {
     this.pendingTouchJump = false;
     const melee = this.enabled && this.pendingMelee;
     this.pendingMelee = false;
+    const firePress = this.enabled && this.pendingFirePress;
+    this.pendingFirePress = false;
     mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
@@ -261,6 +267,7 @@ export class FpsInput {
       crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
       fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
       melee,
+      firePress,
       weapon: this.weapon,
     };
   }
@@ -282,6 +289,7 @@ export class FpsInput {
     this.touch.mx = 0; this.touch.mz = 0;
     this.pendingTouchJump = false;
     this.pendingMelee = false;
+    this.pendingFirePress = false;
     this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
     this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }

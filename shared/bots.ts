@@ -87,7 +87,8 @@ export class BotBrain {
     if (best) {
       if (best.id !== this.target) {
         this.target = best.id; this.seenMs = 0;
-        this.brawl = sim.rng.next() < this.skill.brawlChance;
+        // Under melee-only rules every encounter is a brawl (the roll is still made, so Classic's sequence is unchanged).
+        this.brawl = sim.rng.next() < this.skill.brawlChance || sim.rules === 'melee';
         // Alternate the chancla from one brawl to the next, so both attacks show up.
         if (this.brawl) this.brawlWeapon = this.brawlWeapon === 0 ? 1 : 0;
       }
@@ -139,7 +140,7 @@ export class BotBrain {
       const meleeReady = me.meleeMs <= 0 && me.cooldownMs <= 0 && me.switchMs <= 0;
       const inReach = bestD < MELEE[this.weapon]!.reach + 0.3 && Math.abs(wrap(wantYaw - this.yaw)) < 0.45;
       if (inReach && meleeReady && sim.phase === 'playing' && (this.brawl || sim.rng.next() < 0.08)) buttons |= BTN.melee;
-      else if (!(this.brawl && bestD < 4) && err < this.skill.fireConeRad && me.cooldownMs <= 0 && me.switchMs <= 0 && me.meleeMs <= 0 && sim.phase === 'playing') buttons |= BTN.fire;
+      else if (sim.rules !== 'melee' && !(this.brawl && bestD < 4) && err < this.skill.fireConeRad && me.cooldownMs <= 0 && me.switchMs <= 0 && me.meleeMs <= 0 && sim.phase === 'playing') buttons |= BTN.fire;
       // Strafe and hold a comfortable range.
       if (now > this.strafeUntil) {
         this.strafeUntil = now + 600 + sim.rng.next() * 900;
@@ -148,8 +149,8 @@ export class BotBrain {
       }
       mx = this.strafe;
       mz = bestD > 15 ? 1 : bestD < 6 ? -1 : 0;
-      // A brawler walks straight in and stops at arm's length.
-      if (this.brawl && bestD < 12) { mz = bestD > 1.2 ? 1 : 0; mx = bestD < 3 ? 0 : this.strafe * 0.4; }
+      // A brawler walks straight in and stops at arm's length (from any range when nobody can throw).
+      if (this.brawl && (bestD < 12 || sim.rules === 'melee')) { mz = bestD > 1.2 ? 1 : 0; mx = bestD < 3 ? 0 : this.strafe * 0.4; }
     } else {
       // --- Navigate: towards the last sighting, a cafecito, or the plaza ----
       if (now >= this.replanAt || this.path.length === 0) this.replan(sim, me, now);

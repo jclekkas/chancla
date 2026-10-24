@@ -2,7 +2,7 @@
 // Transport-agnostic: members talk through a Conn, so the WebSocket server
 // and the in-browser practice host run exactly this code.
 
-import { MATCH, NET, type BotDifficulty } from './config';
+import { DEFAULT_RULESET, MATCH, NET, type BotDifficulty, type RulesetId } from './config';
 import { MatchSim, BTN, type SimEvent } from './sim';
 import type { Team } from './map';
 import { DEFAULT_MAP, mapData, type MapId } from './maps';
@@ -54,6 +54,7 @@ export class Room {
   results: Results | null = null;
   bots: { enabled: boolean; difficulty: BotDifficulty } = { enabled: false, difficulty: 'normal' };
   map: MapId = DEFAULT_MAP;
+  rules: RulesetId = DEFAULT_RULESET;
   emptySince: number;
   private acc = 0;
   private lastUpdate = -1;
@@ -186,7 +187,7 @@ export class Room {
       .map((m) => ({ id: m.id, name: m.name, team: m.team, ready: m.bot || m.ready || m.id === this.owner, connected: m.bot || !!m.conn, bot: m.bot, ping: m.ping }));
     return {
       code: this.code, owner: this.owner, phase: this.phase, practice: this.practice, members,
-      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize, map: this.map,
+      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize, map: this.map, rules: this.rules,
     };
   }
 
@@ -231,6 +232,12 @@ export class Room {
         if (!isOwner) return 'not_owner';
         if (this.phase !== 'lobby' && this.phase !== 'results') return 'bad_message';
         if (this.map !== msg.map) { this.map = msg.map; this.roomDirty = true; }
+        return null;
+      case 'rules':
+        // Like the map: the owner's call between matches, broadcast to everyone; a match keeps the rules it started with.
+        if (!isOwner) return 'not_owner';
+        if (this.phase !== 'lobby' && this.phase !== 'results') return 'bad_message';
+        if (this.rules !== msg.rules) { this.rules = msg.rules; this.roomDirty = true; }
         return null;
       case 'start':
         if (!isOwner) return 'not_owner';
@@ -287,7 +294,7 @@ export class Room {
     // Rebalance if one team is over capacity (people may have left).
     const sim = new MatchSim(mapData(this.map), {
       seed: this.opts.seed ?? Math.floor(Math.random() * 1e9),
-      durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs,
+      durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs, rules: this.rules,
     });
     this.sim = sim;
     for (const m of this.members.values()) {

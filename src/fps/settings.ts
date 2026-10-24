@@ -1,6 +1,7 @@
 import { SafeStorage } from '../persistence/storage';
 import type { Lang } from './strings';
 import { isMapId, type MapId } from '../../shared/maps';
+import { rulesetOf, type RulesetId } from '../../shared/config';
 
 export type Quality = 'low' | 'medium' | 'high';
 /** What the player chose: Auto picks Low on phones, tablets and low-core devices, Medium elsewhere. */
@@ -30,6 +31,9 @@ export interface FpsSettings {
   practiceAllies: number;
   practiceEnemies: number;
   practiceMap: MapId | 'random'; // the last map chosen for practice
+  /** Combat mode for practice and for rooms you create (a joined room always uses its host's). */
+  practiceRules: RulesetId;
+  roomRules: RulesetId;
 }
 
 const KEY = 'chancla.mp.settings.v1';
@@ -38,6 +42,7 @@ export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): F
   return {
     lang, name: '', sensitivity: 1, touchSensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium', qualityMode: 'auto',
     music: 0.45, sfx: 0.85, showStats: false, killcam: true, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
+    practiceRules: 'classic', roomRules: 'classic',
   };
 }
 
@@ -71,6 +76,9 @@ export class FpsSettingsStore {
       practiceMap: r.practiceMap === 'random' || isMapId(r.practiceMap) ? r.practiceMap : d.practiceMap,
       practiceAllies: num(r.practiceAllies, d.practiceAllies, 0, 1),
       practiceEnemies: num(r.practiceEnemies, d.practiceEnemies, 1, 2),
+      // Saves from before combat modes existed (or anything unknown) are Classic.
+      practiceRules: rulesetOf(r.practiceRules),
+      roomRules: rulesetOf(r.roomRules),
     };
   }
   update(p: Partial<FpsSettings>): FpsSettings {

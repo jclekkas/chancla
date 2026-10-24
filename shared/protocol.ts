@@ -1,7 +1,7 @@
 // Wire protocol. JSON messages, validated field by field on the server.
 // Clients send intentions (inputs, ready, start); the server sends state.
 
-import { NAME_MAX, PROTOCOL_VERSION, type BotDifficulty, type WeaponId } from './config';
+import { NAME_MAX, PROTOCOL_VERSION, isRulesetId, type BotDifficulty, type RulesetId, type WeaponId } from './config';
 import type { Team } from './map';
 
 export { PROTOCOL_VERSION };
@@ -13,8 +13,9 @@ import { isMapId, type MapId } from './maps';
 
 export type ClientMsg =
   | { t: 'hello'; v: number; name: string; resume?: string }
-  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number }; map?: MapId }
+  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number }; map?: MapId; rules?: RulesetId }
   | { t: 'map'; map: MapId }
+  | { t: 'rules'; rules: RulesetId }
   | { t: 'join'; code: string }
   | { t: 'team'; team: Team }
   | { t: 'ready'; ready: boolean }
@@ -72,6 +73,8 @@ export interface RoomView {
   teamSize: number;
   /** The arena for the next (or current) match: the owner's choice. */
   map: MapId;
+  /** The combat rules for the next (or current) match: the owner's choice, fixed once it starts. */
+  rules: RulesetId;
 }
 
 // Per-player state in a snapshot:
@@ -155,16 +158,21 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
       return { t: 'hello', v: m.v, name: m.name, resume: m.resume as string | undefined };
     case 'create': {
       if (m.map !== undefined && !isMapId(m.map)) return null;
+      if (m.rules !== undefined && !isRulesetId(m.rules)) return null;
       const map = m.map as MapId | undefined;
-      if (m.practice === undefined) return map ? { t: 'create', map } : { t: 'create' };
+      // No rules given (an older client): the room is Classic.
+      const extra = { ...(map ? { map } : {}), ...(m.rules ? { rules: m.rules as RulesetId } : {}) };
+      if (m.practice === undefined) return { t: 'create', ...extra };
       const p = m.practice as Record<string, unknown> | null;
       if (!p || typeof p !== 'object' || !DIFFS.includes(p.difficulty as string) || !isNum(p.allies) || !isNum(p.enemies)) return null;
       if (p.allies < 0 || p.allies > 1 || p.enemies < 1 || p.enemies > 2) return null;
       const practice = { difficulty: p.difficulty as BotDifficulty, allies: Math.floor(p.allies), enemies: Math.floor(p.enemies) };
-      return map ? { t: 'create', practice, map } : { t: 'create', practice };
+      return { t: 'create', practice, ...extra };
     }
     case 'map':
       return isMapId(m.map) ? { t: 'map', map: m.map } : null;
+    case 'rules':
+      return isRulesetId(m.rules) ? { t: 'rules', rules: m.rules } : null;
     case 'join':
       return isStr(m.code, 32) ? { t: 'join', code: normalizeCode(m.code) } : null;
     case 'team':

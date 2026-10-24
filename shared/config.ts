@@ -1,7 +1,23 @@
 // Every multiplayer balancing and networking value lives here. The server,
 // the in-browser practice host and the client all read the same numbers.
 
-export const PROTOCOL_VERSION = 5; // 4: rooms carry a map; 5: melee and ruleros
+export const PROTOCOL_VERSION = 6; // 4: rooms carry a map; 5: melee and ruleros; 6: rooms carry a ruleset
+
+/**
+ * A match's combat rules, fixed for the match and set by the room:
+ * 'classic' throws and fights up close; 'melee' (¡Puro Chanclazo!) only fights
+ * up close: the primary attack swings, and no throw is ever launched.
+ */
+export type RulesetId = 'classic' | 'melee';
+export const RULESETS: readonly RulesetId[] = ['classic', 'melee'];
+/** Anything missing or unknown (older settings, older messages) is Classic. */
+export const DEFAULT_RULESET: RulesetId = 'classic';
+export function isRulesetId(v: unknown): v is RulesetId {
+  return v === 'classic' || v === 'melee';
+}
+export function rulesetOf(v: unknown): RulesetId {
+  return isRulesetId(v) ? v : DEFAULT_RULESET;
+}
 
 export const NET = {
   tickRate: 60, // authoritative simulation steps per second

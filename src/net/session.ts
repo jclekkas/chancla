@@ -16,7 +16,7 @@
 //     that the server would refuse. Whether it connects, the damage and the
 //     ruleros come only from the server's events.
 
-import { MELEE, MELEE_BUFFER_MS, MOVE, NET, PROTOCOL_VERSION, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../shared/config';
+import { MELEE, MELEE_BUFFER_MS, MOVE, NET, PROTOCOL_VERSION, WEAPONS, WEAPON_SWITCH_MS, rulesetOf, type RulesetId, type WeaponId } from '../../shared/config';
 import type { Team } from '../../shared/map';
 import { DEFAULT_MAP, mapData, type MapId } from '../../shared/maps';
 import { World, eyeHeight, newBody, stepMove, type Body } from '../../shared/physics';
@@ -72,6 +72,8 @@ export interface LocalInput {
   crouch: boolean;
   /** The melee button went down since the last tick (a press, never a hold). */
   melee?: boolean;
+  /** The primary button went down since the last tick, however briefly (melee-only rules swing on it). */
+  firePress?: boolean;
   weapon: WeaponId;
 }
 
@@ -119,6 +121,10 @@ export class GameSession {
   name = '';
   resume = '';
   room: RoomView | null = null;
+  /** The primary button was down on the last tick (a hold is one press). */
+  private fireWas = false;
+  /** The room's combat rules (the host's choice; anything missing is Classic). */
+  get rules(): RulesetId { return rulesetOf(this.room?.rules); }
   snap: Snapshot | null = null;
   rtt = 0;
   lastSnapAt = 0;
@@ -536,6 +542,13 @@ export class GameSession {
     if (!this.snap || (this.phase !== 'playing' && this.phase !== 'countdown')) return;
     const seq = ++this.seq;
     const frozen = this.phase !== 'playing';
+    // ¡Puro Chanclazo!: pressing the primary button swings (once per press, and
+    // together with the melee key still once); nothing is ever thrown. The server
+    // applies the same rule to whatever it receives.
+    const press = !!inp.firePress || (inp.fire && !this.fireWas);
+    this.fireWas = inp.fire;
+    const { firePress: _press, ...held } = inp; // the press itself is not simulated or sent
+    inp = this.rules === 'melee' ? { ...held, fire: false, melee: held.melee || press } : held;
     // Simulate exactly what the server will receive (the wire rounds values).
     const q: LocalInput = { ...inp, mx: round(inp.mx), mz: round(inp.mz), yaw: round4(inp.yaw), pitch: round4(inp.pitch) };
     this.simulate(q, frozen, true, seq);

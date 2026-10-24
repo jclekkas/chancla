@@ -639,6 +639,8 @@ body.touch-input .wslot .wmelee { display: none; }
 .hud.killcam-on .names, .hud.killcam-on .spawn-banner, .hud.killcam-on .fps-touch { visibility: hidden; }
 .hud.killcam-on .hud-tr { z-index: 3; }
 .hud.killcam-on .sub-msg { top: auto; bottom: calc(118px + var(--safe-b)); }
+/* A live subtitle still on screen moves up under the REPLAY tag, clear of the attribution and the blow. */
+body.killcam-on .subs { bottom: auto; top: calc(58px + var(--safe-t)); }
 .killcam::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 4px rgba(242, 201, 74, 0.55), inset 0 0 90px rgba(20, 8, 30, 0.45); }
 .kc-tag { position: absolute; top: calc(14px + var(--safe-t)); left: 50%; transform: translateX(-50%); font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: 0.12em; color: var(--marigold); -webkit-text-stroke: 1px var(--violet-deep); background: rgba(46, 24, 70, 0.78); padding: 4px 16px 2px; border-radius: 8px; }
 .kc-tag::before { content: ''; display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #e2463a; margin-right: 10px; vertical-align: 2px; }

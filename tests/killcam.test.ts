@@ -8,7 +8,7 @@ import { LocalHost } from '../src/net/local';
 import { GameSession, type LocalInput } from '../src/net/session';
 import { BTN, type SimEvent } from '../shared/sim';
 import { lineOfSight } from '../shared/collision';
-import { ClipCursor, KILLCAM, KillcamDirector, buildClip, eyeOf, noteFrom, thirdPersonCamera, type Clip } from '../src/fps/killcam';
+import { ClipCursor, KILLCAM, KillcamDirector, buildClip, eyeOf, meleeCamera, noteFrom, thirdPersonCamera, type Clip } from '../src/fps/killcam';
 
 const flushMicro = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 const IDLE: LocalInput = { mx: 0, mz: 0, yaw: 0, pitch: 0, fire: false, jump: false, crouch: false, weapon: 0 };
@@ -166,7 +166,8 @@ describe('elimination replay', () => {
       await untilDecided(t);
       expect(t.clips).toHaveLength(1);
       const c = t.clips[0]!;
-      expect(c).toMatchObject({ killer: t.bot.id, finishSwing: elim.m, view: 'attacker' });
+      // Melee: the framed view of both of them, never her own eyes (her swing would not show).
+      expect(c).toMatchObject({ killer: t.bot.id, finishSwing: elim.m, view: 'melee' });
       expect(c.note).toMatchObject({ w: weapon, melee: true });
       const hit = t.events.find((e) => e.k === 'hit' && e.m === elim.m) as Extract<SimEvent, { k: 'hit' }>;
       expect(c.tKill).toBe(hit.tm);
@@ -307,6 +308,38 @@ describe('elimination replay', () => {
       }
     }
     expect(checked).toBeGreaterThan(20);
+    t.host.dispose();
+  });
+
+  it('the melee view: clear of walls, both of them in plain sight, the same side held', async () => {
+    const t = await setup();
+    const boxes = t.s.world.boxes;
+    const blocker = (o: { tag?: string }) => o.tag !== 'floor';
+    const solid = boxes.filter((b) => b.tag !== 'floor' && b.maxY > 1.5 && b.maxX - b.minX < 30);
+    let checked = 0, framed = 0;
+    for (const b of solid.slice(0, 40)) {
+      // A duel 1.1 m apart along each wall face (the camera wants to sit inside the wall on one side).
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const x = dx ? (dx > 0 ? b.maxX + 0.5 : b.minX - 0.5) : (b.minX + b.maxX) / 2;
+        const z = dz ? (dz > 0 ? b.maxZ + 0.5 : b.minZ - 0.5) : (b.minZ + b.maxZ) / 2;
+        const base = { id: 1, x, y: 0, z, yaw: 0, pitch: 0, vx: 0, vz: 0, alive: true, crouched: false, onGround: true, protected: false, connected: true, hp: 0, weapon: 0 as const, msSinceThrow: 0, msSinceHit: 0, msSinceMelee: 0, ruleros: 15 };
+        const attacker = { ...base, x: x - dz * 0.55, z: z + dx * 0.55 }, victim = { ...base, id: 2, x: x + dz * 0.55, z: z - dx * 0.55 };
+        if ([attacker, victim].some((p) => boxes.some((o) => blocker(o) && p.x > o.minX - 0.3 && p.x < o.maxX + 0.3 && p.z > o.minZ - 0.3 && p.z < o.maxZ + 0.3 && o.maxY > 0.5))) continue;
+        checked++;
+        const cam = meleeCamera(attacker, victim, boxes);
+        if (!cam.ok) continue; // the replay then uses the third-person view (tested above)
+        framed++;
+        expect(boxes.some((o) => blocker(o) && cam.pos.x > o.minX && cam.pos.x < o.maxX && cam.pos.y > o.minY && cam.pos.y < o.maxY && cam.pos.z > o.minZ && cam.pos.z < o.maxZ)).toBe(false);
+        expect(lineOfSight(cam.pos, { x: attacker.x, y: 1.2, z: attacker.z }, boxes, blocker)).toBe(true);
+        expect(lineOfSight(cam.pos, { x: victim.x, y: 1.35, z: victim.z }, boxes, blocker)).toBe(true);
+        // Behind her and to one side, looking toward the victim.
+        const toV = { x: victim.x - attacker.x, z: victim.z - attacker.z }, toCam = { x: cam.pos.x - attacker.x, z: cam.pos.z - attacker.z };
+        expect(toV.x * toCam.x + toV.z * toCam.z).toBeLessThan(0);
+        expect(meleeCamera(attacker, victim, boxes, cam.side).side).toBe(cam.side);
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+    expect(framed / checked).toBeGreaterThan(0.8);
     t.host.dispose();
   });
 

@@ -15,7 +15,7 @@ import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/
 import { Avatar, type AvatarState } from './render/rosa';
 import { CombatFx } from './render/combat-fx';
 import { OwnSwingLog } from './miss-feedback';
-import { ClipCursor, KillcamDirector, eyeOf, noteFrom, thirdPersonCamera, type Clip } from './killcam';
+import { ClipCursor, KillcamDirector, eyeOf, meleeCamera, noteFrom, thirdPersonCamera, type Clip } from './killcam';
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
@@ -72,7 +72,7 @@ export class Engine {
   /** Characters for the replay, reused from one replay to the next (never more than the players shown). */
   private replayPool: Avatar[] = [];
   /** Why the last replay ended, and when it started (tests and diagnostics). */
-  lastReplay: { startedAt: number; endedAt: number; reason: string; view: string; killer: number; ms: number; cues?: number; ruleros?: number; projMax?: number; shownMs?: number; jsMsPerFrame?: number; frames?: number } | null = null;
+  lastReplay: { startedAt: number; endedAt: number; reason: string; view: string; killer: number; ms: number; cues?: number; ruleros?: number; projMax?: number; shownMs?: number; swingShown?: boolean; jsMsPerFrame?: number; frames?: number } | null = null;
   /** Called when a replay starts or ends (main.ts: the overlay, input). */
   onReplay: ((on: boolean, clip: Clip | null) => void) | null = null;
   private lastLocalMelee = -1e9;
@@ -900,7 +900,7 @@ export class Engine {
       if (e.k === 'throw') weapons.set(e.id, e.w);
       if ((e.k === 'hit' || e.k === 'elim') && e.ru?.length && r.t >= clip.start) held.set(e.v, (held.get(e.v) ?? 0) | e.ru.reduce((m, i) => m | (1 << i), 0));
     }
-    this.replay = { clip, cur: new ClipCursor(clip), rt: clip.start, teams, held, weapons, avatars: new Map(), projs: new Map(), cues: 0, startedAt: performance.now(), lastNow: performance.now(), rulerosShown: 0, projMax: 0, jsMs: 0, frames: 0 };
+    this.replay = { clip, cur: new ClipCursor(clip), rt: clip.start, teams, held, weapons, avatars: new Map(), projs: new Map(), cues: 0, startedAt: performance.now(), lastNow: performance.now(), rulerosShown: 0, projMax: 0, jsMs: 0, frames: 0, swingShown: false, camSet: false };
     this.hud.killcam({ name: clip.note.name || this.nameOf(clip.killer), team: clip.note.team, w: clip.note.w, melee: clip.note.melee });
     this.lastReplay = { startedAt: Math.round(performance.now()), endedAt: 0, reason: '', view: clip.view, killer: clip.killer, ms: Math.round(clip.end - clip.start) };
     diagLog('replay', `started (${clip.view} view, ${Math.round(clip.end - clip.start)} ms)`);
@@ -926,7 +926,7 @@ export class Engine {
     this.hud.killcam(null);
     // Anything held during the replay (Space to skip, a finger on the screen) is dropped.
     this.input.release('replay ended');
-    if (this.lastReplay) Object.assign(this.lastReplay, { endedAt: Math.round(performance.now()), reason, cues: r.cues, ruleros: r.rulerosShown, projMax: r.projMax, shownMs: Math.round(r.rt - r.clip.start), jsMsPerFrame: r.frames ? +(r.jsMs / r.frames).toFixed(2) : 0, frames: r.frames });
+    if (this.lastReplay) Object.assign(this.lastReplay, { endedAt: Math.round(performance.now()), reason, cues: r.cues, ruleros: r.rulerosShown, projMax: r.projMax, shownMs: Math.round(r.rt - r.clip.start), swingShown: r.swingShown, jsMsPerFrame: r.frames ? +(r.jsMs / r.frames).toFixed(2) : 0, frames: r.frames });
     diagLog('replay', `ended (${reason})`);
     this.onReplay?.(false, null);
   }
@@ -960,8 +960,9 @@ export class Engine {
       const av = this.replayAvatar(r, id, r.teams.get(id) ?? (id === s.id ? s.team ?? 0 : 0));
       live.add(av);
       driveAvatar(av, p, p.ruleros | (r.held.get(id) ?? 0), this.paused ? 0 : dt, reduced);
-      // From her own eyes the attacker is not drawn.
+      // From her own eyes the attacker is not drawn; in the melee view she is the point.
       av.root.visible = !(clip.view === 'attacker' && id === clip.killer && players.get(clip.killer)?.alive);
+      if (id === clip.killer && av.root.visible && p.msSinceMelee < 600) r.swingShown = true;
     }
     for (const [id, av] of r.avatars) if (!live.has(av)) { av.root.visible = false; r.avatars.delete(id); }
     for (const ev of r.cur.due(rt)) this.replayEvent(r, ev.e, players);
@@ -971,6 +972,10 @@ export class Engine {
       const e = eyeOf(k);
       cam.position.set(e.x, e.y, e.z);
       cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
+    } else if (clip.view === 'melee' && k && v) {
+      // The side chosen at the blow, held; a frame with no clear spot keeps the last one.
+      const c = meleeCamera(k, v, s.world.boxes, clip.camSide);
+      if (c.ok || !r.camSet) { cam.position.set(c.pos.x, c.pos.y, c.pos.z); cam.lookAt(c.look.x, c.look.y, c.look.z); r.camSet = true; }
     } else if (v) {
       const c = thirdPersonCamera(v, k, s.world.boxes);
       cam.position.set(c.pos.x, c.pos.y, c.pos.z);
@@ -1202,6 +1207,9 @@ interface Replay {
   /** The replay's own work per frame (sampling, characters, events, camera), without drawing: the cost report. */
   jsMs: number;
   frames: number;
+  /** The attacker was drawn mid-swing (tests); the melee camera has been placed. */
+  swingShown: boolean;
+  camSet: boolean;
 }
 
 /** Which way a blow travels: a forehand from the attacker's right to left, a backhand left to right, and a little away from her. */

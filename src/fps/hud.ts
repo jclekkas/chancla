@@ -159,6 +159,7 @@ export class Hud {
   killcam(info: { name: string; team: number | null; w: 0 | 1; melee: boolean } | null): void {
     const root = document.getElementById('killcam');
     this.el.root.classList.toggle('killcam-on', !!info);
+    document.body.classList.toggle('killcam-on', !!info); // the subtitles live outside the HUD
     if (!root) return;
     root.hidden = !info;
     if (!info) return;

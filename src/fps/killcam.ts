@@ -95,7 +95,12 @@ export class KillcamRecorder {
   }
 }
 
-export type View = 'attacker' | 'third';
+/**
+ * attacker: from her eyes (throws she could see you for); melee: a framed
+ * three-quarter view of both of you, so her swing, you and the contact show;
+ * third: behind you, facing her.
+ */
+export type View = 'attacker' | 'melee' | 'third';
 
 export interface Clip {
   /** Render-timeline span (server ms): playback runs from start to end. */
@@ -108,6 +113,8 @@ export interface Clip {
   note: KillNote;
   snaps: SnapRecord[];
   events: RecEvent[];
+  /** For the melee view: which side of the attacker the camera sits (+1 her right, -1 her left). */
+  camSide: 1 | -1;
   /** The finishing swing's id, or the finishing projectile's id (for the attack cue). */
   finishSwing?: number;
   finishThrow?: number;
@@ -147,9 +154,13 @@ export function buildClip(rec: KillcamRecorder, note: KillNote, boxes: readonly 
   const at = sampleAt(clipSnaps, tKill);
   const k = at.get(note.killer), v = at.get(note.victim);
   if (!k || !v) return { fallback: 'unknown-killer' };
+  // Melee: the swing is the point, and from her own eyes neither her body nor
+  // her hand shows it, so a framed view of both. Throws: her eyes when she saw you.
+  const framed = note.melee ? meleeCamera(k, v, boxes) : null;
   const clip: Clip = {
     start, end, tKill, killer: note.killer, victim: note.victim, note,
-    view: attackerViewOk(clipSnaps, start, tKill, note.killer, note.victim, boxes) ? 'attacker' : 'third',
+    view: framed?.ok ? 'melee' : !note.melee && attackerViewOk(clipSnaps, start, tKill, note.killer, note.victim, boxes) ? 'attacker' : 'third',
+    camSide: framed?.side ?? 1,
     snaps: clipSnaps,
     events: ev.filter((r) => r.t >= start - KILLCAM.keepMs && r.t <= end),
     finishSwing, finishThrow,
@@ -211,6 +222,35 @@ export function thirdPersonCamera(victim: RemotePlayer, killer: RemotePlayer | u
     if (lineOfSight(eye, probe, boxes, isBlocker) && !insideBox(pos, boxes)) return { pos, look };
   }
   return { pos: { x: eye.x - dx * 0.3, y: eye.y + 0.2, z: eye.z - dz * 0.3 }, look };
+}
+
+/**
+ * A three-quarter view of a melee exchange: behind and to one side of the
+ * attacker, looking past her shoulder at the victim's face, so her recorded
+ * forehand or backhand, the victim and the contact are all in frame. Her
+ * right side first (where both swings start or finish in view), then her
+ * left, each pulled in until the camera is clear of every wall and both of
+ * them are in plain sight from it. `side` keeps the side chosen at the blow
+ * for the whole replay; `ok` is false when no such spot exists.
+ */
+export function meleeCamera(attacker: RemotePlayer, victim: RemotePlayer, boxes: readonly AABB[], side?: 1 | -1): { pos: { x: number; y: number; z: number }; look: { x: number; y: number; z: number }; side: 1 | -1; ok: boolean } {
+  let fx = victim.x - attacker.x, fz = victim.z - attacker.z;
+  const l = Math.hypot(fx, fz) || 1;
+  fx /= l; fz /= l;
+  const rx = -fz, rz = fx; // her right, facing the victim
+  const ay = attacker.y + 1.2, vy = victim.y + 1.35;
+  const look = { x: attacker.x + fx * l * 0.62, y: (ay + vy) / 2 + 0.1, z: attacker.z + fz * l * 0.62 };
+  const mid = { x: (attacker.x + victim.x) / 2, y: look.y, z: (attacker.z + victim.z) / 2 };
+  for (const sd of side ? [side] : ([1, -1] as const)) {
+    for (let k = 1; k >= 0.45; k -= 0.05) {
+      const pos = { x: attacker.x - fx * 1.2 * k + rx * sd * 1.45 * k, y: 1.75 + 0.2 * k + attacker.y, z: attacker.z - fz * 1.2 * k + rz * sd * 1.45 * k };
+      const probe = { x: pos.x + (pos.x - mid.x) * 0.15, y: pos.y, z: pos.z + (pos.z - mid.z) * 0.15 };
+      if (insideBox(pos, boxes) || !lineOfSight(mid, probe, boxes, isBlocker)) continue;
+      if (!lineOfSight(pos, { x: attacker.x, y: ay, z: attacker.z }, boxes, isBlocker) || !lineOfSight(pos, { x: victim.x, y: vy, z: victim.z }, boxes, isBlocker)) continue;
+      return { pos, look, side: sd, ok: true };
+    }
+  }
+  return { pos: { x: mid.x, y: mid.y + 1, z: mid.z }, look, side: side ?? 1, ok: false };
 }
 
 function insideBox(p: { x: number; y: number; z: number }, boxes: readonly AABB[]): boolean {

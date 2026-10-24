@@ -1,0 +1,110 @@
+{
+ "dist": "/home/user/chancla-cc/dist",
+ "download": {
+  "jsBytes": 1333265,
+  "jsGzip": 410165,
+  "totalBytes": 33320091
+ },
+ "high": {
+  "shadows": true,
+  "perRosa": [
+   {
+    "team": 0,
+    "drawCalls": 18,
+    "shadowCasters": 14,
+    "triangles": 10294,
+    "materials": 4,
+    "geometries": 17
+   },
+   {
+    "team": 1,
+    "drawCalls": 18,
+    "shadowCasters": 14,
+    "triangles": 10236,
+    "materials": 4,
+    "geometries": 17
+   },
+   {
+    "team": 1,
+    "drawCalls": 18,
+    "shadowCasters": 14,
+    "triangles": 10236,
+    "materials": 4,
+    "geometries": 17
+   }
+  ],
+  "characterTextureBytes": 12,
+  "gpu": {
+   "geometries": 102,
+   "textures": 21
+  }
+ },
+ "medium": {
+  "shadows": true,
+  "perRosa": [
+   {
+    "team": 0,
+    "drawCalls": 18,
+    "shadowCasters": 10,
+    "triangles": 7106,
+    "materials": 4,
+    "geometries": 17
+   },
+   {
+    "team": 1,
+    "drawCalls": 18,
+    "shadowCasters": 10,
+    "triangles": 7182,
+    "materials": 4,
+    "geometries": 17
+   },
+   {
+    "team": 1,
+    "drawCalls": 18,
+    "shadowCasters": 10,
+    "triangles": 7182,
+    "materials": 4,
+    "geometries": 17
+   }
+  ],
+  "characterTextureBytes": 12,
+  "gpu": {
+   "geometries": 102,
+   "textures": 21
+  }
+ },
+ "low": {
+  "shadows": false,
+  "perRosa": [
+   {
+    "team": 0,
+    "drawCalls": 16,
+    "shadowCasters": 0,
+    "triangles": 3846,
+    "materials": 3,
+    "geometries": 16
+   },
+   {
+    "team": 1,
+    "drawCalls": 16,
+    "shadowCasters": 0,
+    "triangles": 4192,
+    "materials": 3,
+    "geometries": 16
+   },
+   {
+    "team": 1,
+    "drawCalls": 16,
+    "shadowCasters": 0,
+    "triangles": 4192,
+    "materials": 3,
+    "geometries": 16
+   }
+  ],
+  "characterTextureBytes": 12,
+  "gpu": {
+   "geometries": 100,
+   "textures": 19
+  }
+ }
+}

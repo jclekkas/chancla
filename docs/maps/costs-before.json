@@ -1,0 +1,284 @@
+{
+ "env": {
+  "gpu": false,
+  "webgl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "renderer": "Chromium, SwiftShader (software)",
+  "host": "linux x64 Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "at": "2026-10-24T16:03:43.592Z"
+ },
+ "costs": {
+  "patio/plaza-west-high": {
+   "calls": 116,
+   "tris": 114708,
+   "medianMs": 333.2,
+   "p95Ms": 333.2,
+   "frames": 1
+  },
+  "patio/fountain-high": {
+   "calls": 81,
+   "tris": 94642,
+   "medianMs": 250,
+   "p95Ms": 250,
+   "frames": 2
+  },
+  "patio/cafe-high": {
+   "calls": 67,
+   "tris": 94038,
+   "medianMs": 683.3,
+   "p95Ms": 683.3,
+   "frames": 1
+  },
+  "patio/plaza-west-medium": {
+   "calls": 116,
+   "tris": 103144,
+   "medianMs": 599.9,
+   "p95Ms": 599.9,
+   "frames": 1
+  },
+  "patio/fountain-medium": {
+   "calls": 81,
+   "tris": 89336,
+   "medianMs": 233.3,
+   "p95Ms": 233.3,
+   "frames": 2
+  },
+  "patio/cafe-medium": {
+   "calls": 67,
+   "tris": 88732,
+   "medianMs": 233.3,
+   "p95Ms": 233.3,
+   "frames": 2
+  },
+  "patio/plaza-west-low": {
+   "calls": 97,
+   "tris": 63918,
+   "medianMs": 116.6,
+   "p95Ms": 116.7,
+   "frames": 5
+  },
+  "patio/fountain-low": {
+   "calls": 64,
+   "tris": 56104,
+   "medianMs": 83.3,
+   "p95Ms": 83.4,
+   "frames": 7
+  },
+  "patio/cafe-low": {
+   "calls": 50,
+   "tris": 55500,
+   "medianMs": 99.9,
+   "p95Ms": 150,
+   "frames": 8
+  },
+  "patio/plaza-west-phone-low": {
+   "calls": 104,
+   "tris": 64398,
+   "medianMs": 83.3,
+   "p95Ms": 83.4,
+   "frames": 8
+  },
+  "plaza/market-west-high": {
+   "calls": 160,
+   "tris": 57646,
+   "medianMs": 216.6,
+   "p95Ms": 250,
+   "frames": 3
+  },
+  "plaza/walkway-north-high": {
+   "calls": 160,
+   "tris": 57646,
+   "medianMs": 216.7,
+   "p95Ms": 266.7,
+   "frames": 3
+  },
+  "plaza/fountain-high": {
+   "calls": 116,
+   "tris": 37116,
+   "medianMs": 150,
+   "p95Ms": 150.1,
+   "frames": 3
+  },
+  "plaza/stage-south-high": {
+   "calls": 109,
+   "tris": 36874,
+   "medianMs": 166.7,
+   "p95Ms": 200.1,
+   "frames": 3
+  },
+  "plaza/stalls-east-high": {
+   "calls": 116,
+   "tris": 37090,
+   "medianMs": 166.8,
+   "p95Ms": 183.3,
+   "frames": 3
+  },
+  "plaza/market-west-medium": {
+   "calls": 160,
+   "tris": 51388,
+   "medianMs": 150,
+   "p95Ms": 150.1,
+   "frames": 4
+  },
+  "plaza/walkway-north-medium": {
+   "calls": 160,
+   "tris": 51388,
+   "medianMs": 233.4,
+   "p95Ms": 233.4,
+   "frames": 2
+  },
+  "plaza/fountain-medium": {
+   "calls": 116,
+   "tris": 37116,
+   "medianMs": 149.9,
+   "p95Ms": 183.4,
+   "frames": 3
+  },
+  "plaza/stage-south-medium": {
+   "calls": 109,
+   "tris": 36874,
+   "medianMs": 149.9,
+   "p95Ms": 150,
+   "frames": 4
+  },
+  "plaza/stalls-east-medium": {
+   "calls": 116,
+   "tris": 37090,
+   "medianMs": 166.7,
+   "p95Ms": 216.6,
+   "frames": 4
+  },
+  "plaza/market-west-low": {
+   "calls": 123,
+   "tris": 41314,
+   "medianMs": 100,
+   "p95Ms": 150,
+   "frames": 7
+  },
+  "plaza/walkway-north-low": {
+   "calls": 123,
+   "tris": 41314,
+   "medianMs": 116.7,
+   "p95Ms": 133.4,
+   "frames": 5
+  },
+  "plaza/fountain-low": {
+   "calls": 81,
+   "tris": 33036,
+   "medianMs": 99.9,
+   "p95Ms": 183.3,
+   "frames": 6
+  },
+  "plaza/stage-south-low": {
+   "calls": 74,
+   "tris": 32794,
+   "medianMs": 100.1,
+   "p95Ms": 116.7,
+   "frames": 5
+  },
+  "plaza/stalls-east-low": {
+   "calls": 81,
+   "tris": 33010,
+   "medianMs": 83.4,
+   "p95Ms": 183.3,
+   "frames": 7
+  },
+  "plaza/market-west-phone-low": {
+   "calls": 123,
+   "tris": 41314,
+   "medianMs": 133.3,
+   "p95Ms": 150,
+   "frames": 5
+  },
+  "fiesta/tables-west-high": {
+   "calls": 146,
+   "tris": 53518,
+   "medianMs": 216.7,
+   "p95Ms": 383.4,
+   "frames": 3
+  },
+  "fiesta/pinata-high": {
+   "calls": 105,
+   "tris": 32994,
+   "medianMs": 133.4,
+   "p95Ms": 150,
+   "frames": 4
+  },
+  "fiesta/stage-north-high": {
+   "calls": 84,
+   "tris": 31936,
+   "medianMs": 166.6,
+   "p95Ms": 166.7,
+   "frames": 3
+  },
+  "fiesta/hedges-east-high": {
+   "calls": 122,
+   "tris": 33962,
+   "medianMs": 383.4,
+   "p95Ms": 383.4,
+   "frames": 2
+  },
+  "fiesta/tables-west-medium": {
+   "calls": 146,
+   "tris": 47260,
+   "medianMs": 266.7,
+   "p95Ms": 283.4,
+   "frames": 3
+  },
+  "fiesta/pinata-medium": {
+   "calls": 105,
+   "tris": 32994,
+   "medianMs": 116.6,
+   "p95Ms": 366.6,
+   "frames": 3
+  },
+  "fiesta/stage-north-medium": {
+   "calls": 84,
+   "tris": 31936,
+   "medianMs": 183.3,
+   "p95Ms": 333.4,
+   "frames": 3
+  },
+  "fiesta/hedges-east-medium": {
+   "calls": 122,
+   "tris": 33962,
+   "medianMs": 166.7,
+   "p95Ms": 166.7,
+   "frames": 3
+  },
+  "fiesta/tables-west-low": {
+   "calls": 113,
+   "tris": 36110,
+   "medianMs": 83.3,
+   "p95Ms": 100,
+   "frames": 7
+  },
+  "fiesta/pinata-low": {
+   "calls": 74,
+   "tris": 27838,
+   "medianMs": 66.7,
+   "p95Ms": 150,
+   "frames": 7
+  },
+  "fiesta/stage-north-low": {
+   "calls": 53,
+   "tris": 26780,
+   "medianMs": 83.3,
+   "p95Ms": 100,
+   "frames": 7
+  },
+  "fiesta/hedges-east-low": {
+   "calls": 91,
+   "tris": 28806,
+   "medianMs": 100,
+   "p95Ms": 100,
+   "frames": 6
+  },
+  "fiesta/tables-west-phone-low": {
+   "calls": 120,
+   "tris": 36590,
+   "medianMs": 83.3,
+   "p95Ms": 133.4,
+   "frames": 8
+  }
+ }
+}

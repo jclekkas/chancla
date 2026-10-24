@@ -12,10 +12,30 @@ export const COLORS = {
 };
 
 let ramp: THREE.DataTexture | null = null;
+/**
+ * Shadow, mid and lit bands. 'classic' (the campaign, and everything before the
+ * lighting milestone): a soft ramp that lets faces turned from the sun keep
+ * nearly half of it. 'arena': a deeper shadow band, so a face turned from the
+ * sun is lit mostly by the cool sky fill: warm light against cool shade, and
+ * clearer forms, with the fill raised to keep shade readable (lighting.ts).
+ */
+const RAMPS = { classic: [120, 190, 255], arena: [64, 118, 255] } as const;
+export type RampProfile = keyof typeof RAMPS;
+let rampProfile: RampProfile = 'classic';
+/** Switches every toon material's bands at once (one shared texture). */
+export function setToonRamp(p: RampProfile): void {
+  if (p === rampProfile && ramp) return;
+  rampProfile = p;
+  if (!ramp) return;
+  const d = ramp.image.data as Uint8Array;
+  RAMPS[p].forEach((v, i) => { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; });
+  ramp.needsUpdate = true;
+}
 export function toonRamp(): THREE.DataTexture {
   if (ramp) return ramp;
-  // Shadow, mid, lit: a soft three-step ramp so lighting reads as painted.
-  const data = new Uint8Array([120, 120, 120, 255, 190, 190, 190, 255, 255, 255, 255, 255]);
+  // Shadow, mid, lit: a three-step ramp so lighting reads as painted.
+  const [a, b, c] = RAMPS[rampProfile];
+  const data = new Uint8Array([a, a, a, 255, b, b, b, 255, c, c, c, 255]);
   ramp = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
   ramp.minFilter = THREE.NearestFilter;
   ramp.magFilter = THREE.NearestFilter;

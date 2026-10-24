@@ -9,15 +9,20 @@ import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTextu
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
 import { FOCAL_MATS, buildFocal } from './patio-focal';
-import type { DressingModule } from './map-dressing';
+import type { DressingModule, SceneLight } from './map-dressing';
 import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
-import { GROUND_ZONES, patioGround, patioLight } from './patio-materials';
+import { GROUND_ZONES, patioGround } from './patio-materials';
+import { kitLight, shadowSettings } from './lighting';
 import type { Quality } from '../settings';
 
 export interface WorldView {
   group: THREE.Group;
   sun: THREE.DirectionalLight;
+  /** The fog colour this world uses (the engine owns the fog itself). */
+  fog: number;
+  /** The arena maps' light (the first-person hand is lit to match); absent for campaign layouts, which keep theirs. */
+  light?: SceneLight;
   update(t: number): void;
   drawCalls: number;
   // Campaign: lift the ambient light (the patio brightening as it is cleaned).
@@ -97,7 +102,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   const dressing: DressingModule | null = !kit ? null : map.id === 'plaza' ? PLAZA_DRESSING : map.id === 'fiesta' ? FIESTA_DRESSING : null;
   const dressed = (k: 'awnings' | 'trees' | 'danceFloor') => !!dressing?.decor.has(k);
   const th0 = THEMES[opts.theme ?? 'afternoon'];
-  const th: Theme = kit ? { ...th0, ...patioLight({ hemi: th0.hemi, sun: th0.sun }) } : th0;
+  let th: Theme = th0;
+  if (kit) {
+    th = { ...th0, ...kitLight({ hemi: th0.hemi, sun: th0.sun, fog: th0.fog }) };
+    if (dressing?.light) th = { ...th, ...dressing.light({ hemi: th.hemi, sun: th.sun, fog: th.fog }, quality) };
+  }
   const decor = map.decor ?? EL_PATIO.decor!;
   const bd = map.bounds;
   const group = new THREE.Group();
@@ -138,9 +147,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   sc.left = bd.minX - 5; sc.right = bd.maxX + 5; sc.top = bd.maxZ + 7; sc.bottom = bd.minZ - 7; sc.near = 1; sc.far = 100;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.04;
-  const shadowSize = quality === 'high' ? 2048 : 1024;
-  sun.shadow.mapSize.set(shadowSize, shadowSize);
-  sun.castShadow = quality !== 'low';
+  const shadowCfg = shadowSettings(quality);
+  sun.shadow.mapSize.set(shadowCfg?.size ?? 1024, shadowCfg?.size ?? 1024);
+  // Campaign layouts keep the original filter (the softer penumbra is the arena's).
+  sun.shadow.radius = kit ? shadowCfg?.radius ?? 1 : 1;
+  sun.castShadow = !!shadowCfg;
   group.add(sun, sun.target);
 
   // ------------------------------------------------------------- ground
@@ -476,8 +487,25 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   for (const [ax, az, bx2, bz, y] of decor.lights ?? []) string(ax, az, bx2, bz, y);
   group.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(bulbPts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink })));
   const bulbMesh = bulbs.build(new THREE.SphereGeometry(0.5, 6, 4), flat(0xffffff));
-  if (bulbMesh && th.bulbsGlow) bulbMesh.scale.setScalar(1);
   if (bulbMesh) group.add(bulbMesh);
+  let haloCalls = 0;
+  // At dusk the bulbs are lit: each gets a soft additive halo of its own
+  // colour (one instanced draw; no lights, no post-processing).
+  if (bulbMesh && th.bulbsGlow && kit) {
+    const halo = new THREE.InstancedMesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }), bulbMesh.count);
+    const m = new THREE.Matrix4(), c = new THREE.Color(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    for (let i = 0; i < bulbMesh.count; i++) {
+      bulbMesh.getMatrixAt(i, m);
+      m.decompose(p, q, sc);
+      halo.setMatrixAt(i, m.compose(p, q, sc.set(0.5, 0.5, 0.5)));
+      bulbMesh.getColorAt(i, c);
+      halo.setColorAt(i, c.lerp(new THREE.Color(0xffc070), 0.6));
+    }
+    halo.name = 'bulb-halos';
+    halo.renderOrder = 2;
+    group.add(halo);
+    haloCalls = 1;
+  }
 
   // ---------------------------------------------- skyline landmark: church
   const church = new THREE.Group();
@@ -558,7 +586,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   const pinata = decor.pinata ? buildPinata(decor.pinata, group) : null;
 
   // ------------------------------------------------------ bake and finish
-  let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
+  let calls = batch.build(group, (gs) => mergeGeometries(gs, false)) + haloCalls;
   if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality, { heroZone: patioKit, banners: decor.banners ?? [] }); group.add(sec.group); calls += sec.calls; }
   const focal = focalBoxes.length ? buildFocal(focalBoxes, quality) : null;
   if (focal) { group.add(focal.group); calls += focal.calls; }
@@ -584,6 +612,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   return {
     group,
     sun,
+    fog: th.fog,
+    light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
     pinata: pinata?.view,
     setBrightness(k: number) {

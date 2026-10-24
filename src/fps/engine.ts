@@ -11,7 +11,7 @@ import { lineOfSight } from '../../shared/collision';
 import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '../net/session';
 import { audio } from '../audio/audio';
-import { buildWorld, THEMES, type WorldOptions, type WorldView } from './render/world';
+import { buildWorld, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
 import { CombatFx } from './render/combat-fx';
 import { OwnSwingLog } from './miss-feedback';
@@ -19,7 +19,8 @@ import { ClipCursor, KillcamDirector, eyeOf, meleeCamera, noteFrom, thirdPersonC
 import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
-import { COLORS, toon, flat, OUTLINE } from './render/materials';
+import { ContactShadows } from './render/contact-shadows';
+import { COLORS, toon, flat, OUTLINE, setToonRamp } from './render/materials';
 import type { Hud } from './hud';
 import type { FpsInput } from './input';
 import type { FpsSettings, Quality } from './settings';
@@ -65,6 +66,10 @@ export class Engine {
   readonly ruleros = new RuleroFx();
   /** Melee contact, miss and shielded effects (cosmetic, pooled). */
   readonly fx = new CombatFx();
+  /** Soft discs grounding the characters (every quality). */
+  readonly contact = new ContactShadows();
+  private vmHemi = new THREE.HemisphereLight(0xffe7c4, 0x7a4a5a, 2.2);
+  private vmSun = new THREE.DirectionalLight(0xfff0d0, 1.6);
   /** The elimination replay: its recorder and when to play it (killcam.ts). */
   readonly killcam = new KillcamDirector(() => this.session?.id ?? -1);
   /** The replay being shown, if any. */
@@ -129,17 +134,17 @@ export class Engine {
     this.scene.fog = new THREE.Fog(0xf3b07a, 45, 140);
 
     this.world = buildWorld(s.quality);
-    this.scene.add(this.world.group, this.proj.group, this.ruleros.group, this.fx.group);
+    this.scene.add(this.world.group, this.proj.group, this.ruleros.group, this.fx.group, this.contact.mesh);
+    this.contact.setStrength(contactStrength(s.quality));
     this.fx.setQuality(s.quality);
     this.fx.setReducedMotion(s.reducedMotion);
     this.buildPickups();
     this.buildMenuAvatars();
     input.onSkip = () => this.skipReplay();
 
-    this.vmScene.add(new THREE.HemisphereLight(0xffe7c4, 0x7a4a5a, 2.2));
-    const vmSun = new THREE.DirectionalLight(0xfff0d0, 1.6);
-    vmSun.position.set(-1, 2, 1);
-    this.vmScene.add(vmSun, this.vm.root);
+    this.vmSun.position.set(-1, 2, 1);
+    this.vmScene.add(this.vmHemi, this.vmSun, this.vm.root);
+    this.lightHand();
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.contextLost = true; diagLog('gfx', 'WebGL context lost'); this.onContextLost?.(true); });
@@ -242,11 +247,13 @@ export class Engine {
     if (s.quality !== this.quality) {
       this.quality = s.quality;
       this.fx.setQuality(s.quality);
+      this.contact.setStrength(contactStrength(s.quality));
       this.renderer.shadowMap.enabled = s.quality !== 'low';
       this.scene.remove(this.world.group);
       disposeTree(this.world.group);
       this.world = buildWorld(s.quality, this.worldOpts);
       this.scene.add(this.world.group);
+      this.lightHand();
       this.renderer.shadowMap.needsUpdate = true;
       // Characters are built per quality: rebuild them (match ones come back on the next frame).
       for (const av of this.avatars.values()) { this.scene.remove(av.root); av.dispose(); }
@@ -259,6 +266,23 @@ export class Engine {
       for (const av of this.menuAvatars) av.root.visible = menuShown;
       this.resize();
     }
+  }
+
+  /**
+   * The first-person hand is drawn in its own scene: light it like the world
+   * (the same sky fill and sun colours, at the strengths the hand was tuned for),
+   * so it matches the characters around it.
+   */
+  private lightHand(): void {
+    const l = this.world.light;
+    // The arena maps use the deeper shadow band; campaign layouts keep the original.
+    setToonRamp(l ? 'arena' : 'classic');
+    // Campaign layouts keep the hand's original light.
+    this.vmHemi.color.setHex(l ? l.hemi[0] : 0xffe7c4);
+    this.vmHemi.groundColor.setHex(l ? l.hemi[1] : 0x7a4a5a);
+    this.vmHemi.intensity = l ? 2.2 * Math.min(1.25, l.hemi[2] / 1.2) : 2.2;
+    this.vmSun.color.setHex(l ? l.sun[0] : 0xfff0d0);
+    this.vmSun.intensity = l ? 1.6 * Math.min(1.25, l.sun[1] / 2.7) : 1.6;
   }
 
   private buildMenuAvatars(): void {
@@ -284,7 +308,8 @@ export class Engine {
     disposeTree(this.world.group);
     this.world = buildWorld(this.quality, opts);
     this.scene.add(this.world.group);
-    (this.scene.fog as THREE.Fog).color.setHex(THEMES[opts.theme ?? 'afternoon'].fog);
+    this.lightHand();
+    (this.scene.fog as THREE.Fog).color.setHex(this.world.fog);
     this.renderer.shadowMap.needsUpdate = true;
   }
 
@@ -667,10 +692,12 @@ export class Engine {
     this.fpsT += dt;
     if (this.fpsT >= 0.5) { this.fps = this.fpsFrames / this.fpsT; this.fpsFrames = 0; this.fpsT = 0; }
     const t0 = performance.now();
+    this.contact.begin();
     if (this.mode === 'match' && this.session) this.matchFrame(this.session, dt);
     else if (this.mode === 'controller' && this.controller) this.controller.frame(dt);
     else this.menuFrame(dt);
     this.world.update(this.time);
+    this.contact.end();
     if (!this.contextLost) {
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
@@ -709,6 +736,7 @@ export class Engine {
       // Idle with a throw every few seconds, staggered between the two.
       const cycle = (this.time + (av.team === 0 ? 0 : 1.7)) % 3.4;
       av.update(idleState(cycle * 1000), dt, reduced);
+      this.contact.add(av, av.root.position.x, av.root.position.y, av.root.position.z, true);
     }
     this.proj.sync(new Map(), 0, this.camera, dt);
   }
@@ -853,6 +881,7 @@ export class Engine {
       driveAvatar(av, r, (masks.get(r.id) ?? r.ruleros) | (this.heldRuleros.get(r.id) ?? 0), dt, reduced);
       // During a replay the live characters keep animating, out of sight.
       av.root.visible = !this.replay;
+      if (!this.replay) this.contact.add(av, r.x, r.y, r.z, r.onGround);
     }
     for (const [id, av] of this.avatars) if (!seen.has(id)) { this.scene.remove(av.root); av.dispose(); this.avatars.delete(id); }
   }
@@ -963,6 +992,7 @@ export class Engine {
       // From her own eyes the attacker is not drawn; in the melee view she is the point.
       av.root.visible = !(clip.view === 'attacker' && id === clip.killer && players.get(clip.killer)?.alive);
       if (id === clip.killer && av.root.visible && p.msSinceMelee < 600) r.swingShown = true;
+      if (av.root.visible) this.contact.add(av, p.x, p.y, p.z, p.onGround);
     }
     for (const [id, av] of r.avatars) if (!live.has(av)) { av.root.visible = false; r.avatars.delete(id); }
     for (const ev of r.cur.due(rt)) this.replayEvent(r, ev.e, players);
@@ -1236,6 +1266,9 @@ function driveAvatar(av: Avatar, r: RemotePlayer, ruleros: number, dt: number, r
     msSinceMelee: r.msSinceMelee, ruleros,
   }, dt, reduced);
 }
+
+/** How dark the characters' contact discs are: lighter where the sun's shadow map also grounds them. */
+function contactStrength(q: Quality): number { return q === 'high' ? 0.32 : q === 'medium' ? 0.36 : 0.46; }
 
 function idleState(msSinceThrow: number): AvatarState {
   return {

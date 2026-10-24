@@ -22,4 +22,12 @@ export interface DressingModule {
   /** Decor entries it draws itself (the arena then skips its generic version). */
   decor: ReadonlySet<'awnings' | 'trees' | 'danceFloor'>;
   build(boxes: readonly MapBox[], decor: MapDecor, quality: Quality): Dressing;
+  /**
+   * Optional: this map's own adjustment of the arena light (sky fill, sun,
+   * fog), given the light the arena would use. Returns only what changes.
+   */
+  light?(base: SceneLight, quality: Quality): Partial<SceneLight>;
 }
+
+/** The arena's light: hemisphere fill [sky, ground, intensity], sun [colour, intensity], fog colour. */
+export interface SceneLight { hemi: [number, number, number]; sun: [number, number]; fog: number }

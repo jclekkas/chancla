@@ -31,6 +31,7 @@ const DIST = path.resolve(process.env.DIST || path.join(ROOT, 'dist'));
 const OUT = path.resolve(process.env.OUT || path.join(ROOT, 'artifacts/map-capture'));
 const MAPS = (process.env.MAPS || 'patio,plaza,fiesta').split(',');
 const QUALITIES = (process.env.QUALITIES || 'high,medium,low').split(',');
+const SET = process.env.SET === 'lighting' ? 'lighting' : 'maps';
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -53,6 +54,27 @@ export const VIEWS: Record<string, ReadonlyArray<readonly [string, number, numbe
     ['pinata', -5, 5.5, 0, 3.4, 0],
     ['stage-north', -1, -5, 0, 1.5, -11],
     ['hedges-east', 16, 4.5, 4, 1.4, 7.3],
+  ],
+};
+
+/**
+ * SET=lighting: the lighting milestone's matched views, with both teams in shot.
+ * A view's 7th entry places your ally (Sol) and the enemy (Luna): [solX, solZ, lunaX, lunaZ];
+ * both face the camera and stand still (bots paused), so before and after match.
+ */
+export const LIGHT_VIEWS: Record<string, ReadonlyArray<readonly [string, number, number, number, number, number, (readonly [number, number, number, number])?]>> = {
+  patio: [
+    ['sun-close', -12, 4, 0, 1.3, 4, [-9.1, 3.1, -9.1, 4.9]],
+    ['sun-combat', -15, 0.5, 0, 1.3, 1, [-5.5, -0.3, -5, 2.2]],
+    ['alley-shade', 12, -12, -6, 1.6, -12, [9, -12.6, 8.2, -11.3]],
+  ],
+  plaza: [
+    ['market', -21, 2, 10, 1.3, -1, [-14, 1, -13, 3.2]],
+    ['walkway', -21, -13.6, 10, 1.5, -13.6, [-16, -14, -13.5, -13.2]],
+  ],
+  fiesta: [
+    ['dance-floor', -5.5, 3.5, 0, 1.3, 0, [-2.2, 1.3, -1.2, -0.6]],
+    ['hedge-route', 16, 4.5, 4, 1.4, 7.3, [12, 5.6, 9.5, 5.2]],
   ],
 };
 
@@ -96,13 +118,23 @@ async function open(b: Browser, map: string, quality: string, phone: boolean): P
 
 interface Cost { calls: number; tris: number; medianMs: number; p95Ms: number; frames: number }
 
-async function view(p: Page, v: readonly [string, number, number, number, number, number], sampleMs: number): Promise<Cost> {
-  return p.evaluate(async ([[, ex, ez, lx, ly, lz], sampleMs]) => {
+type View = readonly [string, number, number, number, number, number, (readonly [number, number, number, number])?];
+
+async function view(p: Page, v: View, sampleMs: number): Promise<Cost> {
+  return p.evaluate(async ([[, ex, ez, lx, ly, lz, chars], sampleMs]) => {
     const f = (window as any).__fps, s = f.session(), room = [...f.host().hub.rooms.values()][0];
     const me = room.sim.players.get(s.id);
     let k = 0;
-    // Bots far outside the arena, so no character is in shot.
-    for (const q of room.sim.players.values()) if (q !== me) { q.body.x = 80 + k++ * 2; q.body.z = 80; q.body.vx = q.body.vz = 0; }
+    // Bots far outside the arena, so no character is in shot; or, with `chars`, your ally and the enemy where given, facing the camera.
+    for (const q of room.sim.players.values()) {
+      if (q === me) continue;
+      q.body.vx = q.body.vz = 0; q.protectedUntil = 0;
+      if (chars) {
+        const [x, z] = q.team === me.team ? [chars[0], chars[1]] : [chars[2], chars[3]];
+        q.body.x = x; q.body.z = z; q.body.y = 0;
+        q.yaw = Math.atan2(-(ex - x), -(ez - z)); q.pitch = 0;
+      } else { q.body.x = 80 + k++ * 2; q.body.z = 80; }
+    }
     for (const b of [me.body, s.body]) { b.x = ex; b.z = ez; b.y = 0; b.vx = b.vy = b.vz = 0; }
     const i = f.input(), dx = lx - ex, dz = lz - ez;
     i.yaw = Math.atan2(-dx, -dz); i.pitch = Math.atan2(ly - 1.58, Math.hypot(dx, dz));
@@ -145,7 +177,7 @@ async function main(): Promise<void> {
         const p = await open(b, map, q, false);
         // What actually rendered (on a Mac: the Apple GPU through ANGLE/Metal; here: SwiftShader).
         if (!glRenderer) glRenderer = await p.evaluate(() => { const gl = (window as any).__fps.engine().renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); });
-        for (const v of VIEWS[map] ?? []) {
+        for (const v of (SET === 'lighting' ? LIGHT_VIEWS : VIEWS)[map] ?? []) {
           costs[`${map}/${v[0]}-${q}`] = await view(p, v, sampleMs);
           await p.screenshot({ path: path.join(OUT, `${map}-${v[0]}-${q}.png`), timeout: 120000 });
           console.log(`${map}/${v[0]}-${q}`, JSON.stringify(costs[`${map}/${v[0]}-${q}`]));
@@ -154,7 +186,7 @@ async function main(): Promise<void> {
       }
       if (process.env.PHONE) {
         const p = await open(b, map, 'low', true);
-        const v = VIEWS[map]![0]!;
+        const v = (SET === 'lighting' ? LIGHT_VIEWS : VIEWS)[map]![0]!;
         costs[`${map}/${v[0]}-phone-low`] = await view(p, v, sampleMs);
         await p.screenshot({ path: path.join(OUT, `${map}-${v[0]}-phone-low.png`), timeout: 120000 });
         await p.context().close();

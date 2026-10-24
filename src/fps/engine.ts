@@ -686,8 +686,6 @@ export class Engine {
     s.updateRemotes();
     if (!this.paused) s.updateProjectiles(dt);
     this.runFx(s);
-    this.ruleros.update(this.paused ? 0 : dt);
-    this.fx.update(this.paused ? 0 : dt, this.camera);
 
     const team = s.team;
     if (team !== null) this.vm.setTeam(team);
@@ -714,6 +712,9 @@ export class Engine {
 
     this.syncAvatars(s, dt, reduced);
     this.proj.sync(s.projectiles, s.renderTime(), cam, dt);
+    // Effects face this frame's camera (placed above), so billboards never lag a turn.
+    this.ruleros.update(this.paused ? 0 : dt);
+    this.fx.update(this.paused ? 0 : dt, cam);
     // La Fiesta: a chancla through the piñata makes it spin and shower confetti (just for fun).
     const pin = this.world.pinata;
     if (pin) {

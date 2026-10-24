@@ -91,7 +91,7 @@ async function stage(p: Page, o: { me: [number, number]; look: [number, number, 
     i.yaw = Math.atan2(-dx, -dz); i.pitch = Math.atan2(dy, Math.hypot(dx, dz));
     f.engine().vm.root.scale.setScalar(o.spectate ? 1e-4 : 1);
   }, o);
-  await run(p, 400); // positions reach the client, the bots settle
+  await run(p, 900); // positions reach the client, the bots and name tags settle
 }
 
 /**

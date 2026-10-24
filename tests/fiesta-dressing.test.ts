@@ -9,7 +9,7 @@ import type { MapBox } from '../shared/map';
 import { LA_FIESTA } from '../shared/maps/fiesta';
 import { FIESTA_DRESSING, FIESTA_MATS } from '../src/fps/render/fiesta-dressing';
 
-const TRIM = 0.06, CALLS = 8;
+const TRIM = 0.06, CALLS = 10;
 const props = LA_FIESTA.boxes.filter((b) => FIESTA_MATS.has(b.mat));
 const df = LA_FIESTA.decor!.danceFloor!;
 
@@ -44,6 +44,20 @@ describe('La Fiesta dressing', () => {
         const p = m.geometry.getAttribute('position');
         tris += p.count / 3;
         if (m.name === 'fiesta-shadow') continue; // flat on the paving, no volume
+        if (m.name === 'fiesta-glow') {
+          // The baked light pools: flat on the paving (normals up), inside the ground, no volume.
+          const n = m.geometry.getAttribute('normal');
+          for (let i = 0; i < p.count; i++) {
+            v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld);
+            expect(v.y).toBeGreaterThanOrEqual(0);
+            expect(v.y).toBeLessThan(0.02);
+            expect(n.getY(i)).toBe(1);
+            expect(Math.abs(v.x)).toBeLessThanOrEqual(LA_FIESTA.decor!.ground.w / 2 + 1e-4);
+            expect(Math.abs(v.z)).toBeLessThanOrEqual(LA_FIESTA.decor!.ground.d / 2 + 1e-4);
+          }
+          expect(m.castShadow).toBe(false);
+          continue;
+        }
         const isFloor = m.name === 'fiesta-floor' || m.name === 'fiesta-border';
         for (let i = 0; i < p.count; i++) {
           v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld);
@@ -64,7 +78,7 @@ describe('La Fiesta dressing', () => {
       expect(floorR).toBeLessThanOrEqual(df.r + 1e-4);
       // Low casts no shadows; High and Medium cast from the solid props only.
       for (const m of f.group.children as THREE.Mesh[]) {
-        if (q === 'low' || ['fiesta-floor', 'fiesta-border', 'fiesta-shadow'].includes(m.name)) expect(m.castShadow).toBe(false);
+        if (q === 'low' || ['fiesta-floor', 'fiesta-border', 'fiesta-shadow', 'fiesta-glow', 'fiesta-lamp'].includes(m.name)) expect(m.castShadow).toBe(false);
       }
       expect(tris).toBeLessThan(q === 'high' ? 60000 : q === 'medium' ? 40000 : 20000);
     });
@@ -78,6 +92,20 @@ describe('La Fiesta dressing', () => {
     const h = tri('high'), m = tri('medium'), l = tri('low');
     expect(m).toBeLessThan(h);
     expect(l).toBeLessThan(m * 0.7);
+  });
+
+  it('lights the party with baked light only: pools on the paving and lit fixtures, no light objects', () => {
+    for (const q of ['high', 'medium', 'low'] as const) {
+      const f = FIESTA_DRESSING.build(props, LA_FIESTA.decor!, q);
+      expect(f.group.getObjectByName('fiesta-glow')).toBeTruthy();
+      expect(f.group.getObjectByName('fiesta-lamp')).toBeTruthy();
+      let lights = 0;
+      f.group.traverse((o) => { if ((o as THREE.Light).isLight) lights++; });
+      expect(lights).toBe(0);
+    }
+    const light = FIESTA_DRESSING.light!({ hemi: [0xb8a0d8, 0x6a4040, 0.95], sun: [0xffa878, 1.4], fog: 0x6a3a6a }, 'low');
+    expect(light.fog).toBeUndefined();
+    expect(light.hemi![2]).toBeGreaterThan(0.95);
   });
 
   it('keeps the hedges opaque: the leaf mass covers each hedge to its full height', () => {

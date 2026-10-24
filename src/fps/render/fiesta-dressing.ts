@@ -20,28 +20,36 @@
 // Every vertex stays inside its box's footprint (trim at most 6 cm) and at
 // or under its box's top; tests/fiesta-dressing.test.ts holds these bounds.
 //
+// Dusk party light, baked (fiesta-glow.ts): footlights on the tarimas and a
+// farolito on each table (lit, unshaded glass), soft warm pools on the
+// paving under the string lights and round the fixtures, a warm lift on the
+// props facing them, and La Fiesta's own sky fill and sun (`light`).
+//
 // One mesh per material: leaf, painted (flat), wrapping paper, wood,
-// cantera, floor tiles, the floor's talavera border and the contact
-// shadows: eight draw calls for the whole map. Low drops the pleats, the
+// cantera, floor tiles, the floor's talavera border, the contact shadows,
+// the light pools and the lit fixtures: ten draw calls for the whole map. Low drops the pleats, the
 // blossoms, the table goods and the valance, coarsens the hedges' lumps and
 // the bows, and casts no shadows.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MapBox, MapDecor } from '../../../shared/map';
 import type { Quality } from '../settings';
-import type { DressingModule } from './map-dressing';
+import type { DressingModule, SceneLight } from './map-dressing';
 import { COLORS, boxGeo, toonRamp } from './materials';
 import { kitMaterials, noBackfaceShadow } from './patio-materials';
+import { LAMP, bakeLift, fiestaFixtures, glowMaterial, groundGlow, lampMaterial, stageFront } from './fiesta-glow';
 
 const C = {
-  leafDeep: 0x2f5a2c, leafMid: 0x4c8a3e, leafLit: 0x7cbc5a, kerb: 0xd6bf98, kerbCap: 0xe4d2b0,
+  leafDeep: 0x386634, leafMid: 0x559446, leafLit: 0x7cbc5a, kerb: 0xd6bf98, kerbCap: 0xe4d2b0,
   cream: 0xf4e6c8, lace: 0xfbf3e2, clay: 0xb85a3c, clayDark: 0x6e2f1f, plate: 0xf2ece0,
   grout: 0x4a3a40, stageCore: 0x2a1a22, fascia: 0xe8a33a, gold: COLORS.gold,
 } as const;
 const PAPEL = [COLORS.pink, COLORS.turquoise, COLORS.marigold, COLORS.violet] as const;
 
-type MatKey = 'leaf' | 'flat' | 'wrap' | 'wood' | 'cantera' | 'floor' | 'border' | 'shadow';
-const ORDER: readonly MatKey[] = ['leaf', 'flat', 'wrap', 'wood', 'cantera', 'floor', 'border', 'shadow'];
+type MatKey = 'leaf' | 'flat' | 'wrap' | 'wood' | 'cantera' | 'floor' | 'border' | 'shadow' | 'glow' | 'lamp';
+const ORDER: readonly MatKey[] = ['leaf', 'flat', 'wrap', 'wood', 'cantera', 'floor', 'border', 'shadow', 'glow', 'lamp'];
+/** Buckets whose vertex colours take the fixtures' baked warm light (fiesta-glow.ts). */
+const LIFTED: readonly MatKey[] = ['leaf', 'flat', 'wrap', 'cantera'];
 
 function rng(seed: number): () => number {
   let s = seed >>> 0;
@@ -261,6 +269,11 @@ function table(bk: Bucket, b: MapBox, q: Quality, idx: number, sh: Shared): void
   const alongX = w >= d, rw = Math.min(w, d) * 0.34;
   if (alongX) bk.box('flat', b.minX - o - 0.002, topY - 0.06, cz - rw / 2, b.maxX + o + 0.002, topY + 0.003, cz + rw / 2, other, 1, 63 & ~8);
   else bk.box('flat', cx - rw / 2, topY - 0.06, b.minZ - o - 0.002, cx + rw / 2, topY + 0.003, b.maxZ + o + 0.002, other, 1, 63 & ~8);
+  // A farolito in the middle of the runner (the goods leave the middle free): lit glass under a tin cap.
+  const ly = topY + 0.003;
+  bk.add('lamp', new THREE.CylinderGeometry(0.042, 0.048, 0.058, q === 'low' ? 6 : 8), LAMP.glass, new THREE.Matrix4().makeTranslation(cx, ly + 0.029, cz));
+  bk.add('lamp', new THREE.SphereGeometry(0.026, 6, 4), LAMP.core, new THREE.Matrix4().makeTranslation(cx, ly + 0.03, cz));
+  bk.add('flat', new THREE.ConeGeometry(0.056, 0.018, q === 'low' ? 6 : 8), LAMP.tin, new THREE.Matrix4().makeTranslation(cx, ly + 0.067, cz));
   if (q === 'low') return;
   // Goods along the runner, kept under the box's top (8 cm of room).
   const long = Math.max(w, d), n = q === 'high' ? Math.max(2, Math.floor((long - 0.3) / 0.55)) : 2;
@@ -388,6 +401,15 @@ function stage(bk: Bucket, b: MapBox, q: Quality): void {
     const a0 = (alongX ? b.minX : b.minZ) + i * pw + 0.006, a1 = a0 + pw - 0.012;
     if (alongX) bk.box('wood', a0, deckY, b.minZ, a1, top, b.maxZ, 0xffffff, 0.6, 63 & ~8);
     else bk.box('wood', b.minX, deckY, a0, b.maxX, top, a1, 0xffffff, 0.6, 63 & ~8);
+  }
+  // Footlights: a row of little lit bulbs on the fascia's front, half sunk into it.
+  const front = stageFront(b).side, fns = front === 'n' || front === 's', FL = fns ? w : d, nF = Math.max(3, Math.round(FL / 0.5));
+  for (let i = 0; i < nF; i++) {
+    const u = (i + 0.5) / nF;
+    const x = fns ? b.minX + w * u : (front === 'e' ? b.maxX + t : b.minX - t);
+    const z = fns ? (front === 's' ? b.maxZ + t : b.minZ - t) : b.minZ + d * u;
+    const sc = new THREE.Vector3(fns ? 1 : 0.55, 1, fns ? 0.55 : 1);
+    bk.add('lamp', new THREE.SphereGeometry(0.04, 6, 4), i % 2 ? LAMP.core : LAMP.glass, new THREE.Matrix4().compose(new THREE.Vector3(x, (fasciaY + deckY) / 2, z), new THREE.Quaternion(), sc));
   }
   if (q === 'low') return;
   // Papel picado valance: little paper triangles hanging under the fascia.
@@ -562,11 +584,14 @@ function materials(q: Quality): Record<MatKey, THREE.Material> {
   return {
     flat: kit.flat, wood: kit.wood, cantera: kit.cantera,
     // The kit's foliage shading (its lifted shadow band), with the leaf texture.
-    leaf: noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: (kit.leaf as THREE.MeshToonMaterial).gradientMap, vertexColors: true, map: leafTexture(q) })),
+    // A faint green emissive lifts the leaves' shaded faces at dusk, so the hedges keep their shape.
+    leaf: noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: (kit.leaf as THREE.MeshToonMaterial).gradientMap, vertexColors: true, map: leafTexture(q), emissive: 0x1a2e14 })),
     wrap: noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: ramp, vertexColors: true, map: wrapTexture(q) })),
     floor: new THREE.MeshToonMaterial({ gradientMap: ramp, vertexColors: true, ...decal }),
     border: new THREE.MeshToonMaterial({ gradientMap: ramp, map: talavera, ...decal }),
     shadow: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
+    glow: glowMaterial(),
+    lamp: lampMaterial(),
   };
 }
 
@@ -575,7 +600,7 @@ function materials(q: Quality): Record<MatKey, THREE.Material> {
 /** Box types drawn here on La Fiesta. */
 export const FIESTA_MATS: ReadonlySet<string> = new Set(['hedge', 'table', 'gift', 'stage']);
 
-export function buildFiestaDressing(boxes: readonly MapBox[], decor: Pick<MapDecor, 'danceFloor'>, quality: Quality): { group: THREE.Group; calls: number } {
+export function buildFiestaDressing(boxes: readonly MapBox[], decor: Pick<MapDecor, 'danceFloor' | 'lights' | 'ground'>, quality: Quality): { group: THREE.Group; calls: number } {
   const bk = new Bucket(), r = rng(41), lite = quality === 'low';
   const sh: Shared = {
     bud: new THREE.IcosahedronGeometry(0.5, 0),
@@ -590,6 +615,13 @@ export function buildFiestaDressing(boxes: readonly MapBox[], decor: Pick<MapDec
   if (decor.danceFloor) danceFloor(bk, decor.danceFloor, quality);
   sh.bud.dispose();
 
+  // Dusk party light, baked (fiesta-glow.ts): warm lift on the props facing a fixture, and soft pools on the paving.
+  const fx = fiestaFixtures(boxes, decor);
+  for (const k of LIFTED) for (const part of bk.parts.get(k) ?? []) bakeLift(part, fx, k === 'leaf' ? 1.6 : 1);
+  const gw = decor.ground.w, gd = decor.ground.d;
+  const pools = groundGlow(fx, { minX: -gw / 2, maxX: gw / 2, minZ: -gd / 2, maxZ: gd / 2 }, quality);
+  if (pools) bk.add('glow', pools);
+
   const mats = materials(quality);
   const group = new THREE.Group();
   group.name = 'fiesta-dressing';
@@ -599,9 +631,9 @@ export function buildFiestaDressing(boxes: readonly MapBox[], decor: Pick<MapDec
     if (!geo) continue;
     const m = new THREE.Mesh(geo, mats[k]);
     m.name = `fiesta-${k}`;
-    const solid = k !== 'floor' && k !== 'border' && k !== 'shadow';
+    const solid = k !== 'floor' && k !== 'border' && k !== 'shadow' && k !== 'glow' && k !== 'lamp';
     m.castShadow = solid && !lite;
-    m.receiveShadow = k !== 'shadow';
+    m.receiveShadow = k !== 'shadow' && k !== 'glow' && k !== 'lamp';
     if (k === 'floor' || k === 'border') m.position.y = 0.004;
     group.add(m);
     calls++;
@@ -609,8 +641,24 @@ export function buildFiestaDressing(boxes: readonly MapBox[], decor: Pick<MapDec
   return { group, calls };
 }
 
+const mix = (a: number, b: number, t: number) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
+
+/**
+ * La Fiesta's dusk on top of the arena's warm-sun / cool-shade light: a low,
+ * deep orange sun kept (the sunset), a clearer lavender sky fill and a
+ * warmer, stronger ground bounce (the party's lit paving), so shaded faces,
+ * hedges and both teams stay readable. The same on every quality.
+ */
+export function fiestaLight(base: SceneLight): Partial<SceneLight> {
+  return {
+    hemi: [mix(base.hemi[0], 0x9a86d0, 0.3), mix(base.hemi[1], 0xc8866a, 0.5), base.hemi[2] * 1.05],
+    sun: [mix(base.sun[0], 0xff9a62, 0.25), base.sun[1]],
+  };
+}
+
 export const FIESTA_DRESSING: DressingModule = {
   mats: FIESTA_MATS,
   decor: new Set(['danceFloor'] as const),
   build: (boxes, decor, quality) => buildFiestaDressing(boxes, decor, quality),
+  light: (base) => fiestaLight(base),
 };

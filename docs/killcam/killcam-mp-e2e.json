@@ -1,0 +1,100 @@
+[
+ {
+  "name": "online: the victim sees a replay of the Revés from the attacker",
+  "ok": true,
+  "detail": {
+   "view": "attacker",
+   "killer": 2,
+   "attacker": 2
+  }
+ },
+ {
+  "name": "online: the replay plays to its end",
+  "ok": true,
+  "detail": {
+   "startedAt": 20601,
+   "endedAt": 22210,
+   "reason": "done",
+   "view": "attacker",
+   "killer": 2,
+   "ms": 1500,
+   "cues": 2,
+   "ruleros": 3,
+   "projMax": 0,
+   "shownMs": 1500
+  }
+ },
+ {
+  "name": "online: the attacker keeps playing meanwhile (moves, gets at least 10 snapshots a second, alive)",
+  "ok": true,
+  "detail": {
+   "moved": 4.07,
+   "msgs": 20,
+   "ms": 945,
+   "alive": true
+  }
+ },
+ {
+  "name": "online: both sides agree on the score; each elimination handled once",
+  "ok": true,
+  "detail": {
+   "sc1": {
+    "a": [
+     0,
+     1
+    ],
+    "b": [
+     0,
+     1
+    ]
+   },
+   "elims": [
+    1
+   ]
+  }
+ },
+ {
+  "name": "online: Esc opens the menu and ends the replay",
+  "ok": true,
+  "detail": {
+   "reason": "menu",
+   "screen2": "pause"
+  }
+ },
+ {
+  "name": "reconnect: the replay ends; no second replay after it",
+  "ok": true,
+  "detail": {
+   "reason": "connection",
+   "started": 3,
+   "repeats": 0
+  }
+ },
+ {
+  "name": "reconnect: the score still agrees; three eliminations, each once",
+  "ok": true,
+  "detail": {
+   "sc3": {
+    "a": [
+     0,
+     3
+    ],
+    "b": [
+     0,
+     3
+    ]
+   }
+  }
+ },
+ {
+  "name": "only the local site and the local game server were contacted",
+  "ok": true,
+  "detail": {
+   "blocked": [],
+   "sockets": [
+    "ws://localhost:8787/ws",
+    "ws://localhost:8787/ws"
+   ]
+  }
+ }
+]

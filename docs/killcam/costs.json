@@ -1,0 +1,73 @@
+{
+ "results": [],
+ "report": {
+  "costsByQuality": {
+   "high": {
+    "deathScreen": {
+     "frames": 8,
+     "calls": 94,
+     "tris": 107902,
+     "cpuMs": 32.1
+    },
+    "replay": {
+     "frames": 5,
+     "calls": 89,
+     "tris": 106536,
+     "cpuMs": 101
+    },
+    "live": {
+     "frames": 4,
+     "calls": 100,
+     "tris": 113429,
+     "cpuMs": 56.4
+    },
+    "replayJsMsPerFrame": 0.74,
+    "replayFrames": 5
+   },
+   "medium": {
+    "deathScreen": {
+     "frames": 10,
+     "calls": 89,
+     "tris": 95580,
+     "cpuMs": 13
+    },
+    "replay": {
+     "frames": 6,
+     "calls": 85,
+     "tris": 94609,
+     "cpuMs": 20.7
+    },
+    "live": {
+     "frames": 5,
+     "calls": 97,
+     "tris": 101085,
+     "cpuMs": 24.1
+    },
+    "replayJsMsPerFrame": 0.4,
+    "replayFrames": 6
+   },
+   "low": {
+    "deathScreen": {
+     "frames": 26,
+     "calls": 62,
+     "tris": 54099,
+     "cpuMs": 2.5
+    },
+    "replay": {
+     "frames": 16,
+     "calls": 57,
+     "tris": 53325,
+     "cpuMs": 3.8
+    },
+    "live": {
+     "frames": 16,
+     "calls": 67,
+     "tris": 59314,
+     "cpuMs": 3.5
+    },
+    "replayJsMsPerFrame": 0.18,
+    "replayFrames": 16
+   }
+  }
+ }
+}

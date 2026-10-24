@@ -1,0 +1,433 @@
+{
+ "results": [
+  {
+   "name": "chanclazo: replay starts after the death screen",
+   "ok": true,
+   "detail": {
+    "view": "attacker",
+    "length": 1500,
+    "killer": 1000
+   }
+  },
+  {
+   "name": "chanclazo: attacker view, 1.5 s (1.2 s before the blow, 0.3 s after)",
+   "ok": true,
+   "detail": {
+    "view": "attacker",
+    "length": 1500
+   }
+  },
+  {
+   "name": "chanclazo: overlay names killer, team and attack",
+   "ok": true,
+   "detail": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo"
+  },
+  {
+   "name": "chanclazo: live health, scores, timer, crosshair and kill feed hidden",
+   "ok": true,
+   "detail": {
+    "overlay": true,
+    "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo",
+    "nameClass": "kc-name luna",
+    "hp": false,
+    "scores": false,
+    "timer": false,
+    "crosshair": false,
+    "killfeed": false,
+    "menu": false,
+    "skip": true,
+    "tap": false
+   }
+  },
+  {
+   "name": "chanclazo: menu button kept; desktop Skip shown, no tap layer",
+   "ok": true,
+   "detail": {
+    "overlay": true,
+    "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Chanclazo",
+    "nameClass": "kc-name luna",
+    "hp": false,
+    "scores": false,
+    "timer": false,
+    "crosshair": false,
+    "killfeed": false,
+    "menu": false,
+    "skip": true,
+    "tap": false
+   }
+  },
+  {
+   "name": "chanclazo: plays to its end in real time, then the death screen",
+   "ok": true,
+   "detail": {
+    "startedAt": 11312,
+    "endedAt": 12898,
+    "reason": "done",
+    "view": "attacker",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500
+   }
+  },
+  {
+   "name": "chanclazo: two replay sounds at most (the swing and the slap)",
+   "ok": true,
+   "detail": 2
+  },
+  {
+   "name": "chanclazo: one kill and one death scored; the replay adds no damage, score or kill",
+   "ok": true,
+   "detail": {
+    "before": {
+     "scores": [
+      0,
+      0
+     ],
+     "botHp": 100,
+     "deaths": 0
+    },
+    "after": {
+     "scores": [
+      0,
+      1
+     ],
+     "botHp": 100,
+     "deaths": 1,
+     "kills": 1,
+     "alive": true,
+     "held": 0,
+     "vy": 0,
+     "onGround": true
+    }
+   }
+  },
+  {
+   "name": "rev\u00e9s: the rollers the server sent fly once in the replay",
+   "ok": true,
+   "detail": {
+    "shown": 2,
+    "sent": 4,
+    "expected": 2
+   }
+  },
+  {
+   "name": "thrown: replay with the chancla in flight",
+   "ok": true,
+   "detail": {
+    "startedAt": 21371,
+    "endedAt": 22987,
+    "reason": "done",
+    "view": "attacker",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 1,
+    "shownMs": 1500
+   }
+  },
+  {
+   "name": "thrown: overlay says La Chancla, thrown",
+   "ok": true,
+   "detail": "Eliminated by \u263e Lupita (Luna) \u00b7 La Chancla, thrown"
+  },
+  {
+   "name": "Space skips the replay",
+   "ok": true,
+   "detail": {
+    "startedAt": 26156,
+    "endedAt": 26166,
+    "reason": "skip",
+    "view": "attacker",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 0,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 0
+   }
+  },
+  {
+   "name": "after Skip: back to the death screen, nothing held",
+   "ok": true,
+   "detail": {
+    "scores": [
+     0,
+     4
+    ],
+    "botHp": 100,
+    "deaths": 4,
+    "kills": 4,
+    "alive": false,
+    "held": 0,
+    "vy": 0,
+    "onGround": true
+   }
+  },
+  {
+   "name": "after Skip: no jump on respawn",
+   "ok": true,
+   "detail": {
+    "scores": [
+     0,
+     4
+    ],
+    "botHp": 100,
+    "deaths": 4,
+    "kills": 4,
+    "alive": true,
+    "held": 0,
+    "vy": 0,
+    "onGround": true
+   }
+  },
+  {
+   "name": "respawn during playback ends it immediately and play resumes",
+   "ok": true,
+   "detail": {
+    "last": {
+     "startedAt": 31042,
+     "endedAt": 31170,
+     "reason": "respawn",
+     "view": "attacker",
+     "killer": 1000,
+     "ms": 1500,
+     "cues": 0,
+     "ruleros": 0,
+     "projMax": 0,
+     "shownMs": 0
+    },
+    "alive": true
+   }
+  },
+  {
+   "name": "Esc: the menu opens and the replay holds still with the paused match",
+   "ok": true,
+   "detail": {
+    "screen": "pause",
+    "rt0": 0,
+    "rt": 0
+   }
+  },
+  {
+   "name": "Resume: the replay carries on to its end",
+   "ok": true,
+   "detail": {
+    "startedAt": 33653,
+    "endedAt": 36826,
+    "reason": "done",
+    "view": "attacker",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500
+   }
+  },
+  {
+   "name": "focus loss: menu, nothing held, replay paused with the match",
+   "ok": true,
+   "detail": {
+    "active": true,
+    "held7": 0
+   }
+  },
+  {
+   "name": "setting off: no replay, the death screen as before",
+   "ok": true,
+   "detail": {
+    "lastFallback": "off",
+    "center": "Lupita got you"
+   }
+  },
+  {
+   "name": "repeated deaths: one replay each; characters, geometry and buffer do not grow",
+   "ok": true,
+   "detail": {
+    "mem0": {
+     "geometries": 103,
+     "textures": 19,
+     "pool": 2
+    },
+    "mem1": {
+     "geometries": 103,
+     "textures": 19,
+     "pool": 2
+    },
+    "size": {
+     "snaps": 71,
+     "events": 3
+    },
+    "started": 12
+   }
+  },
+  {
+   "name": "match end on the elimination: no replay, results",
+   "ok": true,
+   "detail": {
+    "ended": {
+     "session": "playing",
+     "room": "results",
+     "sim": "ended",
+     "scores": [
+      0,
+      25
+     ],
+     "screen": "results"
+    },
+    "sc": {
+     "scores": [
+      0,
+      24
+     ],
+     "toWin": 25
+    }
+   }
+  },
+  {
+   "name": "touch: large Tap to skip, no desktop button",
+   "ok": true,
+   "detail": {
+    "touchOn": true,
+    "hud": {
+     "overlay": true,
+     "by": "Eliminated by \u263e Lupita (Luna) \u00b7 El Rev\u00e9s",
+     "nameClass": "kc-name luna",
+     "hp": false,
+     "scores": false,
+     "timer": false,
+     "crosshair": false,
+     "killfeed": false,
+     "menu": true,
+     "skip": false,
+     "tap": true
+    }
+   }
+  },
+  {
+   "name": "touch: a tap skips; nothing held; touch controls back",
+   "ok": true,
+   "detail": {
+    "last": {
+     "startedAt": 10886,
+     "endedAt": 11410,
+     "reason": "skip",
+     "view": "attacker",
+     "killer": 1000,
+     "ms": 1500,
+     "cues": 0,
+     "ruleros": 0,
+     "projMax": 0,
+     "shownMs": 519
+    },
+    "held": 0,
+    "touchUi": true
+   }
+  },
+  {
+   "name": "Spanish: REPETICI\u00d3N, Te elimin\u00f3 \u2026 \u00b7 El Rev\u00e9s, Saltar",
+   "ok": true,
+   "detail": {
+    "tag": "REPETICI\u00d3N",
+    "by": "Te elimin\u00f3 \u263e Lupita (Luna) \u00b7 El Rev\u00e9s"
+   }
+  }
+ ],
+ "report": {
+  "buffer": {
+   "snapshotsOnlyHere": 31,
+   "playersBytes": 14963,
+   "eventsBytes": 345,
+   "size": {
+    "snaps": 71,
+    "events": 3
+   }
+  },
+  "costs": {
+   "live": {
+    "frames": 228,
+    "calls": 72,
+    "tris": 59482,
+    "cpuMs": 3.6
+   },
+   "dead": {
+    "frames": 177,
+    "calls": 62,
+    "tris": 53980,
+    "cpuMs": 5.4
+   },
+   "replay": {
+    "frames": 170,
+    "calls": 56,
+    "tris": 53187,
+    "cpuMs": 5.7
+   }
+  },
+  "costsByQuality": {
+   "high": {
+    "deathScreen": {
+     "frames": 9,
+     "calls": 93,
+     "tris": 107654,
+     "cpuMs": 18.8
+    },
+    "replay": {
+     "frames": 5,
+     "calls": 89,
+     "tris": 106536,
+     "cpuMs": 89.8
+    },
+    "live": {
+     "frames": 4,
+     "calls": 100,
+     "tris": 112804,
+     "cpuMs": 33.3
+    }
+   },
+   "medium": {
+    "deathScreen": {
+     "frames": 9,
+     "calls": 89,
+     "tris": 95681,
+     "cpuMs": 9.8
+    },
+    "replay": {
+     "frames": 6,
+     "calls": 85,
+     "tris": 94609,
+     "cpuMs": 21
+    },
+    "live": {
+     "frames": 5,
+     "calls": 95,
+     "tris": 100822,
+     "cpuMs": 16.3
+    }
+   },
+   "low": {
+    "deathScreen": {
+     "frames": 25,
+     "calls": 62,
+     "tris": 54069,
+     "cpuMs": 3.7
+    },
+    "replay": {
+     "frames": 16,
+     "calls": 57,
+     "tris": 53375,
+     "cpuMs": 3.5
+    },
+    "live": {
+     "frames": 15,
+     "calls": 69,
+     "tris": 59620,
+     "cpuMs": 3.8
+    }
+   }
+  }
+ }
+}

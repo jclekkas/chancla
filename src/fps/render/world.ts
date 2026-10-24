@@ -8,6 +8,7 @@ import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
 import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, toonRamp, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
+import { FOCAL_MATS, buildFocal } from './patio-focal';
 import { patioGround, patioLight } from './patio-materials';
 import type { Quality } from '../settings';
 
@@ -158,9 +159,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // Graphics experiment: the café section gets the detailed kit (section.ts);
   // its boxes skip the generic dressing below. Collision is unchanged.
-  const sectionBoxes: MapBox[] = [];
+  const sectionBoxes: MapBox[] = [], focalBoxes: MapBox[] = [];
   for (const bx of opts.boxes ?? map.boxes) {
     if (patioKit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    // El Patio's fountain, statue and kiosks at the kit's quality (patio-focal.ts); the kiosks keep their signs.
+    if (patioKit && FOCAL_MATS.has(bx.mat)) { focalBoxes.push(bx); if (bx.mat === 'kiosk') kioskSigns(bx); continue; }
     addBox(bx);
   }
 
@@ -240,8 +243,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       case 'kiosk':
         batch.add(toon(b.sign === 'ELOTES' ? 0xf5d35a : 0x3f8f6a, { map: stucco }), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.3, b.maxZ, 2));
         batch.add(toon(COLORS.terracotta), boxGeo(b.minX - 0.15, b.maxY - 0.3, b.minZ - 0.15, b.maxX + 0.15, b.maxY, b.maxZ + 0.15, 2));
-        if (b.sign) signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.maxZ + 0.02, ry: 0, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
-        if (b.sign) signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.minZ - 0.02, ry: Math.PI, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
+        kioskSigns(b);
         return;
       case 'crate':
         batch.add(woodMat, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0.8));
@@ -376,6 +378,13 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       bushes.add(x, b.maxY + 0.2, z, 0.5, 0.42 + (i % 3) * 0.08, 0.5, i, i % 2 ? COLORS.leaf : COLORS.leafDark);
       if (i % 2 === 0) flowers.add(x, b.maxY + 0.42, z, 0.16, 0.16, 0.16, i, i % 4 ? COLORS.marigold : COLORS.pink);
     }
+  }
+
+  function kioskSigns(b: MapBox): void {
+    if (!b.sign) return;
+    const cx = (b.minX + b.maxX) / 2, w = b.maxX - b.minX;
+    signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.maxZ + 0.02, ry: 0, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
+    signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.minZ - 0.02, ry: Math.PI, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
   }
 
   function signFor(b: MapBox): { text: string; x: number; y: number; z: number; ry: number; w: number; bg: string; fg: string } {
@@ -540,6 +549,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
   if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality); group.add(sec.group); calls += sec.calls; }
+  const focal = focalBoxes.length ? buildFocal(focalBoxes, quality) : null;
+  if (focal) { group.add(focal.group); calls += focal.calls; }
   const add = (im: THREE.InstancedMesh | null) => { if (im) { group.add(im); calls++; } };
   add(glass.build(UNIT, toon(0x3a2a52, { emissive: 0x120a20 })));
   add(frames.build(UNIT, toon(0xffffff)));
@@ -570,6 +581,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       lines.children.forEach((o) => { if ((o as THREE.InstancedMesh).isInstancedMesh) o.position.y = Math.sin(t * 1.3) * 0.03; });
       if (water) (water.material as THREE.MeshToonMaterial).emissive.setHSL(0.52, 0.6, 0.08 + Math.sin(t * 2) * 0.02);
       if (statue) statue.rotation.y = 0.4 + Math.sin(t * 0.3) * 0.1;
+      focal?.update(t);
       const dt = Math.min(0.1, Math.max(0, t - lastT));
       lastT = t;
       pinata?.step(dt, t);

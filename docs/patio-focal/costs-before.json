@@ -1,0 +1,94 @@
+{
+ "fountain-front-7m-high": {
+  "calls": 121,
+  "tris": 106384
+ },
+ "fountain-close-3m-high": {
+  "calls": 118,
+  "tris": 106322
+ },
+ "fountain-rim-2m-high": {
+  "calls": 115,
+  "tris": 106156
+ },
+ "statue-10m-high": {
+  "calls": 116,
+  "tris": 106158
+ },
+ "kiosk-periodicos-4m-high": {
+  "calls": 102,
+  "tris": 104670
+ },
+ "kiosk-periodicos-2m-high": {
+  "calls": 105,
+  "tris": 104836
+ },
+ "kiosk-elotes-5m-high": {
+  "calls": 132,
+  "tris": 124694
+ },
+ "fountain-front-7m-medium": {
+  "calls": 113,
+  "tris": 93716
+ },
+ "fountain-close-3m-medium": {
+  "calls": 110,
+  "tris": 93654
+ },
+ "fountain-rim-2m-medium": {
+  "calls": 107,
+  "tris": 93488
+ },
+ "statue-10m-medium": {
+  "calls": 108,
+  "tris": 93490
+ },
+ "kiosk-periodicos-4m-medium": {
+  "calls": 94,
+  "tris": 92002
+ },
+ "kiosk-periodicos-2m-medium": {
+  "calls": 97,
+  "tris": 92168
+ },
+ "kiosk-elotes-5m-medium": {
+  "calls": 124,
+  "tris": 105768
+ },
+ "fountain-front-7m-low": {
+  "calls": 69,
+  "tris": 54936
+ },
+ "fountain-close-3m-low": {
+  "calls": 66,
+  "tris": 54874
+ },
+ "fountain-rim-2m-low": {
+  "calls": 63,
+  "tris": 54708
+ },
+ "statue-10m-low": {
+  "calls": 64,
+  "tris": 54710
+ },
+ "kiosk-periodicos-4m-low": {
+  "calls": 50,
+  "tris": 53222
+ },
+ "kiosk-periodicos-2m-low": {
+  "calls": 53,
+  "tris": 53388
+ },
+ "kiosk-elotes-5m-low": {
+  "calls": 78,
+  "tris": 60994
+ },
+ "fountain-front-7m-phone-low": {
+  "calls": 69,
+  "tris": 54936
+ },
+ "kiosk-periodicos-4m-phone-low": {
+  "calls": 51,
+  "tris": 53234
+ }
+}

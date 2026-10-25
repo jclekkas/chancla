@@ -1,0 +1,114 @@
+/* Arena minimap (compact HUD map and the full map screen) and the cafecito
+   hint. Imported by minimap.ts and cafecito.ts. */
+
+/* Compact map: top left under the area name on desktop, display only. */
+.minimap {
+  --mm-ar: 1.42;
+  position: absolute;
+  left: calc(16px + var(--safe-l));
+  top: calc(40px + var(--safe-t));
+  width: clamp(140px, 13vw, 168px);
+  aspect-ratio: var(--mm-ar);
+  border-radius: 10px;
+  border: 2px solid rgba(244, 230, 200, 0.75);
+  background: rgba(36, 22, 38, 0.72);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  pointer-events: none;
+}
+.minimap[hidden] { display: none; }
+.minimap .mm-canvas { display: block; width: 100%; height: 100%; }
+.hud.campaign .minimap, .hud.killcam-on .minimap { display: none; }
+
+/* Touch: smaller, under the health bar and clear of the stick, aim area and
+   buttons; a tap opens the full map (minimap.ts stops the touch reaching the
+   controls underneath). Above #fps-touch (z-index 1) and below the Menu (3). */
+body.touch-input .minimap {
+  left: calc(12px + var(--safe-l));
+  top: calc(64px + var(--safe-t));
+  width: clamp(92px, 15vw, 120px);
+  border-width: 2px;
+  z-index: 2;
+}
+body.touch-input .minimap.tappable {
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  cursor: pointer;
+}
+body.touch-input .minimap.tappable::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid rgba(244, 230, 200, 0.85);
+  border-bottom: 2px solid rgba(244, 230, 200, 0.85);
+  pointer-events: none;
+}
+/* The area name moves below the map while it shows. */
+body.touch-input .hud.has-minimap .region { top: calc(150px + var(--safe-t)); }
+@media (max-height: 420px) {
+  body.touch-input .minimap { top: calc(60px + var(--safe-t)); width: clamp(84px, 13vw, 104px); }
+}
+
+/* Full map screen (pause menu: Map). */
+#scr-map .panel.map-panel { width: min(900px, 100%); align-items: center; text-align: center; }
+#scr-map .map-head { display: flex; align-items: baseline; justify-content: center; gap: 10px; flex-wrap: wrap; width: 100%; }
+#scr-map .map-name { margin: 0; font-size: 18px; font-weight: 800; color: var(--cream, #f4e6c8); opacity: 0.9; }
+#scr-map .map-canvas {
+  --mm-ar: 1.42;
+  display: block;
+  /* Map aspect plus room for the legend strip along the bottom. */
+  width: min(100%, 860px, calc((100dvh - 200px - var(--safe-t) - var(--safe-b)) * var(--mm-ar) * 0.86));
+  aspect-ratio: 1.22; /* minimap.ts sets the map's own */
+  min-width: 220px;
+  border-radius: 12px;
+  border: 2px solid rgba(244, 230, 200, 0.7);
+  background: rgba(36, 22, 38, 0.85);
+}
+@media (max-height: 520px) {
+  #scr-map .panel.map-panel { gap: 6px; padding: 10px 14px; }
+  #scr-map .panel.map-panel h2 { font-size: 22px; }
+  #scr-map .map-canvas { width: min(100%, 860px, calc((100dvh - 120px - var(--safe-t) - var(--safe-b)) * var(--mm-ar) * 0.86)); }
+}
+
+/* Cafecito hint above the cup. Placed by CafecitoLabel (translate), never on the crosshair. */
+.cafe-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: min(280px, 70vw);
+  padding: 3px 10px 4px;
+  border-radius: 10px;
+  border: 2px solid var(--marigold, #f2a33a);
+  background: rgba(46, 24, 70, 0.84);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: none;
+  pointer-events: none;
+  will-change: transform;
+}
+.cafe-label[hidden] { display: none; }
+.cafe-label.walk { border-color: var(--marigold, #f2a33a); }
+.cafe-label.full { border-color: #9be36a; background: rgba(36, 60, 40, 0.84); }
+.cafe-label.unavailable { border-color: rgba(244, 230, 200, 0.5); color: rgba(255, 255, 255, 0.78); background: rgba(46, 24, 70, 0.66); }
+body.touch-input .cafe-label { font-size: 12px; padding: 2px 8px 3px; }
+.cafe-safe-probe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+}

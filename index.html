@@ -102,6 +102,8 @@
         <div class="center-msg" id="center-msg" aria-live="assertive" hidden></div>
         <div class="sub-msg" id="sub-msg" aria-live="polite" hidden></div>
         <div class="region" id="region"></div>
+        <!-- Arena minimap (fixed orientation, north up): display only on desktop, tap to open the full map on touch. -->
+        <div class="minimap" id="minimap" hidden data-t-aria="minimap.open"></div>
         <div class="hud-bl">
           <div class="hp" id="hp" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" data-t-aria="hud.health">
             <div class="hp-face" aria-hidden="true"></div>
@@ -403,6 +405,7 @@
           <button type="button" class="btn primary" id="btn-resume" data-t="pause.resume"></button>
           <button type="button" class="btn" id="btn-pause-settings" data-t="pause.settings"></button>
           <button type="button" class="btn" id="btn-pause-controls" data-t="pause.controls"></button>
+          <button type="button" class="btn" id="btn-pause-map" data-t="pause.map" hidden></button>
           <button type="button" class="btn" id="btn-fullscreen" data-t="pause.fullscreen"></button>
           <button type="button" class="btn" id="btn-pause-retrycp" data-t="pause.retryCp" hidden></button>
           <button type="button" class="btn" id="btn-pause-restart" data-t="pause.restart" hidden></button>
@@ -410,6 +413,18 @@
           <button type="button" class="btn" id="btn-pause-select" data-t="pause.select" hidden></button>
           <button type="button" class="btn ghost" id="btn-pause-diag" data-t="diag.copy"></button>
           <button type="button" class="btn ghost" id="btn-pause-leave" data-t="pause.home"></button>
+        </div>
+      </section>
+
+      <!-- Full arena map (pause menu: Map) -->
+      <section id="scr-map" class="screen overlay" hidden role="dialog" aria-modal="true" aria-labelledby="map-title">
+        <div class="panel map-panel">
+          <div class="map-head">
+            <h2 id="map-title" data-t="minimap.title"></h2>
+            <p class="map-name" id="map-name"></p>
+          </div>
+          <canvas class="map-canvas" id="map-canvas" role="img" data-t-aria="minimap.title"></canvas>
+          <button type="button" class="btn primary" id="btn-map-back" data-t="online.back"></button>
         </div>
       </section>
 
@@ -454,6 +469,7 @@
           <label class="field check"><input type="checkbox" id="set-hints" /><span data-t="settings.hints"></span></label>
           <p class="note" data-t="settings.voiceNote"></p>
           <label class="field check"><input type="checkbox" id="set-killcam" /><span data-t="settings.killcam"></span></label>
+          <label class="field check"><input type="checkbox" id="set-minimap" /><span data-t="settings.minimap"></span></label>
           <label class="field check"><input type="checkbox" id="set-stats" /><span data-t="settings.showStats"></span></label>
           <button type="button" class="btn primary" id="btn-settings-close" data-t="settings.close"></button>
         </div>
@@ -492,6 +508,7 @@
           </div>
           <p class="note" data-t="controls.tip"></p>
           <p class="note" data-t="controls.meleeTip"></p>
+          <p class="note" data-t="controls.cafe"></p>
           <button type="button" class="btn primary" id="btn-controls-close" data-t="settings.close"></button>
         </div>
       </section>

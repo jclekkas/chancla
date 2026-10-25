@@ -75,16 +75,60 @@ function inkShader(sh: THREE.WebGLProgramParametersWithUniforms, fr: FaceRig): v
 }
 
 /**
+ * The arena look's shading on her skin (`rosaMaterial(..., { arena: true })`).
+ * Skin is found by its vertex colour (skin and blush, exact: the palette is
+ * baked flat), so clothing, hair, eyes, brows, lips, glasses and the ink keep
+ * the world's hard bands. On skin only: the same three band values read from
+ * the world ramp (whatever profile the world set), blended across each band
+ * edge instead of stepping (SKIN_SOFT, in ramp coordinates), a small wrap
+ * (SKIN_WRAP) so the terminator sits a little past the side of the face, and
+ * received shadow lifted part way toward lit (SKIN_SHADOW_LIFT), so a hat
+ * brim darkens the face without erasing it. No new texture, light or pass.
+ */
+export const ARENA_SKIN = { soft: 0.09, wrap: 0.1, shadowLift: 0.5 } as const;
+const skinLin = new THREE.Color(ROSA_SHARED.skin), blushLin = new THREE.Color(ROSA_SHARED.blush);
+const v3 = (c: THREE.Color) => `vec3(${f4(c.r)}, ${f4(c.g)}, ${f4(c.b)})`;
+function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
+  const { soft, wrap, shadowLift } = ARENA_SKIN;
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying float vRosaSkin;')
+    .replace('#include <color_vertex>', `#include <color_vertex>
+\tvRosaSkin = 1.0 - smoothstep(0.02, 0.04, min(distance(color.rgb, ${v3(skinLin)}), distance(color.rgb, ${v3(blushLin)})));`);
+  const T = 'texture2D( gradientMap, vec2( ';
+  const pars = THREE.ShaderChunk.lights_toon_pars_fragment.replace('getGradientIrradiance(', 'rosaGradient(');
+  const begin = THREE.ShaderChunk.lights_fragment_begin.split('receiveShadow ) ? get').join(`receiveShadow ) ? rosaLift + ( 1.0 - rosaLift ) * get`);
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vRosaSkin;')
+    .replace('#include <lights_toon_pars_fragment>', `vec3 rosaGradient( vec3 normal, vec3 lightDirection ) {
+\tvec3 hard = getGradientIrradiance( normal, lightDirection );
+\tfloat u = ( dot( normal, lightDirection ) + ${f4(wrap)} ) / ${f4(1 + wrap)} * 0.5 + 0.5;
+\tfloat a = ${T}0.1667, 0.0 ) ).r, b = ${T}0.5, 0.0 ) ).r, c = ${T}0.8333, 0.0 ) ).r;
+\tfloat soft = a + ( b - a ) * smoothstep( ${f4(1 / 3 - soft)}, ${f4(1 / 3 + soft)}, u ) + ( c - b ) * smoothstep( ${f4(2 / 3 - soft)}, ${f4(2 / 3 + soft)}, u );
+\treturn mix( hard, vec3( soft ), vRosaSkin );
+}
+${pars}`)
+    .replace('#include <lights_fragment_begin>', `float rosaLift = ${f4(shadowLift)} * vRosaSkin;\n${begin}`);
+}
+
+/**
  * Rosa's material: vertex-coloured toon with the ink hull. One per avatar
  * (its colour is the hit flash, `face` her expression); all of them share
- * one shader program (`fr` is the same for every look).
+ * one shader program (`fr` is the same for every look). `arena`: the match
+ * look's skin shading (ARENA_SKIN), its own program; without it the
+ * material is exactly the campaign's.
  */
-export function rosaMaterial(fr: FaceRig, face = new THREE.Vector4()): THREE.MeshToonMaterial {
+export function rosaMaterial(fr: FaceRig, face = new THREE.Vector4(), opts: { arena?: boolean } = {}): THREE.MeshToonMaterial {
   const m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toonRamp() });
   const u = { value: face };
-  m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); };
   // The face rig is baked into the shader: one program per rig (the match and campaign looks differ).
   const key = `rosa-ink:${f4(fr.lidY)}:${f4(fr.browIn)}:${f4(fr.browOut)}`;
+  if (opts.arena) {
+    m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); skinShader(sh); };
+    const akey = `${key}:skin:${ARENA_SKIN.soft}:${ARENA_SKIN.wrap}:${ARENA_SKIN.shadowLift}`;
+    m.customProgramCacheKey = () => akey;
+    return m;
+  }
+  m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); };
   m.customProgramCacheKey = () => key;
   return m;
 }

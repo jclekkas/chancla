@@ -627,7 +627,7 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
   const arena = !!opts.arena && !home;
   const look = lookFor(team, q, home, arena);
   const faceState = new THREE.Vector4();
-  const mat = rosaMaterial(arena ? ARENA_FACE_RIG : FACE_RIG, faceState);
+  const mat = arena ? rosaMaterial(ARENA_FACE_RIG, faceState, { arena: true }) : rosaMaterial(FACE_RIG, faceState);
   const G = () => new THREE.Group();
   const root = G(), hips = G(), torso = G(), head = G();
   const armL = G(), armR = G(), foreL = G(), foreR = G(), wristL = G(), wristR = G();

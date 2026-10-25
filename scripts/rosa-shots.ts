@@ -17,6 +17,13 @@
 //   GRAPHICS_EXPERIMENT=1 node node_modules/vite/bin/vite.js build --outDir dist-a
 //   DIST=dist-a OUT=<dir> PORT=4411 node --import tsx scripts/rosa-shots.ts
 // QUALITIES=high,low limits the tiers; SHOTS=door,grip limits the shots.
+// LIGHTS=sun,shade,dusk instead films only the side-by-side line-ups (DISTS,
+// views) once per lighting: sun (El Patio's open paving, as above), shade (El
+// Patio in the marigold house's cast shadow) and dusk (La Fiesta's dance
+// floor), named <q>-<light>-<dist>-<view>.png. All staging is done here
+// (map choice, positions), so it works on any build with window.__fps.
+// Every shot pins the Rosas' idle (no blink, the breath at one phase, a
+// fixed step) and the world's clock, so before and after match pose for pose.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -31,6 +38,7 @@ const DIST = path.resolve(process.env.DIST || path.join(ROOT, 'dist'));
 const OUT = path.resolve(process.env.OUT || path.join(ROOT, 'docs/rosa/shots'));
 const QUALITIES = (process.env.QUALITIES || 'high,medium,low').split(',');
 const ONLY = process.env.SHOTS ? new Set(process.env.SHOTS.split(',')) : null;
+const LIGHTS = process.env.LIGHTS ? process.env.LIGHTS.split(',') : null;
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -47,18 +55,34 @@ interface Shot { name: string; label: string; sol: Pose; luna: Pose; eye: [numbe
 // yaw pi faces +z, toward a camera standing at larger z).
 const MID = { x: 4.5, z: -2.5 };
 const VIEWS: Array<[string, number]> = [['front', Math.PI], ['3q', Math.PI - 0.75], ['side', Math.PI / 2], ['back', 0]];
-function lineup(dist: number, tag: string, view: string, yaw: number): Shot {
-  const eyeZ = MID.z + dist;
+/**
+ * The pair side by side at `c`, the camera `dist` away in direction `th`
+ * (0: toward +z), each view's yaw relative to facing the camera.
+ */
+function lineup(dist: number, tag: string, view: string, yaw: number, c = MID, th = 0, prefix = ''): Shot {
+  const dx = Math.sin(th), dz = Math.cos(th), px = Math.cos(th), pz = -Math.sin(th);
+  const y = yaw + th;
   return {
-    name: `${tag}-${view}`, label: `${dist} m ${view}`,
-    sol: { x: MID.x - 0.45, z: MID.z, yaw }, luna: { x: MID.x + 0.45, z: MID.z, yaw },
-    eye: [MID.x, eyeZ], look: [MID.x, dist < 2 ? 1.1 : 1.0, MID.z],
+    name: `${prefix}${tag}-${view}`, label: `${prefix}${dist} m ${view}`,
+    sol: { x: c.x - 0.45 * px, z: c.z - 0.45 * pz, yaw: y }, luna: { x: c.x + 0.45 * px, z: c.z + 0.45 * pz, yaw: y },
+    eye: [c.x + dx * dist, c.z + dz * dist], look: [c.x, dist < 2 ? 1.1 : 1.0, c.z],
   };
+}
+/** The LIGHTS settings: map, where the pair stands, where the camera looks from. */
+const LIGHT_SET: Record<string, { map: string; c: { x: number; z: number }; th: number }> = {
+  sun: { map: 'patio', c: MID, th: 0 },
+  shade: { map: 'patio', c: { x: 2.05, z: 6.6 }, th: Math.PI }, // under the marigold house (front z = 8; sun from -x, +z)
+  dusk: { map: 'fiesta', c: { x: -1, z: 0.5 }, th: -Math.PI / 2 }, // the dance floor, seen along the party floor from the west
+};
+const DIST_TAGS = (process.env.DISTS ? process.env.DISTS.split(',').map(Number) : [1.5, 4, 8]).map((d) => [d, `${String(d).replace('.', 'm')}${Number.isInteger(d) ? 'm' : ''}`] as const);
+function lightShots(light: string): Shot[] {
+  const L = LIGHT_SET[light];
+  if (!L) throw new Error(`unknown light ${light}`);
+  return DIST_TAGS.flatMap(([d, tag]) => VIEWS.map(([v, yaw]) => lineup(d, tag, v, yaw, L.c, L.th, `${light}-`)));
 }
 const SHOTS: Shot[] = [
   // DISTS=1.5,5,10 picks other distances (tag: 1m5, 5m, 10m).
-  ...(process.env.DISTS ? process.env.DISTS.split(',').map(Number) : [1.5, 4, 8]).map((d) => [d, `${String(d).replace('.', 'm')}${Number.isInteger(d) ? 'm' : ''}`] as const)
-    .flatMap(([d, tag]) => VIEWS.map(([v, yaw]) => lineup(d, tag, v, yaw))),
+  ...DIST_TAGS.flatMap(([d, tag]) => VIEWS.map(([v, yaw]) => lineup(d, tag, v, yaw))),
   // Against the café door (the facade is the plane z = -8, the door near x = -1.2), seen from the plaza.
   { name: 'door-sol', label: 'Sol at the café door, 4 m', sol: { x: -1.2, z: -7.4, yaw: Math.PI - 0.3 }, luna: { x: 30, z: 30, yaw: 0 }, eye: [-0.2, -3.5], look: [-1.2, 1.0, -7.4] },
   { name: 'door-luna', label: 'Luna at the café door, 4 m', sol: { x: 30, z: 30, yaw: 0 }, luna: { x: -1.2, z: -7.4, yaw: Math.PI - 0.3 }, eye: [-0.2, -3.5], look: [-1.2, 1.0, -7.4] },
@@ -93,9 +117,35 @@ async function place(p: Page, shot: Shot): Promise<void> {
         s.weapon = 0; s.switchMs = 0; s.cooldownMs = 0; s.meleeMs = 0; e.lastLocalMelee = -1e9;
         e.vm.root.scale.setScalar(1e-4); // hide your own first-person hand
       };
+      // The world's clock stands at one time (fiesta lights, water, flags).
+      if (e.world?.update && !e.world.__pinned) { const wu = e.world.update.bind(e.world); e.world.update = () => wu(100); e.world.__pinned = true; }
+    }
+    // Pin each Rosa's idle: fixed seed and step, the clock held at one
+    // breath phase, no blinks; then settle the springs at that pose.
+    for (const [id, seed] of [[st.sol, 0.31], [st.luna, 0.77]] as Array<[number, number]>) {
+      const av = e.avatars.get(id); const an = av?.anim;
+      if (!av || !an || av.__pinned) continue;
+      av.__pinned = true;
+      const up = av.update.bind(av);
+      an.seed = seed;
+      av.update = (s2: unknown, _dt: number, rm: boolean) => { an.time = 10; an.blinkAt = 1e9; up(s2, 1 / 60, rm); };
     }
   }, shot);
   await sleep(450);
+  // Settle: the same number of fixed steps at the new spot for every shot.
+  await p.evaluate(() => {
+    const f = (window as any).__fps; const s = f.session(); const e = f.engine(); const st = (window as any).__shot;
+    s.updateRemotes();
+    const S = st.shot;
+    for (const [id, P] of [[st.sol, S.sol], [st.luna, S.luna]]) {
+      const av = e.avatars.get(id); const r = s.remotes.get(id);
+      if (!av?.__pinned || !r) continue;
+      av.root.position.set(P.x, 0, P.z); av.root.rotation.y = P.yaw;
+      const as = { speed: 0, strafe: 0, back: 0, onGround: true, crouched: false, alive: true, protected: false, pitch: r.pitch, weapon: r.weapon, msSinceThrow: r.msSinceThrow, msSinceHit: r.msSinceHit, connected: true, msSinceMelee: r.msSinceMelee, ruleros: r.ruleros };
+      for (let i = 0; i < 240; i++) av.update(as, 1 / 60, false);
+    }
+  });
+  await sleep(250);
 }
 
 /** Per-Rosa cost: each remote's root rendered alone (exact main-pass draws and triangles), shadow casters counted. */
@@ -138,16 +188,19 @@ async function cost(p: Page): Promise<unknown> {
     for (let i = 0; i < 8; i++) round();
     out.leak = { before, after: mem(), rounds: 8 };
     out.memory = mem();
+    out.programs = r.info.programs?.length;
     return out;
   });
 }
 
-async function runQuality(browser: any, q: string): Promise<Record<string, unknown>> {
+async function runQuality(browser: any, q: string, light?: string): Promise<Record<string, unknown>> {
+  const map = light ? LIGHT_SET[light]!.map : 'patio';
+  const shots = light ? lightShots(light) : SHOTS;
   const ctx = await browser.newContext({ viewport: { width: 640, height: 400 } });
   await ctx.route('**/*', (r: any) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p: Page = await ctx.newPage();
   p.on('pageerror', (err) => console.error('pageerror', err.message));
-  await p.addInitScript({ content: `window.__name = (f) => f; localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: '${q}', qualityMode: '${q}', fov: 70 }));` });
+  await p.addInitScript({ content: `window.__name = (f) => f; localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: '${map}', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: '${q}', qualityMode: '${q}', fov: 70 }));` });
   await p.goto(SITE);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title');
   await p.click('#btn-practice'); await p.click('#btn-practice-start');
@@ -156,14 +209,15 @@ async function runQuality(browser: any, q: string): Promise<Record<string, unkno
   await p.evaluate(() => { const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0] as any; for (const m of room.members.values()) if (m.bot) m.brain = null; document.getElementById('hud')!.style.opacity = '0'; });
   await sleep(4000); // start-of-match banners fade
   const files: Array<{ file: string; label: string }> = [];
-  for (const shot of SHOTS) {
-    if (ONLY && !ONLY.has(shot.name) && !ONLY.has(shot.name.split('-')[0]!)) continue;
+  for (const shot of shots) {
+    const bare = light ? shot.name.slice(light.length + 1) : shot.name;
+    if (ONLY && !ONLY.has(shot.name) && !ONLY.has(bare) && !ONLY.has(bare.split('-')[0]!)) continue;
     await place(p, shot);
     const file = path.join(OUT, `${q}-${shot.name}.png`);
     await p.screenshot({ path: file });
     files.push({ file, label: `${q}: ${shot.label}` });
   }
-  if (!ONLY || ONLY.has('home')) {
+  if (!light && (!ONLY || ONLY.has('home'))) {
     // The campaign's home look (no hat or hood, six recovered curlers), built from the avatar class the page uses.
     await place(p, { name: 'home', label: '', sol: { x: 30, z: 30, yaw: 0 }, luna: { x: 31, z: 30, yaw: 0 }, eye: [MID.x + 0.2, MID.z + 1.4], look: [MID.x, 1.35, MID.z] });
     await p.evaluate((mid) => {
@@ -184,7 +238,7 @@ async function runQuality(browser: any, q: string): Promise<Record<string, unkno
   }
   const c = await cost(p);
   await ctx.close();
-  sheet(files, path.join(OUT, `sheet-${q}.jpg`));
+  sheet(files, path.join(OUT, `sheet-${light ? `${light}-` : ''}${q}.jpg`));
   return { cost: c, files: files.map((f) => path.basename(f.file)) };
 }
 
@@ -219,7 +273,13 @@ async function main(): Promise<void> {
   const browser = await launch();
   const report: Record<string, unknown> = { dist: DIST };
   try {
-    for (const q of QUALITIES) { report[q] = await runQuality(browser, q); console.log(q, JSON.stringify((report[q] as any).cost)); }
+    for (const q of QUALITIES) {
+      for (const light of LIGHTS ?? [undefined]) {
+        const k = light ? `${light}-${q}` : q;
+        report[k] = await runQuality(browser, q, light);
+        console.log(k, JSON.stringify((report[k] as any).cost));
+      }
+    }
   } finally {
     await browser.close();
     preview?.kill();

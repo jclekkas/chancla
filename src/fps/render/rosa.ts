@@ -8,6 +8,7 @@ import type { Team } from '../../../shared/map';
 import type { Quality } from '../settings';
 import { RosaAnimator } from './rosa-anim';
 import { buildRosaModel, type RosaModel } from './rosa-model';
+import { buildRosaCandidate, candidateReady } from './rosa-candidate';
 import type { AvatarState } from './rosa-rig';
 
 export type { AvatarState } from './rosa-rig';
@@ -22,12 +23,17 @@ export class Avatar {
   private model: RosaModel;
   private anim: RosaAnimator;
   private rulMask = -1;
+  /** True when she is the Blender-built candidate (rosa-candidate.ts), not the current model. */
+  readonly isCandidate: boolean;
 
   // `home`: the campaign look (no hat or hood), so her ruleros show.
-  constructor(team: Team, opts: { home?: boolean; quality?: Quality; arena?: boolean } = {}) {
+  // `candidate`: the Blender-built Sol (preview), for team 0 in the arena look
+  // once its tier is loaded; anything else (or not loaded yet) is the current model.
+  constructor(team: Team, opts: { home?: boolean; quality?: Quality; arena?: boolean; candidate?: boolean } = {}) {
     this.team = team;
     this.quality = opts.quality ?? 'high';
-    this.model = buildRosaModel(team, { home: opts.home, quality: this.quality, arena: opts.arena });
+    this.isCandidate = !!opts.candidate && team === 0 && !!opts.arena && !opts.home && candidateReady(this.quality);
+    this.model = this.isCandidate ? buildRosaCandidate(team, this.quality) : buildRosaModel(team, { home: opts.home, quality: this.quality, arena: opts.arena });
     this.root = this.model.root;
     this.anim = new RosaAnimator(this.model, { simple: this.quality === 'low' });
     if (this.model.rulMesh) {
@@ -98,6 +104,8 @@ export class Avatar {
     this.root.traverse((o) => {
       const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
       if (g && !g.userData.shared) g.dispose();
+      // The candidate's skeleton owns its bone texture.
+      (o as THREE.SkinnedMesh).skeleton?.dispose();
     });
   }
 

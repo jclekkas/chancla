@@ -15,6 +15,8 @@
 //   GRAPHICS_EXPERIMENT=1 node node_modules/vite/bin/vite.js build --outDir dist-b
 //   DIST=dist-b OUT=<dir> node --import tsx scripts/rosa-motion.ts
 //   env: SCENES=walk6,jump (filter), VIEWS=side,3q, MEASURE=only (no frames), CAM=4 (camera distance, m), PORT
+//   ROSA=candidate: the Blender-built Sol (settings.rosaCandidate) is the subject
+//   (waits until she is on the field); QUALITY=high|medium|low (default high).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -28,6 +30,8 @@ const SITE = `http://localhost:${PORT}/`;
 const DIST = path.resolve(ROOT, process.env.DIST || 'dist-b');
 const OUT = path.resolve(process.env.OUT || path.join(ROOT, '..', 'rosa-motion-out'));
 const MEASURE_ONLY = process.env.MEASURE === 'only';
+const CANDIDATE = process.env.ROSA === 'candidate';
+const QUALITY = process.env.QUALITY || 'high';
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const hasFfmpeg = spawnSync('which', ['ffmpeg']).status === 0;
@@ -76,6 +80,8 @@ function install(): void {
   const w = window as any;
   const f = w.__fps; const s = f.session(); const e = f.engine();
   const ids = [...s.remotes.keys()];
+  // The candidate preview: Sol is the subject.
+  if (w.__candidate) { const m = s.room.members as Array<{ id: number; team: number }>; ids.sort((a: number, b: number) => (m.find((x) => x.id === a)?.team ?? 9) - (m.find((x) => x.id === b)?.team ?? 9)); }
   // An open strip of El Patio along x, clear of the kiosk, planters and
   // fountain for both cameras while she is filmed (x up to -5.5).
   const Z = 3.1, X0 = -6, Z0 = 3.4; // walks; standing scenes
@@ -212,12 +218,13 @@ async function main(): Promise<void> {
     const ctx = await browser.newContext({ viewport: { width: 560, height: 420 } });
     await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
     const p = await ctx.newPage();
-    await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: 'high', qualityMode: 'high', fov: 70, music: 0 })); } catch {}` });
+    await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: '${QUALITY}', qualityMode: '${QUALITY}', fov: 70, music: 0${CANDIDATE ? ', rosaCandidate: true' : ''} })); } catch {} window.__candidate = ${CANDIDATE};` });
     await p.goto(SITE);
     await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
     await p.click('#btn-practice'); await p.click('#btn-practice-start');
     await p.waitForFunction(() => (window as any).__fps.session()?.phase === 'playing' && (window as any).__fps.session()?.remotes.size >= 2, undefined, { timeout: 30000, polling: 100 });
     await p.click('#btn-click-play', { force: true }).catch(() => p.click('#stage', { force: true }));
+    if (CANDIDATE) await p.waitForFunction(() => { const e = (window as any).__fps.engine(); const m = (window as any).__fps.session().room.members as Array<{ id: number; team: number }>; return [...e.avatars.entries()].some(([id, a]: [number, any]) => a.isCandidate && m.find((x) => x.id === id)?.team === 0); }, undefined, { timeout: 30000, polling: 100 });
     await p.evaluate(() => {
       const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0];
       for (const m of room.members.values()) if (m.bot) m.brain = null;

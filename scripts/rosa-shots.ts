@@ -22,6 +22,9 @@
 // Patio in the marigold house's cast shadow) and dusk (La Fiesta's dance
 // floor), named <q>-<light>-<dist>-<view>.png. All staging is done here
 // (map choice, positions), so it works on any build with window.__fps.
+// ROSA=candidate switches on the Blender-built Sol (settings.rosaCandidate)
+// before the match and waits until she is on the field; cost.json then
+// also measures the candidate's create/dispose and quality-toggle stability.
 // Every shot pins the Rosas' idle (no blink, the breath at one phase, a
 // fixed step) and the world's clock, so before and after match pose for pose.
 import fs from 'node:fs';
@@ -39,6 +42,7 @@ const OUT = path.resolve(process.env.OUT || path.join(ROOT, 'docs/rosa/shots'));
 const QUALITIES = (process.env.QUALITIES || 'high,medium,low').split(',');
 const ONLY = process.env.SHOTS ? new Set(process.env.SHOTS.split(',')) : null;
 const LIGHTS = process.env.LIGHTS ? process.env.LIGHTS.split(',') : null;
+const CANDIDATE = process.env.ROSA === 'candidate';
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -176,9 +180,11 @@ async function cost(p: Page): Promise<unknown> {
     const Avatar = any.constructor;
     const mem = () => ({ geometries: r.info.memory.geometries, textures: r.info.memory.textures });
     const cam = e.camera.clone(); cam.position.set(0, 1.2, 3); cam.lookAt(0, 0.9, 0); cam.updateMatrixWorld();
+    const cand = (window as any).__candidate;
     const round = () => {
       const sc = new Scene();
       const made = [new Avatar(0, { quality: any.quality }), new Avatar(1, { quality: any.quality }), new Avatar(0, { home: true, quality: any.quality })];
+      if (cand) made.push(new Avatar(0, { quality: any.quality, arena: true, candidate: true }));
       for (const a of made) sc.add(a.root);
       r.render(sc, cam);
       for (const a of made) a.dispose();
@@ -189,6 +195,10 @@ async function cost(p: Page): Promise<unknown> {
     out.leak = { before, after: mem(), rounds: 8 };
     out.memory = mem();
     out.programs = r.info.programs?.length;
+    if (cand) {
+      const sol = e.avatars.get(st.sol);
+      out.candidate = { sol: !!sol?.isCandidate, state: e.rosaCandidateState?.(), asset: (() => { let n = 0; sol?.root.traverse((o: any) => { if (o.isSkinnedMesh) n = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; }); return { tris: n }; })() };
+    }
     return out;
   });
 }
@@ -200,13 +210,17 @@ async function runQuality(browser: any, q: string, light?: string): Promise<Reco
   await ctx.route('**/*', (r: any) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p: Page = await ctx.newPage();
   p.on('pageerror', (err) => console.error('pageerror', err.message));
-  await p.addInitScript({ content: `window.__name = (f) => f; localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: '${map}', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: '${q}', qualityMode: '${q}', fov: 70 }));` });
+  await p.addInitScript({ content: `window.__name = (f) => f; localStorage.setItem('chancla.mp.settings.v1', JSON.stringify({ practiceMap: '${map}', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: '${q}', qualityMode: '${q}', fov: 70${CANDIDATE ? ', rosaCandidate: true' : ''} })); window.__candidate = ${CANDIDATE};` });
   await p.goto(SITE);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title');
   await p.click('#btn-practice'); await p.click('#btn-practice-start');
   await p.waitForFunction(() => (window as any).__fps.session()?.phase === 'playing' && (window as any).__fps.session()?.remotes.size >= 2, undefined, { timeout: 30000 });
   await p.click('#btn-click-play', { force: true }).catch(() => p.click('#stage', { force: true }));
   await p.evaluate(() => { const f = (window as any).__fps; const room = [...f.host().hub.rooms.values()][0] as any; for (const m of room.members.values()) if (m.bot) m.brain = null; document.getElementById('hud')!.style.opacity = '0'; });
+  if (CANDIDATE) {
+    // The tier loads in the background: wait until Sol on the field is the candidate.
+    await p.waitForFunction(() => { const e = (window as any).__fps.engine(); const s = (window as any).__fps.session(); const m = s.room.members as Array<{ id: number; team: number }>; return [...e.avatars.entries()].some(([id, a]: [number, any]) => a.isCandidate && m.find((x) => x.id === id)?.team === 0); }, undefined, { timeout: 30000 });
+  }
   await sleep(4000); // start-of-match banners fade
   const files: Array<{ file: string; label: string }> = [];
   for (const shot of shots) {

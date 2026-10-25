@@ -16,6 +16,7 @@ import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '..
 import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
 import { Avatar, type AvatarState } from './render/rosa';
+import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
 import { CombatFx } from './render/combat-fx';
 import { OwnSwingLog } from './miss-feedback';
 import { ClipCursor, KillcamDirector, eyeOf, meleeCamera, noteFrom, thirdPersonCamera, type Clip } from './killcam';
@@ -61,6 +62,10 @@ export class Engine {
   world: WorldView;
   private worldOpts: WorldOptions = {};
   private quality: Quality;
+  /** Preview: Sol in the arena is the Blender-built candidate (settings.rosaCandidate). */
+  private rosaCandidate: boolean;
+  /** Bumped by every avatar refresh, so a tier that finishes loading late only rebuilds for the latest one. */
+  private avatarGen = 0;
   private avatars = new Map<number, Avatar>();
   private menuAvatars: Avatar[] = [];
   readonly proj = new ProjectileView();
@@ -130,6 +135,7 @@ export class Engine {
   ) {
     const s = settings();
     this.quality = s.quality;
+    this.rosaCandidate = s.rosaCandidate;
     // The arena hand is built at the quality tier (fewer rings on Medium and Low, same grip and motion).
     this.vm = new ViewModel({ arena: true, quality: s.quality });
     this.renderer = new THREE.WebGLRenderer({ antialias: s.quality !== 'low', powerPreference: 'high-performance', alpha: false, stencil: false });
@@ -149,6 +155,7 @@ export class Engine {
     this.fx.setReducedMotion(s.reducedMotion);
     this.buildPickups();
     this.buildMenuAvatars();
+    if (this.rosaCandidate) void this.refreshAvatars('rosa');
     input.onSkip = () => this.skipReplay();
 
     this.vmSun.position.set(-1, 2, 1);
@@ -253,6 +260,8 @@ export class Engine {
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
     this.fx.setReducedMotion(s.reducedMotion);
+    const candidateChanged = s.rosaCandidate !== this.rosaCandidate;
+    this.rosaCandidate = s.rosaCandidate;
     if (s.quality !== this.quality) {
       this.quality = s.quality;
       this.fx.setQuality(s.quality);
@@ -265,17 +274,58 @@ export class Engine {
       this.scene.add(this.world.group);
       this.lightHand();
       this.renderer.shadowMap.needsUpdate = true;
-      // Characters are built per quality: rebuild them (match ones come back on the next frame).
-      for (const av of this.avatars.values()) { this.scene.remove(av.root); av.dispose(); }
-      this.avatars.clear();
-      this.endReplay('quality');
-      this.disposeReplayPool();
-      const menuShown = this.menuAvatars[0]?.root.visible ?? true;
-      for (const av of this.menuAvatars) { this.scene.remove(av.root); av.dispose(); }
-      this.buildMenuAvatars();
-      for (const av of this.menuAvatars) av.root.visible = menuShown;
+      // Characters are built per quality: rebuild them (with the candidate on, once its tier has loaded).
+      void this.refreshAvatars('quality');
       this.resize();
-    }
+    } else if (candidateChanged) void this.refreshAvatars('rosa');
+  }
+
+  /**
+   * Preview: Sol as the Blender-built candidate model (or back to the current
+   * one). The match goes on; the characters are rebuilt once the tier is
+   * loaded (until then the current model stays). The persisted setting is
+   * `rosaCandidate` (settings.ts): updating it and calling applySettings()
+   * does the same. Resolves when the characters have been rebuilt (or the
+   * load failed and the current model stays).
+   */
+  setRosaCandidate(on: boolean): Promise<void> {
+    if (on === this.rosaCandidate) return Promise.resolve();
+    this.rosaCandidate = on;
+    return this.refreshAvatars('rosa');
+  }
+
+  /** Whether the candidate is switched on, its current tier is loaded, and how many characters use it. */
+  rosaCandidateState(): { on: boolean; ready: boolean; avatars: number } {
+    let n = 0;
+    for (const a of [...this.avatars.values(), ...this.menuAvatars, ...this.replayPool]) if (a.isCandidate) n++;
+    return { on: this.rosaCandidate, ready: candidateReady(this.quality), avatars: n };
+  }
+
+  /** Rebuilds the characters now, or (candidate on, tier not loaded yet) right after the tier loads. */
+  private refreshAvatars(reason: string): Promise<void> {
+    const gen = ++this.avatarGen;
+    if (!this.rosaCandidate || candidateReady(this.quality)) { this.rebuildAvatars(reason); return Promise.resolve(); }
+    const q = this.quality;
+    return loadRosaCandidate(q)
+      .catch((err: unknown) => { diagLog('gfx', `rosa candidate ${q} failed to load: ${String(err)}`); })
+      .then(() => { if (!this.disposed && gen === this.avatarGen && q === this.quality) this.rebuildAvatars(reason); });
+  }
+
+  /** Disposes and rebuilds every character (match ones come back on the next frame; the replay pool refills). */
+  private rebuildAvatars(reason: string): void {
+    for (const av of this.avatars.values()) { this.scene.remove(av.root); av.dispose(); }
+    this.avatars.clear();
+    this.endReplay(reason);
+    this.disposeReplayPool();
+    const menuShown = this.menuAvatars[0]?.root.visible ?? true;
+    for (const av of this.menuAvatars) { this.scene.remove(av.root); av.dispose(); }
+    this.buildMenuAvatars();
+    for (const av of this.menuAvatars) av.root.visible = menuShown;
+  }
+
+  /** How every arena character is built (the candidate applies to Sol only, when loaded). */
+  private avatarOpts(): { quality: Quality; arena: true; candidate: boolean } {
+    return { quality: this.quality, arena: true, candidate: this.rosaCandidate };
   }
 
   /**
@@ -300,7 +350,7 @@ export class Engine {
   private buildMenuAvatars(): void {
     this.menuAvatars = [];
     for (const team of [0, 1] as const) {
-      const a = new Avatar(team, { quality: this.quality, arena: true });
+      const a = new Avatar(team, this.avatarOpts());
       a.root.position.set(team === 0 ? -1.6 : 1.6, 0, 3.4);
       a.root.rotation.y = team === 0 ? -0.5 : 0.5;
       this.menuAvatars.push(a);
@@ -896,7 +946,7 @@ export class Engine {
       const team = this.teamOf(r.id);
       let av = this.avatars.get(r.id);
       if (av && av.team !== team) { this.scene.remove(av.root); av.dispose(); av = undefined; }
-      if (!av) { av = new Avatar(team, { quality: this.quality, arena: true }); this.avatars.set(r.id, av); this.scene.add(av.root); }
+      if (!av) { av = new Avatar(team, this.avatarOpts()); this.avatars.set(r.id, av); this.scene.add(av.root); }
       seen.add(r.id);
       driveAvatar(av, r, (masks.get(r.id) ?? r.ruleros) | (this.heldRuleros.get(r.id) ?? 0), dt, reduced);
       // During a replay the live characters keep animating, out of sight.
@@ -991,7 +1041,7 @@ export class Engine {
     if (av) return av;
     const used = new Set(r.avatars.values());
     av = this.replayPool.find((a) => a.team === team && !used.has(a));
-    if (!av) { av = new Avatar(team, { quality: this.quality, arena: true }); this.replayPool.push(av); this.scene.add(av.root); }
+    if (!av) { av = new Avatar(team, this.avatarOpts()); this.replayPool.push(av); this.scene.add(av.root); }
     av.reset(); // a pooled one keeps nothing from the live scene or an earlier replay
     r.avatars.set(id, av);
     return av;
@@ -1229,7 +1279,7 @@ export class Engine {
     return {
       mode: this.mode, fps: Math.round(this.fps), frameMs: +this.frameMs.toFixed(2), drawCalls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles, geometries: this.renderer.info.memory.geometries, textures: this.renderer.info.memory.textures,
-      avatars: this.avatars.size, quality: this.quality, pixelRatio: this.renderer.getPixelRatio(),
+      avatars: this.avatars.size, quality: this.quality, rosaCandidate: this.rosaCandidateState(), pixelRatio: this.renderer.getPixelRatio(),
       session: s ? {
         id: s.id, state: s.state, phase: s.phase, team: s.team, alive: s.alive, hp: s.hp, weapon: s.weapon, rtt: Math.round(s.rtt),
         pos: [+s.body.x.toFixed(2), +s.body.y.toFixed(2), +s.body.z.toFixed(2)], scores: s.snap?.sc, remotes: s.remotes.size,
@@ -1240,8 +1290,11 @@ export class Engine {
 
   dispose(): void {
     this.disposed = true;
+    this.avatarGen++;
     cancelAnimationFrame(this.raf);
     this.clearMatch();
+    for (const a of this.menuAvatars) { this.scene.remove(a.root); a.dispose(); }
+    this.menuAvatars = [];
     this.cafeLabel.dispose();
     for (const c of this.cups) c.dispose();
     disposeTree(this.scene);

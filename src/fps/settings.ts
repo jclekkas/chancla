@@ -36,6 +36,8 @@ export interface FpsSettings {
   /** Combat mode for practice and for rooms you create (a joined room always uses its host's). */
   practiceRules: RulesetId;
   roomRules: RulesetId;
+  /** Preview: Sol in matches is the Blender-built candidate model (rosa-candidate.ts), loaded on demand. */
+  rosaCandidate: boolean;
 }
 
 const KEY = 'chancla.mp.settings.v1';
@@ -44,7 +46,7 @@ export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): F
   return {
     lang, name: '', sensitivity: 1, touchSensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium', qualityMode: 'auto',
     music: 0.45, sfx: 0.85, showStats: false, killcam: true, minimap: true, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
-    practiceRules: 'classic', roomRules: 'classic',
+    practiceRules: 'classic', roomRules: 'classic', rosaCandidate: false,
   };
 }
 
@@ -82,6 +84,7 @@ export class FpsSettingsStore {
       // Saves from before combat modes existed (or anything unknown) are Classic.
       practiceRules: rulesetOf(r.practiceRules),
       roomRules: rulesetOf(r.roomRules),
+      rosaCandidate: bool(r.rosaCandidate, d.rosaCandidate),
     };
   }
   update(p: Partial<FpsSettings>): FpsSettings {

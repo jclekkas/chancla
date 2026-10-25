@@ -628,6 +628,52 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
   const look = lookFor(team, q, home, arena);
   const faceState = new THREE.Vector4();
   const mat = arena ? rosaMaterial(ARENA_FACE_RIG, faceState, { arena: true }) : rosaMaterial(FACE_RIG, faceState);
+  const { root, joints } = buildRosaJoints();
+  const { hips, torso, head, armL, armR, foreL, foreR, wristL, wristR, legL, legR, shinL, shinR, footL, footR } = joints;
+  const extras: RosaRig['extras'] = {};
+  for (const j of Object.keys(joints) as Joint[]) {
+    const g = look[j];
+    if (!g) continue;
+    const m = new THREE.Mesh(g, mat);
+    m.castShadow = d.shadows.has(j);
+    m.receiveShadow = q !== 'low';
+    if (j === 'hips') { m.position.y = SKIRT_PIVOT; extras.skirt = m; }
+    joints[j].add(m);
+  }
+
+  const curlers: THREE.Mesh[] = [];
+  let rulMesh: THREE.InstancedMesh | null = null, rulOutline: THREE.InstancedMesh | null = null;
+  const rulPlace: THREE.Matrix4[] = [];
+  if (home) {
+    // Six curler slots across the crown, filled as ruleros are recovered.
+    CURLER_SPOTS.forEach(([x, y, z], i) => {
+      const m = new THREE.Mesh(curlerGeometry(i), mat);
+      bigHead(onHair(new THREE.Vector3(x, y, z), X, 0.042, 0.016)).decompose(m.position, m.quaternion, m.scale);
+      m.visible = false;
+      head.add(m);
+      curlers.push(m);
+    });
+  } else {
+    // Four ruleros: the ones a backhand to the face can knock off.
+    ({ rulMesh, rulOutline } = matchRuleros(rulSpots(team).map(bigHead), d.lean, rulPlace));
+    head.add(rulMesh);
+    if (rulOutline) head.add(rulOutline);
+  }
+
+  const { weapons, bubble, stars } = attachRosaProps(team, q, root, head, wristR);
+
+  return { root, hips, torso, head, armL, armR, foreL, foreR, wristL, wristR, legL, legR, shinL, shinR, footL, footR, weapons, stars, bubble, flashMats: [mat], face: faceState, extras, rulMesh, rulOutline, rulPlace, rulOutlineScale: 1.14, curlers };
+}
+
+
+/** The joint names of the rig (rosa-rig.ts), in a fixed order. */
+export const ROSA_JOINTS = ['hips', 'torso', 'head', 'armL', 'armR', 'foreL', 'foreR', 'wristL', 'wristR', 'legL', 'legR', 'shinL', 'shinR', 'footL', 'footR'] as const;
+export type RosaJoint = (typeof ROSA_JOINTS)[number];
+/** Where the skirt hangs from (hips-local y): the waist. */
+export const ROSA_SKIRT_PIVOT = SKIRT_PIVOT;
+
+/** The joint tree at the RIG positions, rest rotation zero (shared by every Rosa build). */
+export function buildRosaJoints(): { root: THREE.Group; joints: Record<RosaJoint, THREE.Group> } {
   const G = () => new THREE.Group();
   const root = G(), hips = G(), torso = G(), head = G();
   const armL = G(), armR = G(), foreL = G(), foreR = G(), wristL = G(), wristR = G();
@@ -656,48 +702,33 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
     foot.position.y = -RIG.shin;
     shin.add(foot);
   }
-  const extras: RosaRig['extras'] = {};
-  for (const j of Object.keys(joints) as Joint[]) {
-    const g = look[j];
-    if (!g) continue;
-    const m = new THREE.Mesh(g, mat);
-    m.castShadow = d.shadows.has(j);
-    m.receiveShadow = q !== 'low';
-    if (j === 'hips') { m.position.y = SKIRT_PIVOT; extras.skirt = m; }
-    joints[j].add(m);
-  }
+  return { root, joints };
+}
 
-  const curlers: THREE.Mesh[] = [];
-  let rulMesh: THREE.InstancedMesh | null = null, rulOutline: THREE.InstancedMesh | null = null;
-  const rulPlace: THREE.Matrix4[] = [];
-  if (home) {
-    // Six curler slots across the crown, filled as ruleros are recovered.
-    CURLER_SPOTS.forEach(([x, y, z], i) => {
-      const m = new THREE.Mesh(curlerGeometry(i), mat);
-      bigHead(onHair(new THREE.Vector3(x, y, z), X, 0.042, 0.016)).decompose(m.position, m.quaternion, m.scale);
-      m.visible = false;
-      head.add(m);
-      curlers.push(m);
-    });
-  } else {
-    // Four ruleros: the ones a backhand to the face can knock off.
-    const spots = rulSpots(team).map(bigHead);
-    rulMesh = new THREE.InstancedMesh(ruleroGeometry(), rulMaterial(), spots.length);
-    if (!d.lean) rulOutline = new THREE.InstancedMesh(ruleroGeometry(), OUTLINE, spots.length);
-    const p = new THREE.Vector3(), r = new THREE.Quaternion(), s = new THREE.Vector3();
-    spots.forEach((m, i) => {
-      rulPlace.push(m);
-      rulMesh!.setMatrixAt(i, m);
-      m.decompose(p, r, s);
-      rulOutline?.setMatrixAt(i, new THREE.Matrix4().compose(p, r, s.multiplyScalar(1.14)));
-      rulMesh!.setColorAt(i, new THREE.Color(RULERO_COLORS[i % RULERO_COLORS.length]!));
-    });
-    // Bounds would come from the bare geometry, not the instances: never cull (four tiny pieces).
-    rulMesh.frustumCulled = false;
-    head.add(rulMesh);
-    if (rulOutline) { rulOutline.frustumCulled = false; head.add(rulOutline); }
-  }
+/**
+ * The four match ruleros on the head: one instanced mesh (a colour per
+ * roller) and its outline (none when `lean`), at the head-local `spots`
+ * (pushed to `place`, the avatar's roller placements).
+ */
+export function matchRuleros(spots: THREE.Matrix4[], lean: boolean, place: THREE.Matrix4[]): { rulMesh: THREE.InstancedMesh; rulOutline: THREE.InstancedMesh | null } {
+  const rulMesh = new THREE.InstancedMesh(ruleroGeometry(), rulMaterial(), spots.length);
+  const rulOutline = lean ? null : new THREE.InstancedMesh(ruleroGeometry(), OUTLINE, spots.length);
+  const p = new THREE.Vector3(), r = new THREE.Quaternion(), s = new THREE.Vector3();
+  spots.forEach((m, i) => {
+    place.push(m);
+    rulMesh.setMatrixAt(i, m);
+    m.decompose(p, r, s);
+    rulOutline?.setMatrixAt(i, new THREE.Matrix4().compose(p, r, s.multiplyScalar(1.14)));
+    rulMesh.setColorAt(i, new THREE.Color(RULERO_COLORS[i % RULERO_COLORS.length]!));
+  });
+  // Bounds would come from the bare geometry, not the instances: never cull (four tiny pieces).
+  rulMesh.frustumCulled = false;
+  if (rulOutline) rulOutline.frustumCulled = false;
+  return { rulMesh, rulOutline };
+}
 
+/** The weapons in her right hand, the protection bubble and the dizzy stars, as every Rosa carries them. */
+export function attachRosaProps(team: Team, q: Quality, root: THREE.Group, head: THREE.Group, wristR: THREE.Group): { weapons: [THREE.Object3D, THREE.Object3D]; bubble: THREE.Mesh; stars: THREE.Group } {
   const std = heldChancla(q === 'low'), heavy = heldPesada(q === 'low');
   std.castShadow = heavy.castShadow = q !== 'low';
   wristR.add(std, heavy);
@@ -708,13 +739,12 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
   bubble.scale.set(0.6, 1.0, 0.6);
   bubble.position.y = 0.9;
   root.add(bubble);
-  const stars = G();
+  const stars = new THREE.Group();
   stars.add(new THREE.Mesh(starsGeometry(), propMaterial()));
   stars.visible = false;
   stars.position.y = 0.45;
   head.add(stars);
-
-  return { root, hips, torso, head, armL, armR, foreL, foreR, wristL, wristR, legL, legR, shinL, shinR, footL, footR, weapons, stars, bubble, flashMats: [mat], face: faceState, extras, rulMesh, rulOutline, rulPlace, rulOutlineScale: 1.14, curlers };
+  return { weapons, bubble, stars };
 }
 
 let rulMat: THREE.MeshToonMaterial | null = null;

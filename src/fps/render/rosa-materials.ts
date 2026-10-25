@@ -83,7 +83,9 @@ export function rosaMaterial(fr: FaceRig, face = new THREE.Vector4()): THREE.Mes
   const m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toonRamp() });
   const u = { value: face };
   m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); };
-  m.customProgramCacheKey = () => 'rosa-ink';
+  // The face rig is baked into the shader: one program per rig (the match and campaign looks differ).
+  const key = `rosa-ink:${f4(fr.lidY)}:${f4(fr.browIn)}:${f4(fr.browOut)}`;
+  m.customProgramCacheKey = () => key;
   return m;
 }
 

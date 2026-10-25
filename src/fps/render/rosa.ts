@@ -24,10 +24,10 @@ export class Avatar {
   private rulMask = -1;
 
   // `home`: the campaign look (no hat or hood), so her ruleros show.
-  constructor(team: Team, opts: { home?: boolean; quality?: Quality } = {}) {
+  constructor(team: Team, opts: { home?: boolean; quality?: Quality; arena?: boolean } = {}) {
     this.team = team;
     this.quality = opts.quality ?? 'high';
-    this.model = buildRosaModel(team, { home: opts.home, quality: this.quality });
+    this.model = buildRosaModel(team, { home: opts.home, quality: this.quality, arena: opts.arena });
     this.root = this.model.root;
     this.anim = new RosaAnimator(this.model, { simple: this.quality === 'low' });
     if (this.model.rulMesh) {

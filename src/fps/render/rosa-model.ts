@@ -23,6 +23,7 @@ import { RULERO_COLORS, ruleroGeometry } from './ruleros';
 import { RIG, type RosaRig } from './rosa-rig';
 import { Parts, blob, catEyeFrame, crescentShape, ellipsoidRings, limb, loft, trs, type Ring } from './rosa-geo';
 import { FACE_TAG, ROSA_COLORS, ROSA_SHARED as S, propMaterial, rosaMaterial, type FaceRig } from './rosa-materials';
+import { arenaArm, arenaFaceRig, arenaHairRes, arenaFore, arenaHand, arenaHead, arenaHips, arenaTorso } from './rosa-arena';
 
 /** The team accent colour (the protection bubble, and anything else that names her team). */
 export function teamAccent(team: Team): number { return team === 0 ? 0xf2a33a : 0x36b9c9; }
@@ -99,6 +100,8 @@ const HEAD_SCALE = 1.12;
 const HOOD_TILT = trs(0, 0.05, 0.03, 0.16).multiply(trs(0, -0.05, -0.03));
 /** The face's features as drawn (the head scaled up), for the expression shader. */
 const FACE_RIG: FaceRig = { lidY: (at(face(0.05, 0.125, 0.002)).y - 0.004) * HEAD_SCALE, browIn: 0.018 * HEAD_SCALE, browOut: 0.09 * HEAD_SCALE };
+/** The arena look's face rig (its own head shape; rosa-arena.ts). */
+const ARENA_FACE_RIG: FaceRig = arenaFaceRig(HEAD_SCALE);
 const bigHead = (m: THREE.Matrix4): THREE.Matrix4 => { const p = new THREE.Vector3().setFromMatrixPosition(m).multiplyScalar(HEAD_SCALE); return m.clone().setPosition(p); };
 
 // The four match ruleros (head-local), in roller-index order: two across
@@ -225,14 +228,11 @@ function buildTorso(team: Team, d: Detail, p: Parts, home: boolean): void {
   }
 }
 
-function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
-  const c = ROSA_COLORS[team];
-  const [hw, hh] = d.head, [sw, sh] = d.small, [tw, th] = d.tiny;
-  // Skull with fuller cheeks: the lower half widens a little to the sides.
-  const skull = ellipsoidRings(SKULL.r.x, SKULL.r.y, SKULL.r.z, hh, S.skin, SKULL.c.y);
-  const cheeks = (a: number, _i: number, r: Ring) => 1 + 0.07 * Math.min(1, Math.max(0, (SKULL.c.y - r.y) / 0.1)) * Math.abs(Math.sin(a));
-  p.loft(skull, hw, { mod: cheeks }, d.ink, { step: 2, opts: { mod: cheeks } });
-  // Hair: a cap tilted back (its rim is the hairline), tucked inside the skull below it.
+/**
+ * Hair: a cap tilted back (its rim is the hairline), tucked inside the skull
+ * below it. `full` (the arena look): more volume low at the back of the head.
+ */
+function buildHairCap(d: Detail, p: Parts, hw: number, hh: number, full = false): void {
   const hair: Ring[] = [];
   const rows = Math.max(4, Math.round(hh * 0.75));
   for (let k = 0; k <= rows; k++) {
@@ -240,7 +240,19 @@ function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
     hair.push({ y: Math.cos(t) * HAIR.r.y, r: Math.sin(t) * HAIR.r.x, rz: Math.sin(t) * HAIR.r.z, c: S.hair });
   }
   hair.push({ y: Math.cos(HAIR_CAP) * HAIR.r.y * 0.78, r: Math.sin(HAIR_CAP) * HAIR.r.x * 0.78, c: S.hair }, { y: -HAIR.r.y * 0.6, r: 0, c: S.hair });
-  p.loft(hair, hw, { mod: d.fine ? (a, i) => (i > 1 && i < rows ? 1 + 0.012 * Math.cos(7 * a) : 1) : undefined }, d.ink, { step: 2, m: trs(HAIR.c.x, HAIR.c.y, HAIR.c.z, HAIR_TILT) });
+  const vol = (a: number, r: Ring) => 1 + 0.07 * Math.max(0, -Math.cos(a)) * Math.min(1, Math.max(0, (0.12 - r.y) / 0.12));
+  const mod = full ? (a: number, i: number, r: Ring) => vol(a, r) * (d.fine && i > 1 && i < rows ? 1 + 0.012 * Math.cos(7 * a) : 1)
+    : d.fine ? (a: number, i: number) => (i > 1 && i < rows ? 1 + 0.012 * Math.cos(7 * a) : 1) : undefined;
+  p.loft(hair, hw, { mod }, d.ink, { step: 2, m: trs(HAIR.c.x, HAIR.c.y, HAIR.c.z, HAIR_TILT), opts: full ? { mod: (a, _i, r) => vol(a, r) } : undefined });
+}
+
+function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
+  const [hw, hh] = d.head, [sw, sh] = d.small, [tw, th] = d.tiny;
+  // Skull with fuller cheeks: the lower half widens a little to the sides.
+  const skull = ellipsoidRings(SKULL.r.x, SKULL.r.y, SKULL.r.z, hh, S.skin, SKULL.c.y);
+  const cheeks = (a: number, _i: number, r: Ring) => 1 + 0.07 * Math.min(1, Math.max(0, (SKULL.c.y - r.y) / 0.1)) * Math.abs(Math.sin(a));
+  p.loft(skull, hw, { mod: cheeks }, d.ink, { step: 2, opts: { mod: cheeks } });
+  buildHairCap(d, p, hw, hh);
   if (team === 0 || home) p.add(blob(0.07, 0.062, 0.058, sw, sh), S.hair, trs(0, 0.075, 0.165), d.ink, blob(0.07, 0.062, 0.058, 6, 4)); // the low bun (hidden under Luna's hood)
   // Face: nose, ears, eyes behind cat-eye frames, stern brows, a red smirk.
   p.add(blob(0.02, 0.024, 0.022, tw, th), S.skin, face(0, 0.083, 0.006), d.inkSmall, blob(0.02, 0.024, 0.022, 5, 3));
@@ -276,7 +288,13 @@ function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
   p.add(blob(0.032, 0.009, 0.01, tw + 1, th), S.lips, face(0.003, 0.043, 0, 0.1));
   p.add(blob(0.026, 0.01, 0.01, tw + 1, th), S.lips, face(0.002, 0.03, 0, 0.08));
 
-  if (home) return;
+  if (!home) buildHeadwear(team, d, p);
+}
+
+/** Team Sol's straw sun hat or Team Luna's rebozo hood. */
+function buildHeadwear(team: Team, d: Detail, p: Parts): void {
+  const c = ROSA_COLORS[team];
+  const [tw, th] = d.tiny;
   if (team === 0) {
     // Wide straw sun hat, tipped back: woven bands on a soft, wavy brim, a terracotta band and a pink flower.
     const tilt = trs(0, 0.255, 0, 0.1).multiply(trs(0, -0.255, 0));
@@ -408,8 +426,10 @@ function buildShoe(_team: Team, d: Detail, p: Parts, right: boolean): void {
 const SKIRT_PIVOT = 0.08;
 const looks = new Map<string, Look>();
 
-function lookFor(team: Team, q: Quality, home: boolean): Look {
-  const key = `${team}:${q}:${home ? 1 : 0}`;
+function lookFor(team: Team, q: Quality, home: boolean, arena = false): Look {
+  // The arena look applies to the match avatar only; the campaign's home look keeps its own shapes.
+  if (home) arena = false;
+  const key = `${team}:${q}:${home ? 1 : 0}${arena ? ':arena' : ''}`;
   const hit = looks.get(key);
   if (hit) return hit;
   const d = DETAIL[q];
@@ -423,17 +443,32 @@ function lookFor(team: Team, q: Quality, home: boolean): Look {
     markShared(g);
     look[j] = g;
   };
-  bake('hips', (p) => buildHips(team, d, p));
-  bake('torso', (p) => buildTorso(team, d, p, home));
-  bake('head', (p) => buildHead(team, d, p, home));
+  if (arena) {
+    bake('hips', (p) => arenaHips(team, q, d, p));
+    bake('torso', (p) => arenaTorso(team, q, d, p));
+    bake('head', (p) => arenaHead(team, q, d, p, { hair: (pp) => buildHairCap(d, pp, ...arenaHairRes(q), true), headwear: (pp) => buildHeadwear(team, d, pp) }));
+  } else {
+    bake('hips', (p) => buildHips(team, d, p));
+    bake('torso', (p) => buildTorso(team, d, p, home));
+    bake('head', (p) => buildHead(team, d, p, home));
+  }
   look.head!.scale(HEAD_SCALE, HEAD_SCALE, HEAD_SCALE);
   look.head!.computeBoundingSphere();
-  bake('armL', (p) => buildArm(team, d, p));
-  bake('armR', (p) => buildArm(team, d, p));
-  bake('foreL', (p) => { buildFore(team, d, p); if (d.lean) buildHand(false, d, p, trs(0, -RIG.foreArm, 0)); });
-  bake('foreR', (p) => buildFore(team, d, p));
-  if (!d.lean) bake('wristL', (p) => buildHand(false, d, p));
-  bake('wristR', (p) => buildHand(true, d, p));
+  if (arena) {
+    bake('armL', (p) => arenaArm(team, q, d, p));
+    bake('armR', (p) => arenaArm(team, q, d, p));
+    bake('foreL', (p) => { arenaFore(d, p); if (d.lean) arenaHand(false, d, p, GRIP_Y, trs(0, -RIG.foreArm, 0)); });
+    bake('foreR', (p) => arenaFore(d, p));
+    if (!d.lean) bake('wristL', (p) => arenaHand(false, d, p, GRIP_Y));
+    bake('wristR', (p) => arenaHand(true, d, p, GRIP_Y));
+  } else {
+    bake('armL', (p) => buildArm(team, d, p));
+    bake('armR', (p) => buildArm(team, d, p));
+    bake('foreL', (p) => { buildFore(team, d, p); if (d.lean) buildHand(false, d, p, trs(0, -RIG.foreArm, 0)); });
+    bake('foreR', (p) => buildFore(team, d, p));
+    if (!d.lean) bake('wristL', (p) => buildHand(false, d, p));
+    bake('wristR', (p) => buildHand(true, d, p));
+  }
   bake('legL', (p) => buildLeg(d, p));
   bake('legR', (p) => buildLeg(d, p));
   bake('shinL', (p) => buildShin(d, p));
@@ -575,20 +610,24 @@ export interface RosaModel extends RosaRig {
 }
 
 /** Triangles of one look's body (without weapons and ruleros), for tests and the cost notes. */
-export function rosaLookTriangles(team: Team, quality: Quality, home = false): number { return lookFor(team, quality, home).tris; }
+export function rosaLookTriangles(team: Team, quality: Quality, home = false, arena = false): number { return lookFor(team, quality, home, arena).tris; }
 
 /**
  * Builds a Rosa. `home`: the campaign look (no hat or hood), so her ruleros
- * show. `quality` sets the detail; team colours, silhouettes, the face and
- * the ruleros stay at every level.
+ * show. `arena`: the match look (rosa-arena.ts: re-shaped head, face,
+ * bodice, sleeves, hands and skirt on the same joints); without it the
+ * shapes are the original ones (the campaign relies on that). `quality`
+ * sets the detail; team colours, silhouettes, the face and the ruleros stay
+ * at every level.
  */
-export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Quality } = {}): RosaModel {
+export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Quality; arena?: boolean } = {}): RosaModel {
   const q = opts.quality ?? 'high';
   const d = DETAIL[q];
   const home = !!opts.home;
-  const look = lookFor(team, q, home);
+  const arena = !!opts.arena && !home;
+  const look = lookFor(team, q, home, arena);
   const faceState = new THREE.Vector4();
-  const mat = rosaMaterial(FACE_RIG, faceState);
+  const mat = rosaMaterial(arena ? ARENA_FACE_RIG : FACE_RIG, faceState);
   const G = () => new THREE.Group();
   const root = G(), hips = G(), torso = G(), head = G();
   const armL = G(), armR = G(), foreL = G(), foreR = G(), wristL = G(), wristR = G();

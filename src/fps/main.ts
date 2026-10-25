@@ -1059,6 +1059,7 @@ function renderSettings(): void {
   ($('set-fov') as HTMLInputElement).value = String(v.fov);
   $('out-fov').textContent = `${v.fov}°`;
   ($('set-motion') as HTMLInputElement).checked = v.reducedMotion;
+  ($('set-rosa-cand') as HTMLInputElement).checked = v.rosaCandidate;
   ($('set-music') as HTMLInputElement).value = String(Math.round(v.music * 100));
   $('out-music').textContent = `${Math.round(v.music * 100)}%`;
   ($('set-sfx') as HTMLInputElement).value = String(Math.round(v.sfx * 100));
@@ -1401,6 +1402,8 @@ function bindUi(): void {
   check('set-stats', (v) => store.update({ showStats: v }));
   check('set-killcam', (v) => store.update({ killcam: v }));
   check('set-minimap', (v) => store.update({ minimap: v }));
+  // Preview builds only: Sol drawn with the candidate Blender model (review; the current model stays the default).
+  if (OFFLINE_ONLY) { $('field-rosa-cand').hidden = false; check('set-rosa-cand', (v) => store.update({ rosaCandidate: v })); }
   // The replay's Skip button (mouse, when the pointer is free) and the touch "Tap to skip" layer.
   for (const id of ['kc-skip', 'kc-tap']) $(id).addEventListener('click', (e) => { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); engine?.skipReplay(); });
   range('set-voice', (v) => store.update({ voice: v / 100 }));

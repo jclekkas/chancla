@@ -108,7 +108,8 @@ export type SimEvent =
   | { k: 'swing'; id: number; a: number; w: WeaponId; tm: number }
   | { k: 'whiff'; id: number; a: number; w: WeaponId; tm: number }
   | { k: 'spawn'; id: number }
-  | { k: 'pickup'; id: number; i: number; hp: number }
+  // n: the health actually restored (capped at the maximum); tm: server time of the pickup.
+  | { k: 'pickup'; id: number; i: number; hp: number; n: number; tm: number }
   | { k: 'end'; winner: Team | -1; reason: 'score' | 'time' };
 
 export type SimPhase = 'countdown' | 'playing' | 'ended';
@@ -650,9 +651,10 @@ export class MatchSim {
       for (const p of this.players.values()) {
         if (!p.alive || p.hp >= MATCH.maxHealth) continue;
         if (Math.hypot(p.body.x - pk.x, p.body.z - pk.z) < 1.1 && Math.abs(p.body.y - pk.y) < 1.2) {
+          const before = p.hp;
           p.hp = Math.min(MATCH.maxHealth, p.hp + MATCH.pickupHeal);
           pk.availableAt = this.timeMs + MATCH.pickupRespawnMs;
-          this.events.push({ k: 'pickup', id: p.id, i, hp: p.hp });
+          this.events.push({ k: 'pickup', id: p.id, i, hp: p.hp, n: Math.round(p.hp - before), tm: this.timeMs });
           break;
         }
       }

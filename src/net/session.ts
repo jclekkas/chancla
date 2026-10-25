@@ -548,7 +548,10 @@ export class GameSession {
     const press = !!inp.firePress || (inp.fire && !this.fireWas);
     this.fireWas = inp.fire;
     const { firePress: _press, ...held } = inp; // the press itself is not simulated or sent
-    inp = this.rules === 'melee' ? { ...held, fire: false, melee: held.melee || press } : held;
+    // Classic: a press that came and went between two ticks (a quick click or tap
+    // on a slow frame) still reaches the game as one tick of fire; the cooldown
+    // decides, as for any other throw.
+    inp = this.rules === 'melee' ? { ...held, fire: false, melee: held.melee || press } : { ...held, fire: held.fire || !!inp.firePress };
     // Simulate exactly what the server will receive (the wire rounds values).
     const q: LocalInput = { ...inp, mx: round(inp.mx), mz: round(inp.mz), yaw: round4(inp.yaw), pitch: round4(inp.pitch) };
     this.simulate(q, frozen, true, seq);
@@ -625,7 +628,9 @@ export class GameSession {
   }
 
   private onEvent(e: SimEvent): void {
-    const meleeKey = e.k === 'swing' || e.k === 'whiff' ? `${e.k}:${e.id}` : (e.k === 'hit' || e.k === 'elim' || e.k === 'shielded') && e.m !== undefined ? `${e.k}:${e.m}` : null;
+    // Outcomes that must never be handled twice (a resent snapshot, a reconnect): melee by swing id, cafecitos by cup and time.
+    const meleeKey = e.k === 'swing' || e.k === 'whiff' ? `${e.k}:${e.id}` : (e.k === 'hit' || e.k === 'elim' || e.k === 'shielded') && e.m !== undefined ? `${e.k}:${e.m}`
+      : e.k === 'pickup' ? `pickup:${e.i}:${e.tm}` : null;
     if (meleeKey) {
       if (this.seenMelee.has(meleeKey)) { this.duplicatesDropped++; return; }
       this.seenMelee.add(meleeKey);

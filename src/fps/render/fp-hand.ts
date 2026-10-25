@@ -16,7 +16,7 @@ import { chanclaGrip, fpChanclaGeometry, fpPesadaGeometry, pesadaGrip } from './
 const SKIN = PALETTE.skin1;
 const NAIL = 0xc0142f;
 
-interface Grip { z: number; xl: number; xr: number; yb: number; yt: number }
+export interface Grip { z: number; xl: number; xr: number; yb: number; yt: number }
 
 interface GripOpts {
   /** Where the knuckles sit under the item, as a fraction of its width from the left edge. */
@@ -35,7 +35,7 @@ interface GripOpts {
  * The fingers' path round the grip cross-section: from the knuckles under the
  * item, round its left edge and back over the top face (offset by `o`).
  */
-function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
+export function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
   const pts: THREE.Vector2[] = [new THREE.Vector2(kx, g.yb - o)];
   const corner = (cx: number, cy: number, a0: number, a1: number) => {
     for (let i = 0; i <= 4; i++) { const a = a0 + ((a1 - a0) * i) / 4; pts.push(new THREE.Vector2(cx + Math.cos(a) * o, cy + Math.sin(a) * o)); }
@@ -46,7 +46,7 @@ function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
   return pts;
 }
 
-function along(path: THREE.Vector2[], dist: number): THREE.Vector2 {
+export function along(path: THREE.Vector2[], dist: number): THREE.Vector2 {
   let d = dist;
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i]!, b = path[i + 1]!, l = a.distanceTo(b);

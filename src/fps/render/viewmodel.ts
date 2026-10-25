@@ -23,6 +23,7 @@ import * as THREE from 'three';
 import { MELEE, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { applyRest, buildFpHand, FP_REST, type FpPose, type FpRig } from './fp-hand';
+import { buildFpHandArena, FP_REST_ARENA } from './fp-hand-arena';
 import { COLORS } from './materials';
 
 export interface ViewState {
@@ -142,9 +143,16 @@ const smooth = (k: number) => { const c = clamp(k, 0, 1); return c * c * (3 - 2 
 /** Layer of the timeline that drives the hand this frame. */
 const enum Layer { Idle, Throw, Melee }
 
+export interface ViewModelOptions {
+  /** Build the sculpted arena hand instead of the original one (opt-in; the campaign leaves it off). */
+  arena?: boolean;
+}
+
 export class ViewModel {
   readonly root = new THREE.Group();
   private rig: FpRig;
+  /** Both hands, each built on first use. */
+  private rigs: { base?: FpRig; arena?: FpRig } = {};
   private phase = 0;
   private team: Team | null = null;
   private pose: Pose = { ...ZERO };
@@ -159,7 +167,9 @@ export class ViewModel {
   private e = new THREE.Euler();
   private pivot = new THREE.Vector3();
   /** Rest pose of the arm and grips (kept on the instance so it can be tuned live while reviewing). */
-  private rest: FpPose = JSON.parse(JSON.stringify(FP_REST)) as FpPose;
+  private restBase: FpPose = JSON.parse(JSON.stringify(FP_REST)) as FpPose;
+  private restArena: FpPose = JSON.parse(JSON.stringify(FP_REST_ARENA)) as FpPose;
+  private rest: FpPose = this.restBase;
 
   // Secondary motion, all stepped on dt so it reads the same at any frame rate.
   private clock = 0;
@@ -196,11 +206,46 @@ export class ViewModel {
   private missOn = false;
   private carry: Pose = { ...ZERO };
 
-  constructor() {
-    this.rig = buildFpHand();
+  /**
+   * `arena`: the shooter's arena view builds the sculpted hand (fp-hand-arena.ts).
+   * Without it (the campaign) the original hand is built exactly as before.
+   */
+  constructor(opts: ViewModelOptions = {}) {
+    this.rig = this.rigFor(opts.arena === true);
     this.root.add(this.rig.root);
-    applyRest(this.rig, this.rest);
     this.setTeam(0);
+  }
+
+  /** Built with the sculpted arena hand (the constructor option, then setArena). */
+  get arena(): boolean { return this.rig === this.rigs.arena; }
+
+  /**
+   * Swaps between the original hand and the sculpted arena hand. Each is
+   * built once, on first use, and kept; switching only swaps which one is in
+   * the scene (the pose is recomputed from the same state on the next update).
+   */
+  setArena(on: boolean): void {
+    const next = this.rigFor(on);
+    if (next === this.rig) return;
+    this.root.remove(this.rig.root);
+    this.rig = next;
+    this.rest = on ? this.restArena : this.restBase;
+    this.root.add(next.root);
+    const team = this.team;
+    this.team = null;
+    if (team !== null) this.setTeam(team);
+  }
+
+  private rigFor(arena: boolean): FpRig {
+    const key = arena ? 'arena' : 'base';
+    let rig = this.rigs[key];
+    if (!rig) {
+      rig = arena ? buildFpHandArena() : buildFpHand();
+      applyRest(rig, arena ? this.restArena : this.restBase);
+      this.rigs[key] = rig;
+    }
+    this.rest = arena ? this.restArena : this.restBase;
+    return rig;
   }
 
   /** Re-applies `rest` after it was changed (review and tuning only). */

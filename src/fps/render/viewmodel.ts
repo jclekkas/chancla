@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import { MELEE, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
 import { applyRest, buildFpHand, FP_REST, type FpPose, type FpRig } from './fp-hand';
-import { buildFpHandArena, FP_REST_ARENA } from './fp-hand-arena';
+import { buildFpHandArena, FP_REST_ARENA, type HandQuality } from './fp-hand-arena';
 import { COLORS } from './materials';
 
 export interface ViewState {
@@ -146,6 +146,8 @@ const enum Layer { Idle, Throw, Melee }
 export interface ViewModelOptions {
   /** Build the sculpted arena hand instead of the original one (opt-in; the campaign leaves it off). */
   arena?: boolean;
+  /** Tessellation tier of the arena hand (default 'high'); the original hand has one tier and ignores it. */
+  quality?: HandQuality;
 }
 
 export class ViewModel {
@@ -153,6 +155,7 @@ export class ViewModel {
   private rig: FpRig;
   /** Both hands, each built on first use. */
   private rigs: { base?: FpRig; arena?: FpRig } = {};
+  private handQuality: HandQuality = 'high';
   private phase = 0;
   private team: Team | null = null;
   private pose: Pose = { ...ZERO };
@@ -211,6 +214,7 @@ export class ViewModel {
    * Without it (the campaign) the original hand is built exactly as before.
    */
   constructor(opts: ViewModelOptions = {}) {
+    this.handQuality = opts.quality ?? 'high';
     this.rig = this.rigFor(opts.arena === true);
     this.root.add(this.rig.root);
     this.setTeam(0);
@@ -236,11 +240,49 @@ export class ViewModel {
     if (team !== null) this.setTeam(team);
   }
 
+  /** The arena hand's tier (kept while the original hand is shown, and used when the arena hand is next built). */
+  get quality(): HandQuality { return this.handQuality; }
+
+  /**
+   * Rebuilds the arena hand at another tessellation tier. The new rig takes
+   * over the old one's transforms, sleeve colour and visibility at once, and
+   * everything else (weapon shown, switch, attack timelines, smoothing) lives
+   * on the view model, so the hand carries on mid-swing without a reset.
+   * The old rig is disposed (its skin, sleeve, trim and ink geometry and its
+   * materials; the chanclas' geometry, ink material and toon ramp are shared
+   * and stay). While the original hand is shown it is left alone: the arena
+   * hand, if built, is dropped and rebuilt at the new tier when next shown.
+   */
+  setQuality(q: HandQuality): void {
+    if (q === this.handQuality) return;
+    this.handQuality = q;
+    const old = this.rigs.arena;
+    if (!old) return;
+    if (this.rig !== old) { old.dispose(); delete this.rigs.arena; return; }
+    const next = buildFpHandArena(q);
+    applyRest(next, this.restArena);
+    const copy = (a: THREE.Object3D, b: THREE.Object3D) => { b.position.copy(a.position); b.quaternion.copy(a.quaternion); b.scale.copy(a.scale); b.visible = a.visible; };
+    copy(old.root, next.root);
+    copy(old.hand, next.hand);
+    for (const i of [0, 1] as const) {
+      copy(old.grips[i], next.grips[i]);
+      next.grips[i].userData.flickAxis = old.grips[i].userData.flickAxis;
+      copy(old.items[i], next.items[i]);
+      copy(old.skins[i], next.skins[i]);
+    }
+    next.sleeve.color.copy(old.sleeve.color);
+    this.root.remove(old.root);
+    this.root.add(next.root);
+    this.rigs.arena = next;
+    this.rig = next;
+    old.dispose();
+  }
+
   private rigFor(arena: boolean): FpRig {
     const key = arena ? 'arena' : 'base';
     let rig = this.rigs[key];
     if (!rig) {
-      rig = arena ? buildFpHandArena() : buildFpHand();
+      rig = arena ? buildFpHandArena(this.handQuality) : buildFpHand();
       applyRest(rig, arena ? this.restArena : this.restBase);
       this.rigs[key] = rig;
     }

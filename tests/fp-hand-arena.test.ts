@@ -122,7 +122,7 @@ describe('first-person arena hand', () => {
     };
     const arena = buildFpHandArena();
     expect(count(arena, 0)).toBe(0);
-    expect(count(arena, 1)).toBeLessThanOrEqual(1);
+    expect(count(arena, 1)).toBe(0);
   });
 
   it('stays economical: shared materials, a few draw calls, bounded triangles', () => {

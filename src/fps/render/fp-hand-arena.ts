@@ -8,7 +8,9 @@
 // into the wrist, the thumb rises from a thenar pad and presses its pad on
 // the item opposite the fingertips, and the forearm runs on under the
 // bangles to the cuff. Nails stay painted into the skin mesh; the bangles,
-// cuff and forearm share one mesh with the skin's material.
+// cuff and forearm share one mesh with the skin's material. Three tiers
+// (High, Medium, Low) sweep the same paths with fewer rings and segments, so
+// the grip and the motion are the same and only the cost changes.
 import * as THREE from 'three';
 import { PALETTE } from '../../world/palette';
 import { INK, inkHull, merge, painted, profile, trs, tube, vertexToon } from './fp-geo';
@@ -25,6 +27,48 @@ const Z = new THREE.Vector3(0, 0, 1);
 /** Rest pose: the same as the original hand (the swing pivot and every keyframe depend on it). */
 export const FP_REST_ARENA: FpPose = FP_REST;
 
+export type HandQuality = 'high' | 'medium' | 'low';
+
+/**
+ * Tessellation of one quality tier. Every tier sweeps the same paths and
+ * profiles (only the ring and segment counts change), so the grip's
+ * silhouette, the wrist point and the frames are the same on every tier.
+ */
+interface HandDetail {
+  /** Palm loft: ring vertices, body rings, rounded cap rings at each end. */
+  palm: [radial: number, steps: number, cap: number];
+  /** Finger tubes: ring vertices, body rings, cap rings at the base and the tip. */
+  finger: [radial: number, steps: number, capStart: number, capEnd: number];
+  /** Thumb tube, as the fingers. */
+  thumb: [radial: number, steps: number, capStart: number, capEnd: number];
+  /** Knuckle bumps on the back of the hand (sphere segments), or none. */
+  knuckle: [w: number, h: number] | null;
+  nail: [w: number, h: number];
+  thenar: [w: number, h: number];
+  /** Sleeve: segments round and along. */
+  sleeve: [radial: number, rows: number];
+  forearm: [radial: number, steps: number, cap: number];
+  cuff: number;
+  /** The cuff's rolled lip and the bangles: torus [tube, round] segments. */
+  lip: [number, number];
+  bangle: [number, number];
+}
+
+const DETAIL: Record<HandQuality, HandDetail> = {
+  high: {
+    palm: [14, 12, 4], finger: [8, 13, 2, 3], thumb: [9, 13, 2, 3], knuckle: [10, 6], nail: [7, 4], thenar: [12, 8],
+    sleeve: [22, 8], forearm: [14, 8, 4], cuff: 22, lip: [5, 22], bangle: [6, 20],
+  },
+  medium: {
+    palm: [10, 8, 3], finger: [7, 9, 2, 2], thumb: [8, 9, 2, 2], knuckle: [8, 4], nail: [5, 3], thenar: [10, 6],
+    sleeve: [16, 4], forearm: [10, 5, 3], cuff: 16, lip: [4, 16], bangle: [4, 14],
+  },
+  low: {
+    palm: [8, 5, 2], finger: [5, 6, 2, 2], thumb: [6, 6, 2, 2], knuckle: null, nail: [4, 2], thenar: [8, 4],
+    sleeve: [10, 2], forearm: [8, 3, 2], cuff: 12, lip: [3, 12], bangle: [3, 10],
+  },
+};
+
 interface ArenaGripOpts {
   knuckle: number;
   reach: number;
@@ -38,6 +82,30 @@ interface ArenaGripOpts {
 }
 
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+/**
+ * The thumb on a thick item (La Pesada), as offsets from the right face (x),
+ * the bottom face (y) and the thumb's plane (z): it rises from the thenar
+ * pad by the wrist, its knuckle rounds the edge of the face, and it lies
+ * across the face diagonally toward the index finger, bent at the joint so
+ * the pad of its tip is pressed on the face, opposite the fingertips.
+ */
+const ALONG_THUMB: Array<[number, number, number]> = [
+  [-0.012, -0.016, 0.024],
+  [0.009, -0.005, 0.02],
+  [0.021, 0.012, 0.016],
+  [0.019, 0.03, 0.013],
+  [0.0098, 0.047, 0.01],
+];
+const ALONG_THUMB_PROFILE = profile([
+  [0, 0.0165, 0.0142],
+  [0.3, 0.015, 0.0134],
+  [0.5, 0.014, 0.0124],
+  [0.64, 0.0128, 0.0108],
+  [0.78, 0.0134, 0.0106],
+  [0.9, 0.0124, 0.0094],
+  [1, 0.011, 0.0086],
+]);
 const TIP = new THREE.Color(0xd8846a);
 
 /** Warms a digit's colour toward its tip (flushed fingertips), in place. */
@@ -53,11 +121,11 @@ function flushTip(g: THREE.BufferGeometry, tip: THREE.Vector3, reach: number): T
 }
 
 /** A painted nail on the back of a digit's tip: `w` its half-width, `h` the digit's half-thickness there. */
-function nail(tip: THREE.Vector3, dir: THREE.Vector3, out: THREE.Vector3, w: number, h: number): THREE.BufferGeometry {
+function nail(tip: THREE.Vector3, dir: THREE.Vector3, out: THREE.Vector3, w: number, h: number, seg: [number, number]): THREE.BufferGeometry {
   const side = new THREE.Vector3().crossVectors(dir, out).normalize();
   const up = new THREE.Vector3().crossVectors(side, dir).normalize();
   const np = tip.clone().addScaledVector(dir, -w * 0.15).addScaledVector(up, h * 0.78);
-  const g = new THREE.SphereGeometry(1, 7, 4);
+  const g = new THREE.SphereGeometry(1, seg[0], seg[1]);
   const m = new THREE.Matrix4().makeTranslation(np.x, np.y, np.z).multiply(new THREE.Matrix4().makeBasis(side, up, dir)).multiply(new THREE.Matrix4().makeScale(w * 0.8, w * 0.34, w * 1.0));
   const out2 = painted(g, NAIL, m);
   g.dispose();
@@ -70,7 +138,7 @@ function nail(tip: THREE.Vector3, dir: THREE.Vector3, out: THREE.Vector3, w: num
  * face, thumb up the right edge pressing on the top (or lying along the right
  * face for thick items). Built in the item's frame.
  */
-function gripSkin(g0: Grip, opt: ArenaGripOpts): GripBuild {
+function gripSkin(g0: Grip, opt: ArenaGripOpts, dt: HandDetail): GripBuild {
   const g: Grip = { ...g0, yt: g0.yt - opt.sink };
   const parts: THREE.BufferGeometry[] = [];
   const kx = g.xl + (g.xr - g.xl) * opt.knuckle;
@@ -94,7 +162,7 @@ function gripSkin(g0: Grip, opt: ArenaGripOpts): GripBuild {
       [0.86, 0.0285, 0.0176, 2.1],
       [1, 0.0256, 0.0228, 2],
     ]);
-    parts.push(painted(tube([K, M, w0, wrist], prof, { side: Z, radial: 14, steps: 12, capStart: 4, capEnd: 4, capLen: 1 }), SKIN));
+    parts.push(painted(tube([K, M, w0, wrist], prof, { side: Z, radial: dt.palm[0], steps: dt.palm[1], capStart: dt.palm[2], capEnd: dt.palm[2], capLen: 1 }), SKIN));
   }
 
   // Fingers: index toward the toe (-Z), pinky toward the heel. Each is one
@@ -142,20 +210,20 @@ function gripSkin(g0: Grip, opt: ArenaGripOpts): GripBuild {
       [1, r * 0.82, r * 0.72],
     ]);
     // Knuckle on the back of the hand, where the finger leaves the palm.
-    {
-      const kb = new THREE.SphereGeometry(1, 10, 6);
+    if (dt.knuckle) {
+      const kb = new THREE.SphereGeometry(1, dt.knuckle[0], dt.knuckle[1]);
       const kp = j3[0]!;
       parts.push(painted(kb, SKIN, trs(kp.x + 0.003, kp.y - r * 0.4, z, 0, 0, 0, r * 1.05, r * 0.82, r * 0.92)));
       kb.dispose();
     }
-    parts.push(flushTip(painted(tube(pts, prof, { side: Z, radial: 8, steps: 13, capStart: 2, capEnd: 3, capLen: 0.95 }), SKIN), j3[3]!, 0.03));
+    parts.push(flushTip(painted(tube(pts, prof, { side: Z, radial: dt.finger[0], steps: dt.finger[1], capStart: dt.finger[2], capEnd: dt.finger[3], capLen: 0.95 }), SKIN), j3[3]!, 0.03));
     const tip = j3[3]!, dir = tip.clone().sub(j3[2]!).normalize();
     const out = v3(tip.x - THREE.MathUtils.clamp(tip.x, g.xl, g.xr), tip.y - THREE.MathUtils.clamp(tip.y, g.yb, g.yt), 0);
     if (out.lengthSq() < 1e-10) out.set(0, 1, 0);
     out.normalize();
     // Nail face: off the tip toward the back of the finger (away from the item).
     out.addScaledVector(dir, -out.dot(dir)).normalize();
-    parts.push(nail(tip, dir, out, r * 0.82, r * 0.72));
+    parts.push(nail(tip, dir, out, r * 0.82, r * 0.72, dt.nail));
   }
 
   // Thumb: from a thenar pad on the radial (index) side of the heel of the
@@ -166,10 +234,10 @@ function gripSkin(g0: Grip, opt: ArenaGripOpts): GripBuild {
   const txr = opt.edgeAt ? Math.max(g.xr, opt.edgeAt(zt - 0.02)[1]) : g.xr;
   const th = opt.thumb === 'across'
     ? [v3(g.xr - 0.004, g.yb - 0.018, zt + 0.004), v3(txr + 0.013, g.yb - 0.008, zt - 0.008), v3(txr + 0.0145, g.yt - 0.006, zt - 0.019), v3(txr + 0.001, g.yt + 0.0118, zt - 0.026), v3(txr - 0.021, g.yt + 0.0098, zt - 0.031)]
-    : [v3(g.xr - 0.008, g.yb - 0.016, zt + 0.024), v3(g.xr + 0.009, g.yb - 0.009, zt + 0.018), v3(g.xr + 0.0165, g.yb + 0.016, zt + 0.007), v3(g.xr + 0.0192, g.yb + 0.036, zt - 0.002), v3(g.xr + 0.0118, g.yb + 0.053, zt - 0.008)];
+    : ALONG_THUMB.map(([x, y, z]) => v3(g.xr + x, g.yb + y, zt + z));
   {
     const thumbSide = opt.thumb === 'across' ? v3(0.3, 0, 1).normalize() : v3(0, 0.25, 1).normalize();
-    const prof = profile([
+    const prof = opt.thumb === 'along' ? ALONG_THUMB_PROFILE : profile([
       [0, 0.0162, 0.014],
       [0.3, 0.0146, 0.0132],
       [0.5, 0.0136, 0.0124],
@@ -178,15 +246,15 @@ function gripSkin(g0: Grip, opt: ArenaGripOpts): GripBuild {
       [0.88, 0.012, 0.0096],
       [1, 0.0106, 0.0086],
     ]);
-    parts.push(flushTip(painted(tube(th, prof, { side: thumbSide, radial: 9, steps: 13, capStart: 2, capEnd: 3, capLen: 0.95 }), SKIN), th[4]!, 0.03));
+    parts.push(flushTip(painted(tube(th, prof, { side: thumbSide, radial: dt.thumb[0], steps: dt.thumb[1], capStart: dt.thumb[2], capEnd: dt.thumb[3], capLen: 0.95 }), SKIN), th[4]!, 0.03));
     const t3 = th[3]!, t4 = th[4]!;
     const out = opt.thumb === 'across' ? v3(0, 1, 0) : v3(1, 0, 0);
     const dir = t4.clone().sub(t3).normalize();
     out.addScaledVector(dir, -out.dot(dir)).normalize();
-    parts.push(nail(t4, dir, out, 0.0102, 0.0088));
+    parts.push(nail(t4, dir, out, 0.0102, 0.0088, dt.nail));
   }
   // Thenar pad: the fleshy base of the thumb, bridging palm and thumb.
-  const thenar = new THREE.SphereGeometry(1, 12, 8);
+  const thenar = new THREE.SphereGeometry(1, dt.thenar[0], dt.thenar[1]);
   const tp = opt.thumb === 'across' ? [g.xr + 0.004, g.yb - 0.017, zt - 0.002] : [g.xr - 0.002, g.yb - 0.017, zt + 0.02];
   if (opt.thumb === 'across') parts.push(painted(thenar, SKIN, trs(tp[0]!, tp[1]!, tp[2]!, 0, 0.5, 0, 0.0155, 0.011, 0.022)));
   else {
@@ -229,9 +297,9 @@ function palmar(skin: THREE.BufferGeometry, g: Grip): void {
 }
 
 /** La Pesada: the phone grip turned a quarter turn about the item's length, as in fp-hand.ts. */
-function sideGrip(g: Grip): GripBuild {
+function sideGrip(g: Grip, dt: HandDetail): GripBuild {
   const t: Grip = { z: g.z, xl: g.yb, xr: g.yt, yb: -g.xr, yt: -g.xl };
-  const b = gripSkin(t, { knuckle: 0.34, reach: 1.0, clear: 0.0032, forearm: [0.55, -0.55, 0.62], thumb: 'along', sink: 0 });
+  const b = gripSkin(t, { knuckle: 0.34, reach: 1.0, clear: 0.0032, forearm: [0.55, -0.55, 0.62], thumb: 'along', sink: 0 }, dt);
   const back = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
   b.skin.applyMatrix4(back);
   b.wrist.applyMatrix4(back);
@@ -239,24 +307,24 @@ function sideGrip(g: Grip): GripBuild {
   return b;
 }
 
-let gripCache: { light: GripBuild; heavy: GripBuild } | null = null;
-export function arenaGrips(): { light: GripBuild; heavy: GripBuild } {
-  if (!gripCache) {
-    gripCache = {
-      light: gripSkin(chanclaGrip(), { knuckle: 0.42, reach: 1.28, clear: 0.0015, forearm: [0.75, 0.2, 0.6], thumb: 'across', sink: 0.0055, edgeAt: (z) => { const [l, r] = soleEdges(z); return [l - 0.0045, r + 0.0045]; } }),
-      heavy: sideGrip(pesadaGrip()),
-    };
-  }
-  return gripCache;
+/** Both grips' skins for a tier (new geometry: the caller owns and disposes it). */
+export function arenaGrips(q: HandQuality = 'high'): { light: GripBuild; heavy: GripBuild } {
+  const dt = DETAIL[q];
+  return {
+    light: gripSkin(chanclaGrip(), { knuckle: 0.42, reach: 1.28, clear: 0.0015, forearm: [0.75, 0.2, 0.6], thumb: 'across', sink: 0.0055, edgeAt: (z) => { const [l, r] = soleEdges(z); return [l - 0.0045, r + 0.0045]; } }, dt),
+    heavy: sideGrip(pesadaGrip(), dt),
+  };
 }
 
-let armCache: { sleeve: THREE.BufferGeometry; trim: THREE.BufferGeometry } | null = null;
-/** Sleeve (team colour), and one mesh for the forearm, bangles and cuff (skin material, vertex colours). */
-export function arenaArm(): { sleeve: THREE.BufferGeometry; trim: THREE.BufferGeometry } {
-  if (armCache) return armCache;
+/**
+ * Sleeve (team colour), and one mesh for the forearm, bangles and cuff (skin
+ * material, vertex colours), for a tier (new geometry: the caller owns it).
+ */
+export function arenaArm(q: HandQuality = 'high'): { sleeve: THREE.BufferGeometry; trim: THREE.BufferGeometry } {
+  const dt = DETAIL[q];
   const flat = new THREE.Matrix4().makeScale(1, 0.86, 1);
   // Sleeve: the same extent as the original, with soft folds near the cuff.
-  const sl = new THREE.CylinderGeometry(0.068, 0.05, 0.42, 22, 8, true);
+  const sl = new THREE.CylinderGeometry(0.068, 0.05, 0.42, dt.sleeve[0], dt.sleeve[1], true);
   sl.rotateX(Math.PI / 2); sl.translate(0, 0, 0.29);
   {
     const p = sl.attributes.position!;
@@ -275,24 +343,23 @@ export function arenaArm(): { sleeve: THREE.BufferGeometry; trim: THREE.BufferGe
   const trims: THREE.BufferGeometry[] = [];
   // Forearm: on from the wrist pivot under the bangles into the cuff, round
   // where it meets the hand's wrist so a flick bends without a seam.
-  const fa = tube([v3(0, 0, 0), v3(0, 0, 0.05), v3(0, 0, 0.12)], profile([[0, 0.0244, 0.0244], [0.3, 0.0278, 0.025], [1, 0.033, 0.029]]), { side: v3(1, 0, 0), radial: 14, steps: 8, capStart: 4, capLen: 1 });
+  const fa = tube([v3(0, 0, 0), v3(0, 0, 0.05), v3(0, 0, 0.12)], profile([[0, 0.0244, 0.0244], [0.3, 0.0278, 0.025], [1, 0.033, 0.029]]), { side: v3(1, 0, 0), radial: dt.forearm[0], steps: dt.forearm[1], capStart: dt.forearm[2], capLen: 1 });
   trims.push(painted(fa, SKIN));
   fa.dispose();
   // Cream cuff: a turned-back band with a rolled lip.
-  const cuff = new THREE.CylinderGeometry(0.056, 0.05, 0.045, 22, 1, true);
+  const cuff = new THREE.CylinderGeometry(0.056, 0.05, 0.045, dt.cuff, 1, true);
   cuff.rotateX(Math.PI / 2); cuff.translate(0, 0, 0.09);
   trims.push(painted(cuff, CREAM, flat));
-  const lip = new THREE.TorusGeometry(0.0515, 0.0085, 5, 22);
+  const lip = new THREE.TorusGeometry(0.0515, 0.0085, dt.lip[0], dt.lip[1]);
   trims.push(painted(lip.translate(0, 0, 0.068), CREAM, flat));
   cuff.dispose(); lip.dispose();
   // Gold bangles, loose on the wrist and tipped a little, as they hang.
   for (const [z, R, r, tilt] of [[0.03, 0.0322, 0.0047, 0.12], [0.045, 0.0332, 0.0039, -0.08]] as const) {
-    const b = new THREE.TorusGeometry(R, r, 6, 20);
+    const b = new THREE.TorusGeometry(R, r, dt.bangle[0], dt.bangle[1]);
     trims.push(painted(b, GOLD, trs(0, -0.0025, z, tilt, 0, 0, 1, 0.84, 1)));
     b.dispose();
   }
-  armCache = { sleeve, trim: merge(trims) };
-  return armCache;
+  return { sleeve, trim: merge(trims) };
 }
 
 function mesh(g: THREE.BufferGeometry, m: THREE.Material, hull?: number): THREE.Mesh {
@@ -301,7 +368,15 @@ function mesh(g: THREE.BufferGeometry, m: THREE.Material, hull?: number): THREE.
   return me;
 }
 
-export function buildFpHandArena(): FpRig {
+/**
+ * The arena hand for a quality tier. Every tier has the same groups, frames,
+ * wrist point and draw calls (only the tessellation differs), so the motion
+ * is identical. The rig owns its skin, sleeve and trim geometry, every ink
+ * hull and its four materials, and `dispose()` frees them all; the two
+ * chanclas' geometry, the ink material and the toon ramp are shared caches
+ * and stay.
+ */
+export function buildFpHandArena(q: HandQuality = 'high'): FpRig {
   const root = new THREE.Group();
   const arm = new THREE.Group();
   const hand = new THREE.Group();
@@ -314,10 +389,12 @@ export function buildFpHandArena(): FpRig {
   const owned: THREE.BufferGeometry[] = [];
   const track = <T extends THREE.Object3D>(o: T) => { o.traverse((c) => { const m = c as THREE.Mesh; if (m.isMesh && m.material === INK) owned.push(m.geometry); }); return o; };
 
-  const a = arenaArm();
+  const a = arenaArm(q);
+  owned.push(a.sleeve, a.trim);
   arm.add(track(mesh(a.sleeve, sleeve, 0.0032)), track(mesh(a.trim, skinMat, 0.0018)));
 
-  const gb = arenaGrips();
+  const gb = arenaGrips(q);
+  owned.push(gb.light.skin, gb.heavy.skin);
   const c = fpChanclaGeometry();
   const light = new THREE.Group();
   light.add(new THREE.Mesh(c.body, itemMat), new THREE.Mesh(c.flower, flowerMat));
@@ -341,8 +418,15 @@ export function buildFpHandArena(): FpRig {
     gripGroups.push(grip);
   }
   root.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
+  root.userData.quality = q;
+  let disposed = false;
   return {
     root, arm, hand, grips: [gripGroups[0]!, gripGroups[1]!], items: [light, heavy], skins: [skins[0]!, skins[1]!], sleeve,
-    dispose() { for (const g of owned) g.dispose(); for (const m of [skinMat, sleeve, itemMat, flowerMat]) m.dispose(); },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const g of owned) g.dispose();
+      for (const m of [skinMat, sleeve, itemMat, flowerMat]) m.dispose();
+    },
   };
 }

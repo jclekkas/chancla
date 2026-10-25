@@ -90,9 +90,13 @@ describe('Rosa motion: frame-rate independence', () => {
         if (process.env.DEBUG) console.log(name, fps, d.mean.toFixed(4), d.p95.toFixed(4), d.max.toFixed(3));
         // Everything is solved for the frame's dt. Steps start and end on
         // a frame, though, so a run at 30 fps may land a step up to a frame
-        // (33 ms) apart: looser for locomotion, and only in the tail.
-        expect(d.mean).toBeLessThan(loco ? 0.03 : 0.003);
-        expect(d.p95).toBeLessThan(loco ? 0.15 : 0.01);
+        // (33 ms) apart: looser for locomotion, and only in the tail. (The
+        // run's steps are longer and fewer since the gait was matched to her
+        // speed, and a running foot meets the paving on the beat rather than
+        // hovering over its spot, so a step a frame apart differs a little
+        // more: 0.035 and 0.17, from 0.03 and 0.15.)
+        expect(d.mean).toBeLessThan(loco ? 0.035 : 0.003);
+        expect(d.p95).toBeLessThan(loco ? 0.17 : 0.01);
         if (!loco) expect(d.max).toBeLessThan(0.1);
       }
     });

@@ -259,6 +259,20 @@ describe('ProjectileView', () => {
     expect(shapes(false, 0.02).star).toBe(0);
   });
 
+  it("a player hit's speed lines carry on along the chancla's travel when it is known", () => {
+    const v = new ProjectileView(settings('high'));
+    v.impact(0, [0, 1.3, 0], true, { x: 1, y: -0.1, z: 0 });
+    v.sync(new Map(), 0, camera(0, 1.58, 4), DT);
+    const layer = (v as any).sprites.layers.get('streak') as { n: number; mesh: THREE.InstancedMesh };
+    expect(layer.n).toBe(3);
+    const m = new THREE.Matrix4(), ax = new THREE.Vector3();
+    for (let i = 0; i < layer.n; i++) {
+      layer.mesh.getMatrixAt(i, m);
+      ax.setFromMatrixColumn(m, 0).normalize(); // the streak's own axis
+      expect(ax.x).toBeGreaterThan(0.75); // all fanned around +x, none back toward the thrower
+    }
+  });
+
   it('clear() empties flight, trails and impacts; dispose() frees it', () => {
     const v = new ProjectileView(settings());
     const cam = camera();

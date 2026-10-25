@@ -195,6 +195,7 @@ interface Foot {
   s: number; q0: number; dur: number; // swing progress; gait phase at lift-off; settling-step duration (0: gait-timed)
   stx: number; stz: number; // a stumble's offset from the rest spot (world)
   lift: number; pitch: number;
+  l0: number; p0: number; // a raised heel's lift and pitch at lift-off (the swing carries on from them)
   down: boolean; // the swing has reached its spot
   err: number; // standing: how far out of place it was last frame (1: enough for a settling step)
   yOff: Spring; // a foot set down above the paving settles onto it
@@ -239,6 +240,10 @@ export class RosaAnimator {
   private bx = 0; private bz = 0; // her ground position this frame (world, plus any walk-on-the-spot offset)
   private gait = new Spring();
   private run = new Spring();
+  /** This frame's run weight (0 walk, 1 run), for the swing's lift profile. */
+  private runW = 0;
+  /** How much of a forward run this is (no heel peel strafing or backpedalling). */
+  private heelW = 0;
   private phase = 0;
   private backMode = false;
   private hipWorld = 0; private hipWorldV = 0;
@@ -258,6 +263,13 @@ export class RosaAnimator {
   private sinceReact = 1e9; private sinceHit = 1e9;
   // The startled flinch of a hit: hands up and splayed, leaning away from the blow.
   private flinchT = 1e9; private flinchK = 1; private flinchSide = 0; private flinchDur = 0.42;
+  /** How far a flinch leans her back (+1) or forward (-1, a blow from behind). */
+  private flinchBack = 1;
+  // A thrown chancla's direction (world, unit), told by the engine when the
+  // hit is confirmed; the recoil it shapes plays when the hit reaches her
+  // (msSinceHit), which can come a little before or after.
+  private hitDirX = 0; private hitDirZ = 0; private hitDirAt = -1e9;
+  private recoilAt = -1e9; private recoilBack = 1; private recoilSide = 0;
   private wob = new Float64Array(R_N); private wobV = new Float64Array(R_N);
   // The skirt: pitch and roll pendulums, and a lag behind the hips' turn and roll (the swish).
   private extX = new Pend(); private extZ = new Pend();
@@ -293,7 +305,7 @@ export class RosaAnimator {
     this.simple = !!opts.simple;
     this.blinkAt = 0.6 + 2 * hash(this.seed, 0);
     const mk = (side: number): Foot => ({
-      side, planted: true, wx: 0, wz: 0, yaw: 0, sx: 0, sz: 0, syaw: 0, s: 1, q0: 0, dur: 0, stx: 0, stz: 0, lift: 0, pitch: 0, down: false, err: 0,
+      side, planted: true, wx: 0, wz: 0, yaw: 0, sx: 0, sz: 0, syaw: 0, s: 1, q0: 0, dur: 0, stx: 0, stz: 0, lift: 0, pitch: 0, l0: 0, p0: 0, down: false, err: 0,
       yOff: new Spring(), ax: new Spring(), ay: new Spring(), az: new Spring(), lx: side * STANCE_W, ly: GROUND, lz: 0,
     });
     this.feet = [mk(-1), mk(1)];
@@ -314,15 +326,55 @@ export class RosaAnimator {
   /**
    * A cartoon flinch from a melee hit: the head snaps aside and the upper
    * body twists, with a little wobble. `side`: +1 knocked to her left, -1 to her right.
+   * `push` (optional): how much the blow travels toward her back (the blow
+   * direction on her facing, reversed: about +0.4 for a swing from in front
+   * of her, negative from behind). A blow from behind snaps the head and
+   * shoulders forward instead of back; from in front it is as before.
    */
-  react(head: boolean, side: number): void {
+  react(head: boolean, side: number, push = 1): void {
     const sd = side >= 0 ? 1 : -1;
     // The snapshot side of the same blow may have recoiled her already: add less.
     const k = this.sinceHit < 0.25 ? 0.7 : 1;
+    const pb = clamp(push / 0.2, -1, 1);
     this.sinceReact = 0;
-    this.flinchT = 0; this.flinchK = k * (head ? 1 : 0.75); this.flinchSide = sd; this.flinchDur = head ? 0.46 : 0.38;
-    if (head) this.kick(k, sd * 13, sd * 7, 6, sd * 3.5, sd * 2.2, 3.2, 9, 0.35);
+    this.flinchT = 0; this.flinchK = k * (head ? 1 : 0.75); this.flinchSide = sd; this.flinchDur = head ? 0.46 : 0.38; this.flinchBack = pb;
+    if (head) this.kick(k, sd * 13, sd * 7, 6 * pb, sd * 3.5, sd * 2.2, 3.2 * pb, 9, 0.35);
     else this.kick(k, sd * 6, sd * 3, -2, sd * 5, sd * 1.5, -3.5, 6, 0.45);
+  }
+
+  /**
+   * A confirmed throw hit on her: the direction the chancla travelled
+   * (world x, z). Her recoil goes with it: knocked back from in front,
+   * forward from behind, twisted aside from the side. Without one (or if it
+   * comes late) the recoil is straight back, as before.
+   */
+  hitFrom(dx: number, dz: number): void {
+    const l = Math.hypot(dx, dz);
+    if (!(l > 1e-6)) return;
+    this.hitDirX = dx / l; this.hitDirZ = dz / l; this.hitDirAt = this.time;
+    // The recoil has just played undirected (the hit reached her first): turn it the right way.
+    if (this.time - this.recoilAt < 0.15 && this.recoilBack === 1 && this.recoilSide === 0) {
+      this.recoil(-1, 1, 0);
+      this.aimRecoil();
+    }
+  }
+
+  /** The recoil of a throw hit, along the last told direction if it is fresh. */
+  private aimRecoil(): void {
+    let back = 1, side = 0;
+    if (this.time - this.hitDirAt < 1) {
+      const yaw = this.rig.root.rotation.y, sn = Math.sin(yaw), cs = Math.cos(yaw);
+      // Her forward is (-sin, -cos), her left (-cos, sin).
+      back = clamp((this.hitDirX * sn + this.hitDirZ * cs) / 0.5, -1, 1);
+      side = this.hitDirX * -cs + this.hitDirZ * sn;
+      this.hitDirAt = -1e9;
+    }
+    this.recoil(1, back, side);
+  }
+
+  private recoil(k: number, back: number, side: number): void {
+    this.kick(k, side * 5, side * 2.5, 5 * back, side * 3, side * 1.2, 4.5 * back, 7, 0.3);
+    if (k > 0) { this.recoilAt = this.time; this.recoilBack = back; this.recoilSide = side; this.flinchBack = back; }
   }
 
   /**
@@ -347,7 +399,8 @@ export class RosaAnimator {
     this.wob.fill(0); this.wobV.fill(0);
     for (const sp of [this.squash, this.crouch, this.air, this.tuck, this.lean, this.roll, this.vx, this.vz, this.gait, this.run, this.sideness, this.lid, this.browUp, this.browKnit]) sp.set(0);
     this.clearCloth();
-    this.whiffT = 1e9; this.flinchT = 1e9;
+    this.whiffT = 1e9; this.flinchT = 1e9; this.flinchBack = 1;
+    this.hitDirAt = this.recoilAt = -1e9;
     this.vy = this.airVy = 0;
     this.walking = false; this.prevSpeed = 0; this.walkFrac = 1; this.backMode = false; this.phase = 0; this.settleHold = 0;
     this.onGround = true;
@@ -411,7 +464,7 @@ export class RosaAnimator {
     this.walkFrac = !wasWalking && this.walking ? clamp((speed - 0.35) / Math.max(1e-6, speed - this.prevSpeed), 0, 1) : 1;
     this.prevSpeed = speed;
     const gw = this.gait.to(this.walking ? Math.min(1, speed / 1.2) : 0, 9, dt);
-    const run = this.run.to(clamp((speed - 2.2) / 2.8, 0, 1) * (1 - cr), 6, dt);
+    const run = this.runW = this.run.to(clamp((speed - 2.2) / 2.8, 0, 1) * (1 - cr), 6, dt);
 
     // Motion direction and the pelvis. Strafing turns the hips (and the
     // stride) part way toward the motion while the shoulders and head stay
@@ -439,14 +492,23 @@ export class RosaAnimator {
     const side = this.sideness.to(this.walking ? Math.abs(Math.sin(Math.atan2(vR, vF) + hipYawLoco)) : 0, 8, dt);
 
     // Gait from speed: the stride (two steps) grows with speed, and each
-    // foot's share on the ground shrinks into a run.
-    // (Never more than about 3.3 strides a second: a frantic patter reads as a glitch.)
-    const D = Math.max((0.55 + 0.27 * speed) * (1 - 0.3 * cr) * (1 - 0.3 * side) * (this.backMode ? 0.8 : 1), speed / 3.3);
-    const beta = clamp((0.56 + 0.15 * cr) / D, 0.3, 0.64);
+    // foot's share on the ground shrinks into a run. Matched to her 0.83 m
+    // legs: about 2.6 to 3 steps a second at 1.5 m/s and 4.3 to 4.7 at the game's 6 m/s
+    // run (2.8 m strides with a flight phase; never more than 2.6 strides a
+    // second); the earlier 6 steps a second in the run read as a patter, the
+    // feet out of step with the ground going by. Crouched she keeps short
+    // quick steps (at most 3.3 strides a second): longer ones push the
+    // knees out through the skirt.
+    const dirK = (1 - 0.3 * side) * (this.backMode ? 0.8 : 1);
+    const Dstand = Math.max((0.62 + 0.36 * speed) * dirK, speed / 2.6), Dcrouch = Math.max((0.55 + 0.27 * speed) * 0.7 * dirK, speed / 3.3);
+    const D = Dstand + (Dcrouch - Dstand) * cr;
+    const beta = clamp((0.56 + 0.04 * Math.min(speed, 2) * (1 - cr) + 0.15 * cr) / D, 0.3 - 0.04 * run, 0.64);
     const E = beta * D;
     const freq = Math.max(speed / D, 1.1);
     const W = STANCE_W + 0.04 * cr + 0.07 * side;
-    const H = Math.min(0.17, 0.06 + 0.02 * speed) * (1 - 0.7 * cr); // crouched: short, low steps that stay under the skirt
+    this.heelW = run * (1 - side) * (this.backMode ? 0 : 1);
+    // Running, the heel kicks up higher behind her (still under the hem's swing).
+    const H = (Math.min(0.17, 0.06 + 0.02 * speed) + 0.04 * run) * (1 - 0.7 * cr); // crouched: short, low steps that stay under the skirt
 
     // ---- Actions, each on its own clock ----
     const def = WEAPONS[s.weapon]!, mdef = MELEE[s.weapon]!;
@@ -459,7 +521,7 @@ export class RosaAnimator {
       // A hit (a throw, or the snapshot side of a melee blow): a recoil back,
       // unless react() already gave this blow its own.
       if (this.sinceReact > 0.25) {
-        this.kick(1, 0, 0, 5, 0, 0, 4.5, 7, 0.3);
+        this.aimRecoil();
         // On the hit's own clock (it may have landed between frames).
         this.flinchT = clamp(s.msSinceHit / 1000, 0, dt) - dt; this.flinchK = 0.55; this.flinchSide = 0; this.flinchDur = 0.34;
       }
@@ -568,6 +630,15 @@ export class RosaAnimator {
     const stride = clamp((fwdL - fwdR) / Math.max(E, 0.3), -1.2, 1.2) * gw * (1 - airW);
     const strideTw = -stride * (0.1 + 0.06 * run) * sec;
     let hipsY = RIG.hipY - 0.4 * cr - 0.05 * run * gw - this.squash.x + 0.004 * breath * idleW - wob[R_DROP]! * 0.12;
+    // Weight on a bent leg: running and crouch-walking, the hips sink a
+    // little through each foot's stance (lowest as she passes over it) and
+    // rise again into the next step, so the weight visibly goes onto each
+    // foot. (A straight-legged walk gets its bob from the reach to the feet.)
+    if (this.walking && s.onGround) {
+      let comp = 0;
+      for (let i = 0; i < 2; i++) { const ph = (this.phase + 0.5 * i) % 1; if (ph < beta && ft[i]!.planted) comp = Math.max(comp, Math.sin(Math.PI * ph / beta)); }
+      hipsY -= (0.035 * run + 0.015 * cr) * gw * comp * sec;
+    }
     hipsY -= (body.hd * bodyW + 0.05 * wf) * mAmp;
     const hipYaw = hipYawLoco + strideTw + (body.hy * bodyW - 0.18 * wsgn * wf) * mAmp;
     // Waddle: the hip over the swinging leg drops; standing, a slow weight shift.
@@ -581,7 +652,11 @@ export class RosaAnimator {
         const hx = f.side * RIG.legX * Math.cos(hipYaw), hz = -f.side * RIG.legX * Math.sin(hipYaw);
         const dx = f.lx - hx, dz = f.lz - hz;
         const rr = Math.min(dx * dx + dz * dz, SOFT_REACH * SOFT_REACH * 0.92);
-        const cap = f.ly - RIG.legY + Math.sqrt(SOFT_REACH * SOFT_REACH - rr) - Math.abs(RIG.legX * Math.sin(hipRoll));
+        let cap = f.ly - RIG.legY + Math.sqrt(SOFT_REACH * SOFT_REACH - rr) - Math.abs(RIG.legX * Math.sin(hipRoll));
+        // Running, a swinging leg folds instead of pulling her down: only a
+        // foot about to land (or still on the ground) holds the hips, so she
+        // is highest between steps, not lowest.
+        if (!f.planted && !f.down) cap += 0.5 * run * (1 - smooth((f.s - 0.6) / 0.36));
         hipsY = smin(hipsY, cap, 0.03);
       }
       hipsY = Math.max(hipsY, hipFloor - (body.hd * bodyW + 0.05 * wf) * mAmp - this.squash.x - 0.03 * fl);
@@ -614,7 +689,7 @@ export class RosaAnimator {
     let torsoX = leanF - 0.075 * run * gw - 0.2 * cr + 0.012 * breath * idleW + pitch * 0.18 + (body.lx * bodyW - 0.14 * wf) * mAmp;
     if (this.backMode && this.walking) torsoX += 0.07 * gw;
     torsoX += -this.squash.x * 1.4 + airW * (this.tuck.x * 0.12 - 0.06);
-    raw[TX] = torsoX + wob[R_TORX]! + 0.2 * fl;
+    raw[TX] = torsoX + wob[R_TORX]! + 0.2 * fl * this.flinchBack;
     // Shoulders: the pelvis's turn mostly undone, the stride countered, the action's own twist.
     raw[TY] = -hipYawLoco * 0.8 - strideTw * 1.6 - (body.hy * bodyW - 0.18 * wsgn * wf) * mAmp + tw + wob[R_TORY]! + fs * 0.22 * fl;
     raw[TZ] = -hipRoll * 0.6 + leanR * 0.6 + (body.lz * bodyW + 0.1 * wsgn * wf) * mAmp - 0.02 * sway * idleW + wob[R_TORZ]!;
@@ -757,12 +832,13 @@ export class RosaAnimator {
 
   private lift(f: Foot, q0: number, dur: number): void {
     f.planted = false; f.down = false; f.sx = f.wx - this.bx; f.sz = f.wz - this.bz; f.syaw = f.yaw; f.s = 0; f.q0 = q0; f.dur = dur;
+    f.l0 = f.lift; f.p0 = f.pitch;
   }
 
   private plant(f: Foot): void {
     f.planted = true; f.s = 1;
     f.yOff.x += f.lift; f.yOff.v = 0; // set down from wherever the swing was
-    f.lift = 0; f.pitch = 0; f.stx = f.stz = 0;
+    f.lift = 0; f.pitch = 0; f.l0 = f.p0 = 0; f.stx = f.stz = 0;
   }
 
   /** Steps the feet on the ground: timed by the gait while she moves, settling steps when she stands. */
@@ -790,18 +866,30 @@ export class RosaAnimator {
         const ph = (this.phase + 0.5 * i) % 1;
         const stance = ph < beta;
         const q = stance ? 0 : (ph - beta) / (1 - beta);
-        if (f.planted) { if (!stance) this.lift(f, q, 0); else continue; }
+        if (f.planted) {
+          if (!stance) this.lift(f, q, 0);
+          else {
+            // Running, the heel peels off the paving late in the stance (the
+            // toes stay where they are): the leg pushes off rather than
+            // dragging the hips down to reach a foot far behind.
+            const hr = 0.07 * this.heelW * smooth((ph / beta - 0.5) / 0.5);
+            f.lift = hr; f.pitch = -6 * hr;
+            continue;
+          }
+        }
         else if (stance) { this.plant(f); continue; }
         else if (f.dur > 0) { f.q0 = Math.min(0.95, (q - f.s) / Math.max(0.05, 1 - f.s)); f.dur = 0; } // a settling step caught by the gait
         f.s = clamp((q - f.q0) / Math.max(0.05, 1 - f.q0), 0, 1);
         // Land half a stance ahead of where the hip will be by then.
-        const tLeft = (1 - ph) / freq, ahead = E * 0.5;
+        // (Running, a little less far ahead: a runner lands nearer under herself and pushes off further back.)
+        const tLeft = (1 - ph) / freq, ahead = E * (0.5 - 0.14 * this.runW);
         this.swingTo(f, vx * tLeft + ux * ahead, vz * tLeft + uz * ahead, hc, hs, W, H);
       }
       return;
     }
     // Standing: finish any step, then settle a foot that is out of place.
     this.gaitIdle = true;
+    for (let fi = 0; fi < ft.length; fi++) { const f = ft[fi]!; if (f.planted && f.lift > 0) { f.yOff.x += f.lift; f.lift = 0; f.pitch = 0; } } // a raised heel settles back down
     this.settleHold -= dt;
     let busy = false;
     for (let fi = 0; fi < ft.length; fi++) { const f = ft[fi]!;
@@ -835,16 +923,24 @@ export class RosaAnimator {
   private swingTo(f: Foot, cx: number, cz: number, hc: number, hs: number, W: number, H: number): void {
     const tx = cx + f.side * W * hc, tz = cz - f.side * W * hs;
     // The foot is down on its spot a moment before the beat, so it is set down flat, not dropped.
-    const u = Math.min(1, f.s / 0.88), k = smooth(u);
+    // (A gait step comes down closer to the beat: hovering over its spot, the
+    // foot would turn in place; running, it lands on the beat, no time to hover.)
+    const u = Math.min(1, f.s / (f.dur > 0 ? 0.88 : 0.94 + 0.06 * this.runW)), k = smooth(f.dur > 0 ? u : u / ((1 - 0.1 * this.runW) * 0.95)); // (over its spot a moment before it touches)
     if (u < 1 || !f.down) {
       f.wx = this.bx + f.sx + (tx - f.sx) * k;
       f.wz = this.bz + f.sz + (tz - f.sz) * k;
       f.down = u >= 1; // once down it stays put until the beat plants it
     }
     f.yaw = f.syaw + wrapAngle(this.hipWorld + f.side * TOE_OUT - f.syaw) * k;
-    f.lift = H * Math.sin(Math.PI * u);
+    // Walking, the foot rises and falls evenly; running, the heel comes up
+    // quickly behind her as the foot leaves, and the leg reaches forward and
+    // down into the next step.
+    const r = this.runW;
+    f.lift = H * ((1 - r) * Math.sin(Math.PI * u) + r * 6.75 * u * (1 - u) * (1 - u)); // (run: highest a third of the way, coming down flat)
     // Toe down as it leaves, toe up as it reaches.
     f.pitch = Math.sin(Math.PI * u) * (-0.55 * (1 - u) + 0.35 * u);
+    // From a raised heel (running), the swing starts where the push-off left the foot.
+    if (f.l0 > 0 || f.p0 !== 0) { const h = 1 - smooth(u / 0.35); f.lift = Math.max(f.lift, f.l0 * h); f.pitch += f.p0 * h; }
   }
 
   /** A miss throws her weight over: one foot steps out the way the swing went. */

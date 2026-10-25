@@ -127,7 +127,7 @@ class Ribbons {
   dispose(): void { this.geo.dispose(); (this.mesh.material as THREE.Material).dispose(); }
 }
 
-interface Impact { weapon: WeaponId; player: boolean; ground: boolean; x: number; y: number; z: number; age: number; life: number; born: number; seed: number }
+interface Impact { weapon: WeaponId; player: boolean; ground: boolean; x: number; y: number; z: number; age: number; life: number; born: number; seed: number; dx: number; dy: number; dz: number; dir: boolean }
 
 /** Impact effects alive at once; the oldest is reused beyond this. */
 export const IMPACT_POOL = 12;
@@ -169,7 +169,7 @@ export class ProjectileView {
       }
     }
     this.group.add(this.ribbons.mesh, this.sprites.group, this.particles.mesh);
-    for (let i = 0; i < IMPACT_POOL; i++) this.impacts.push({ weapon: 0, player: false, ground: false, x: 0, y: 0, z: 0, age: 1, life: 0, born: 0, seed: 0 });
+    for (let i = 0; i < IMPACT_POOL; i++) this.impacts.push({ weapon: 0, player: false, ground: false, x: 0, y: 0, z: 0, age: 1, life: 0, born: 0, seed: 0, dx: 0, dy: 0, dz: 0, dir: false });
   }
 
   clear(): void {
@@ -183,9 +183,10 @@ export class ProjectileView {
   /**
    * A projectile landed. Surfaces: a dust puff (with a scuff ring on the
    * paving); a player: a slap star, warm and brighter, so the two never
-   * look alike.
+   * look alike. `dir`: the chancla's travel when it landed (a player hit's
+   * speed lines then carry on the way it was going, out of the far side).
    */
-  impact(weapon: WeaponId, pos: [number, number, number], player: boolean): void {
+  impact(weapon: WeaponId, pos: [number, number, number], player: boolean, dir?: { x: number; y: number; z: number }): void {
     let im = this.impacts[0]!;
     for (const x of this.impacts) {
       if (x.age >= x.life) { im = x; break; }
@@ -194,6 +195,9 @@ export class ProjectileView {
     im.weapon = weapon; im.player = player; im.x = pos[0]; im.y = pos[1]; im.z = pos[2];
     im.ground = !player && pos[1] < 0.35;
     im.age = 0; im.life = weapon === 1 ? IMPACT_LIFE.heavy : IMPACT_LIFE.light; im.born = ++this.seq; im.seed = (this.seq * 3.7) % 89;
+    const dl = dir ? Math.hypot(dir.x, dir.y, dir.z) : 0;
+    im.dir = dl > 1e-6;
+    if (im.dir) { im.dx = dir!.x / dl; im.dy = dir!.y / dl; im.dz = dir!.z / dl; }
     // A few real bits on High and Medium (Low: the shapes alone).
     const q = this.settings.quality;
     if (q !== 'low') {
@@ -261,9 +265,19 @@ export class ProjectileView {
         const [a, sz] = nearSafe(d, (heavy ? 0.36 : 0.24) * k * pop(t, reduced), this.safe);
         s.add('star', im.x, im.y, im.z, v.billboard(im.seed + (reduced ? 0 : t), this.q), sz, sz, sz, heavy ? IC.slapHeavy : IC.slap, (1 - smooth(0.45, 1, t)) * a);
         if (q !== 'low') {
-          for (let i = 0; i < (heavy ? 4 : 3); i++) {
-            const an = hash(im.seed, i) * 6.283, dx = Math.cos(an), dy = Math.sin(an);
-            const wx = v.right.x * dx + v.up.x * dy, wy = v.right.y * dx + v.up.y * dy, wz = v.right.z * dx + v.up.z * dy;
+          const n = heavy ? 4 : 3;
+          for (let i = 0; i < n; i++) {
+            let wx: number, wy: number, wz: number;
+            if (im.dir) {
+              // Fanned around the chancla's travel (mostly level), so the hit reads from where it came.
+              const sp = ((i / (n - 1)) - 0.5) * 1.0 + (hash(im.seed, i) - 0.5) * 0.25, c = Math.cos(sp), sn = Math.sin(sp);
+              const hl = Math.hypot(im.dx, im.dz) || 1, hx = im.dx / hl, hz = im.dz / hl;
+              wx = hx * c - hz * sn; wz = hx * sn + hz * c; wy = Math.max(-0.35, Math.min(0.35, im.dy)) + (hash(im.seed, i + 9) - 0.5) * 0.5;
+              const nl = Math.hypot(wx, wy, wz); wx /= nl; wy /= nl; wz /= nl;
+            } else {
+              const an = hash(im.seed, i) * 6.283, dx = Math.cos(an), dy = Math.sin(an);
+              wx = v.right.x * dx + v.up.x * dy; wy = v.right.y * dx + v.up.y * dy; wz = v.right.z * dx + v.up.z * dy;
+            }
             const st = (heavy ? 0.18 : 0.12) + 0.25 * smooth(0, 0.7, t) * (reduced ? 0.5 : 1);
             const px = im.x + wx * st, py = im.y + wy * st, pz = im.z + wz * st;
             const [la, ls] = nearSafe(v.dist(px, py, pz), (heavy ? 0.22 : 0.15) * (1 - 0.5 * t), this.safe);

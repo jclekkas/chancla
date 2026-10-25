@@ -134,6 +134,40 @@ describe('Rosa animation: locomotion', () => {
     expect(steps(drive(rig, anim, 3, () => ({ x: 1, z: 2 })), 0.5)).toBe(0);
   });
 
+  it("the run's cadence suits its speed: about 4 to 5 steps a second at 6 m/s, highest between steps", () => {
+    const { rig, anim } = make();
+    const fr = drive(rig, anim, 3, (t) => ({ x: 6 * t, z: 0 }));
+    const n = steps(fr, 1) / 2; // over the last 2 s
+    expect(n).toBeGreaterThanOrEqual(3.8);
+    expect(n).toBeLessThanOrEqual(5);
+    // The hips: higher with both feet off the paving than with one on it (a run's flight).
+    let air = 0, na = 0, down = 0, nd = 0;
+    for (const f of fr) {
+      if (f.t < 1) continue;
+      const off = f.feet.every((p) => p.y > GROUND + 0.03);
+      if (off) { air += f.pose[0]!; na++; } else { down += f.pose[0]!; nd++; }
+    }
+    expect(na).toBeGreaterThan(10);
+    expect(air / na).toBeGreaterThan(down / nd + 0.01);
+  });
+
+  it('a throw hit recoils her along the throw: back from in front, forward from behind', () => {
+    const lean = (dir: [number, number] | null) => {
+      const { rig, anim } = make();
+      // She faces -z (yaw 0). In front of her, the chancla travels +z; from behind, -z.
+      drive(rig, anim, 0.5, () => ({ x: 0, z: 0, yaw: 0 }));
+      if (dir) anim.hitFrom(dir[0], dir[1]);
+      const fr = drive(rig, anim, 0.25, (t) => ({ x: 0, z: 0, yaw: 0, s: { msSinceHit: (t - 0.5) * 1000 } }), false, 0.5);
+      // The torso's pitch (+ back) at its largest swing from where it stood.
+      const c = 1 + 3 * JOINTS.indexOf('torso'), rest = fr[0]!.pose[c]!;
+      return fr.reduce((m, f) => (Math.abs(f.pose[c]! - rest) > Math.abs(m) ? f.pose[c]! - rest : m), 0);
+    };
+    expect(lean(null)).toBeGreaterThan(0.1); // undirected: back, as before
+    expect(lean([0, 1])).toBeGreaterThan(0.1); // from in front: back
+    expect(lean([0, -1])).toBeLessThan(-0.1);
+    expect(Math.abs(lean([1, 0]))).toBeLessThan(0.05); // from the side: twisted aside, not pitched // from behind: forward
+  });
+
   it('settles with a step after stopping, then stands still', () => {
     const { rig, anim } = make();
     const fr = drive(rig, anim, 4, (t) => ({ x: Math.min(t, 1.2) * 6, z: 0 }));

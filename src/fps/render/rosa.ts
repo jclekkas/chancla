@@ -76,8 +76,12 @@ export class Avatar {
   /**
    * A cartoon flinch from a melee hit: the head snaps aside and the upper
    * body twists, for a third of a second. `side`: +1 knocked to her left, -1 to her right.
+   * `push`: the blow's travel toward her back (negative: from behind; see RosaAnimator.react).
    */
-  react(head: boolean, side: number): void { this.anim.react(head, side); }
+  react(head: boolean, side: number, push?: number): void { this.anim.react(head, side, push); }
+
+  /** A confirmed throw hit: the chancla's travel (world x, z), so her recoil goes with it. */
+  hitFrom(dx: number, dz: number): void { this.anim.hitFrom(dx, dz); }
 
   /**
    * Starts her motion afresh (smoothing, cloth, gait, reactions): for an

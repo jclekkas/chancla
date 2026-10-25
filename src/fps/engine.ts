@@ -522,6 +522,8 @@ export class Engine {
         break;
       case 'hit': {
         if (e.m !== undefined) { this.onMeleeHit(e); break; }
+        // [motion] A throw hit: her recoil follows the chancla's travel (thrower to contact).
+        if (e.v !== me) { const a = e.a === me ? s.body : s.remotes.get(e.a); if (a) this.avatars.get(e.v)?.hitFrom(e.p[0] - a.x, e.p[2] - a.z); }
         if (e.a === me && e.v !== me) {
           this.hud.hitMarker(e.head ? 'head' : 'body');
           this.sfx(e.head ? 'headshot' : 'hitConfirm');
@@ -572,6 +574,10 @@ export class Engine {
         if (e.v === me) { this.sfx('died'); this.hud.center(t('hud.eliminatedBy', { name: this.nameOf(e.a) }), 2.2); }
         break;
       }
+      case 'pend':
+        // [motion] Someone else's chancla that ended on a player: its impact is drawn as a hit, not as dust.
+        if (e.r === 'player') { this.pendOnPlayer.add(`s${e.id}`); if (this.pendOnPlayer.size > 64) this.pendOnPlayer.delete(this.pendOnPlayer.values().next().value!); }
+        break;
       case 'spawn':
         if (e.id === me) audio.play('spawn');
         break;
@@ -647,7 +653,8 @@ export class Engine {
         const r = s.remotes.get(e.v);
         const yaw = r ? r.yaw : 0;
         const left = { x: -Math.cos(yaw), z: Math.sin(yaw) };
-        av.react(e.head, dir.x * left.x + dir.z * left.z);
+        // [motion] and how much the blow travels toward her back (from behind: forward).
+        av.react(e.head, dir.x * left.x + dir.z * left.z, dir.x * Math.sin(yaw) + dir.z * Math.cos(yaw));
       }
       // Your own face: the contact effect would fill the view, so it is not drawn.
       if (e.v !== me && !this.replay) this.fx.meleeHit(e.w, { x: e.p[0], y: e.p[1], z: e.p[2] }, dir, e.head);
@@ -738,9 +745,15 @@ export class Engine {
     this.sfx(weapon === 1 ? 'throwHeavy' : 'throw');
   }
 
+  /** [motion] Remote chanclas the server said ended on a player (the session reports their end as 'world'). */
+  private pendOnPlayer = new Set<string>();
+
   onImpact(p: ClientProjectile, pos: [number, number, number], reason: string): void {
     if (this.replay) return;
-    this.proj.impact(p.weapon, pos, reason === 'player');
+    const b = this.session?.body;
+    // (Not one that hit you: nothing new drawn over your own view.)
+    const onPlayer = reason === 'player' || (this.pendOnPlayer.delete(p.id) && !(b && Math.hypot(pos[0] - b.x, pos[2] - b.z) < 0.9));
+    this.proj.impact(p.weapon, pos, onPlayer, { x: p.pr.vx, y: p.pr.vy, z: p.pr.vz }); // [motion] with its travel
     const k = this.near(pos);
     if (k > 0.05) this.sfx(p.weapon === 1 ? 'heavyImpact' : 'thwap', k);
   }
@@ -1149,10 +1162,11 @@ export class Engine {
         const dir = blowDir(players.get(e.a)?.yaw ?? 0, e.w);
         if (e.m !== undefined) {
           const vp = players.get(e.v);
-          if (vp) r.avatars.get(e.v)?.react(e.head, dir.x * -Math.cos(vp.yaw) + dir.z * Math.sin(vp.yaw));
+          if (vp) r.avatars.get(e.v)?.react(e.head, dir.x * -Math.cos(vp.yaw) + dir.z * Math.sin(vp.yaw), dir.x * Math.sin(vp.yaw) + dir.z * Math.cos(vp.yaw)); // [motion] push
           this.fx.meleeHit(e.w, { x: e.p[0], y: e.p[1], z: e.p[2] }, dir, e.head);
           if (e.m === c.finishSwing) cue(e.w === 1 ? 'paf' : 'slap');
         }
+        else { const ap = players.get(e.a); if (ap) r.avatars.get(e.v)?.hitFrom(e.p[0] - ap.x, e.p[2] - ap.z); } // [motion] a throw hit's recoil direction
         if (e.ru?.length) this.replayRuleros(r, e.v, e.ru, dir, false);
         break;
       }

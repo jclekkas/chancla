@@ -1316,5 +1316,7 @@ function disposeTree(root: THREE.Object3D): void {
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
     if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
     else mat?.dispose?.();
+    // A shadow-casting light owns its shadow map (a render target the renderer otherwise keeps).
+    (o as THREE.DirectionalLight).shadow?.dispose();
   });
 }

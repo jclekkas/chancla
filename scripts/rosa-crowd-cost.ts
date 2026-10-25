@@ -1,8 +1,9 @@
-// Several characters in view: offline practice in El Patio with three
-// teammates and three opponents (bots frozen), all six lined up 6 m in front
-// of the camera, and the renderer's whole-frame counts (scene, shadow and
-// hand passes) averaged over 30 frames, first with the current Rosa, then
-// with the candidate model on team Sol, in the same page and the same state.
+// Several characters in view: offline practice in El Patio with practice's
+// largest lineup (one teammate, two opponents; bots frozen), all lined up
+// 6 m in front of the camera, and the renderer's whole-frame counts (scene,
+// shadow and hand passes) averaged over 30 frames, first with the current
+// Rosa, then with the candidate model on team Sol, in the same page and the
+// same state. The staging is re-applied until the view is settled.
 //
 //   DIST=<build> [Q=high] [PORT=4247] [OUT=<dir>] node --import tsx scripts/rosa-crowd-cost.ts
 import fs from 'node:fs';
@@ -27,7 +28,7 @@ try {
   const ctx = await browser.newContext(phone ? { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 720 } });
   await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p = await ctx.newPage();
-  const settings = { practiceMap: 'patio', practiceAllies: 3, practiceEnemies: 3, practiceDifficulty: 'easy', quality: Q, qualityMode: Q, music: 0, lang: 'en', name: 'Rosa' };
+  const settings = { practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 2, practiceDifficulty: 'easy', quality: Q, qualityMode: Q, music: 0, lang: 'en', name: 'Rosa' };
   await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
   await p.goto(SITE);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
@@ -49,8 +50,7 @@ try {
   });
   out.lineup = await stage();
   const measure = async (label: string) => {
-    await stage();
-    await sleep(2500);
+    for (let i = 0; i < 12; i++) { await stage(); await sleep(250); }
     if (OUT) { fs.mkdirSync(OUT, { recursive: true }); await p.screenshot({ path: path.join(OUT, `crowd-${Q}-${label}.png`) }); }
     return p.evaluate(() => new Promise((res) => {
       const e = (window as any).__fps.engine(), r = e.renderer;

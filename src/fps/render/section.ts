@@ -121,6 +121,34 @@ function chunkOf(b: MapBox): string {
 const SOFFIT = 0.78;
 /** A facade's top band under its eave: from 1 at EAVE_BAND below the roofline to EAVE_K at it. */
 const EAVE_BAND = 1.3, EAVE_K = 0.84;
+/**
+ * Weathering by height on plaster that stands on the ground, as control
+ * points (height, shade) the wall's vertex colours run through linearly:
+ * the foot darker and stained (splash and rising damp), easing out by about
+ * 2.2 m, a slightly deeper middle, and the top paler, sun-bleached, up to
+ * the eave band (which then darkens toward the roofline as before). A wall
+ * body is drawn in rows at these heights: two triangles per face per row.
+ */
+const FOOT: ReadonlyArray<readonly [number, number]> = [[0, 0.74], [0.9, 0.79], [2.4, 0.95]];
+const WALL_MID = 0.95, WALL_TOP = 1, BLEACH_BAND = 1.6;
+function weatherRows(minY: number, maxY: number, eave: boolean): Array<[number, number]> {
+  const pts: Array<[number, number]> = [];
+  if (minY <= 0.001) { for (const [y, k] of FOOT) if (y < maxY - 0.3) pts.push([y, k]); } else pts.push([minY, WALL_MID]);
+  const yb = maxY - (eave ? EAVE_BAND : BLEACH_BAND);
+  if (yb > pts[pts.length - 1]![0] + 0.3) pts.push([yb, WALL_TOP]);
+  pts.push([maxY, eave ? EAVE_K : WALL_TOP]);
+  return pts;
+}
+/** The weathering shade at height y on a wall from minY to maxY (see weatherRows). */
+function weatherAt(y: number, minY: number, maxY: number, eave: boolean): number {
+  const pts = weatherRows(minY, maxY, eave);
+  if (y <= pts[0]![0]) return pts[0]![1];
+  for (let i = 1; i < pts.length; i++) {
+    const [y0, k0] = pts[i - 1]!, [y1, k1] = pts[i]!;
+    if (y <= y1) return k0 + (k1 - k0) * (y - y0) / Math.max(1e-6, y1 - y0);
+  }
+  return pts[pts.length - 1]![1];
+}
 /** Per-vertex shade in a facade frame (local position and normal: x along, y up, z out). */
 type ShadeFn = (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number;
 /** Faces of a reveal turned toward the opening (normal along +x or -x in the frame). */
@@ -340,10 +368,10 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     fbox(f, mat, a0, y0, n0, a1, y1, n1, uv, drop, sh);
   };
   /** A box's body: faces fully hidden by neighbours (and the ground face) are left out. */
-  const body = (b: MapBox, mat: Mat, uv: number, top = true, y1 = b.maxY, eave = false) => {
+  const body = (b: MapBox, mat: Mat, uv: number, top = true, y1 = b.maxY, eave = false, bottom = true) => {
     let faces = top ? 4 : 0;
     for (const s of SIDES) if (!faceCovered(boxes, b, s, b.minY, y1)) faces |= FACE_BIT[s];
-    if (b.minY > 0) faces |= 8;
+    if (b.minY > 0 && bottom) faces |= 8;
     // Long walls that run into a crossing wall stop at its face (no coplanar overlap at the corners).
     let { minX, maxX, minZ, maxZ } = b;
     for (const o of boxes) {
@@ -357,23 +385,49 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     return { minX, maxX, minZ, maxZ };
   };
   /**
-   * A wall body box; under an eave, its top EAVE_BAND is a separate band
-   * whose side faces darken toward the roofline (same UVs, two more
-   * triangles per face).
+   * A wall body box, drawn in rows (weatherRows) whose side faces carry the
+   * weathering: the stained foot, the paler top and, under an eave, the
+   * darkening toward the roofline. Same UVs throughout.
    */
   const walls = (mat: Mat, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, uv: number, faces: number, eave: boolean) => {
-    const yb = maxY - EAVE_BAND;
-    if (!eave || yb < minY + 0.5) { batch.add(mat, boxGeo(minX, minY, minZ, maxX, maxY, maxZ, uv, faces)); return; }
-    batch.add(mat, boxGeo(minX, minY, minZ, maxX, yb, maxZ, uv, faces & ~4));
-    const sides = grade(yb, maxY, 1, EAVE_K);
-    batch.add(mat, shadeGeo(boxGeo(minX, yb, minZ, maxX, maxY, maxZ, uv, faces & ~8), (x, y, z, nx, ny, nz) => (Math.abs(ny) > 0.5 ? 1 : sides(x, y, z, nx, ny, nz))));
+    const rows = weatherRows(minY, maxY, eave), sides = faces & ~12;
+    for (let i = 1; i < rows.length; i++) {
+      const [y0, k0] = rows[i - 1]!, [y1, k1] = rows[i]!;
+      const fc = sides | (i === 1 ? faces & 8 : 0) | (i === rows.length - 1 ? faces & 4 : 0);
+      const gr = grade(y0, y1, k0, k1);
+      batch.add(mat, shadeGeo(boxGeo(minX, y0, minZ, maxX, y1, maxZ, uv, fc), (x, y, z, nx, ny, nz) => (Math.abs(ny) > 0.5 ? 1 : gr(x, y, z, nx, ny, nz))));
+    }
+  };
+  /** The wall a window is being placed on (its colour and height band), for the stain under its sill. */
+  let wallOf: { col: number; minY: number; maxY: number; eave: boolean } | null = null;
+  /**
+   * A faint stain run down the plaster under an upper sill: a flat fan of
+   * the wall's own material just proud of the wall, darker under the sill's
+   * middle and fading to the wall's exact colour (weathering included) at
+   * its edges, with the wall's world UVs so the texture runs through.
+   */
+  const sillStain = (f: Frame, a: number, y1: number, hw: number) => {
+    if (!wallOf) return;
+    const w = wallOf, y0 = Math.max(y1 - 1.3, w.minY + 1);
+    if (y1 - y0 < 0.4) return;
+    const g = new THREE.PlaneGeometry(2 * hw, y1 - y0, 2, 1);
+    g.translate(a, (y0 + y1) / 2, 0.006);
+    shadeGeo(g, (x, y) => weatherAt(y, w.minY, w.maxY, w.eave) * (Math.abs(x - a) < 0.01 && y > y1 - 0.01 ? 0.86 : 1));
+    g.applyMatrix4(f.m);
+    const p = g.getAttribute('position') as THREE.BufferAttribute, nr = g.getAttribute('normal') as THREE.BufferAttribute, uv = g.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, (Math.abs(nr.getX(i)) > 0.5 ? p.getZ(i) : p.getX(i)) / 2, p.getY(i) / 2);
+    batch.add(wallMat(w.col), g);
   };
 
   // -------------------------------------------------------------- components
 
   function windowUnit(f: Frame, a: number, wy: number, shutter: number, ground: boolean, balcony: boolean): void {
     const hw = 0.45, hh = 0.6, top = wy + hh, bot = wy - hh;
-    fbox(f, M.glass, a - hw, bot, 0.0, a + hw, top, 0.012, 1, 0, grade(bot, top, 1, 0.74)); // glass, flush with the wall, in the reveal's shade toward the lintel
+    // Glass, flush with the wall, its texture fitted to the opening (frame, panes, the reveal's shadow).
+    const gl = boxGeo(a - hw, bot, 0, a + hw, top, 0.012, 1, 63 & ~32);
+    const gp = gl.getAttribute('position') as THREE.BufferAttribute, guv = gl.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < gp.count; i++) guv.setXY(i, (gp.getX(i) - (a - hw)) / (2 * hw), (gp.getY(i) - bot) / (top - bot));
+    batch.add(M.glass, shadeGeo(gl, grade(bot, top, 1, 0.9)).applyMatrix4(f.m));
     fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.17, 1, 0, reveal(1, 0.8));  // jambs: a 0.16 m reveal, the inner faces in shade
     fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.17, 1, 0, reveal(-1, 0.8));
     fbox(f, M.trim, a - hw - 0.14, top, 0, a + hw + 0.14, top + 0.16, 0.2);         // lintel
@@ -390,6 +444,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       if (!lite) for (let i = -2; i <= 2; i++) fbox(f, M.iron, a + i * 0.17 - 0.013, bot + 0.02, 0.1, a + i * 0.17 + 0.013, top - 0.02, 0.126, 1, hero ? 0 : 12);
       for (const y of [bot + 0.12, top - 0.12]) fbox(f, M.iron, a - hw, y - 0.015, 0.1, a + hw, y + 0.015, 0.13, 1, hero ? 0 : 3);
     } else if (balcony) {
+      sillStain(f, a, bot - 0.42, 0.62);
       // Juliet balcony: a molded slab on two corbels, iron railing, flower pots. Above head height.
       const sy = bot - 0.1;
       fbox(f, M.cantera, a - 0.75, sy - 0.08, 0, a + 0.75, sy, 0.34);
@@ -402,6 +457,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
         fmesh(f, s ? M.pink : M.marigold, hero ? BUD : FLOWER, a + s, sy + 0.28, 0.17, 0.26, 0.22, 0.26);
       }
     } else {
+      sillStain(f, a, bot - 0.08, 0.56);
       // Window box with a little greenery.
       fbox(f, M.pot, a - 0.44, bot - 0.08, 0.06, a + 0.44, bot + 0.1, 0.24);
       for (const s of [-0.28, 0, 0.28]) fmesh(f, M.leaf, hero ? TUFTS[s ? 0 : 1]! : SPRIG[s ? 0 : 1]!, a + s, bot + 0.08, 0.15, 0.36, 0.28, 0.3, 0, s * 4);
@@ -484,7 +540,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   /** Painted base band with a molded cap on one exposed run, stopping at door casings (`gaps`, along the frame). */
   function bandRun(f: Frame, s: Span, band: number, gaps: ReadonlyArray<readonly [number, number]> = []): void {
     for (const p of cut(s, gaps)) {
-      sbox(f, p, wallMat(band), 0, 0, 0.8, 0.03);
+      sbox(f, p, wallMat(band), 0, 0, 0.8, 0.03, 1, 0, grade(0, 0.8, 0.8, 1)); // splashed and damp at its foot
       sbox(f, p, M.trim, 0.8, 0, 0.88, 0.07);
     }
   }
@@ -510,7 +566,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     // The band stops at the door casing (it ran across the closed door in milestone 2).
     const pieces: Array<[number, number]> = door === undefined ? [[0, f.len]] : [[0, door - 0.77], [door + 0.77, f.len]];
     for (const [p, q] of pieces) {
-      fbox(f, wallMat(band), p, 0, 0, q, 0.8, 0.03);
+      fbox(f, wallMat(band), p, 0, 0, q, 0.8, 0.03, 1, 0, grade(0, 0.8, 0.8, 1));
       fbox(f, M.trim, p === 0 ? -0.02 : p, 0.8, 0, q === f.len ? f.len + 0.02 : q, 0.88, 0.07);
     }
     if (!pilasters) return;
@@ -527,6 +583,8 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     fbox(f, M.trim, a, 0.8, 0, a + 0.34, 0.88, 0.09);
   }
 
+  /** Depth of the stone apron along wall feet with no paving. */
+  const APRON = 0.34;
   const bandOf = (col: number) => (col === STUCCO.stuccoCream ? 0xc2704f : 0xa45c3e); // a softer, earthier base band
   const shutterOf = (col: number) => (col === STUCCO.stuccoTurquoise ? COLORS.marigold : col === STUCCO.stuccoViolet ? 0xf4e6c8 : COLORS.turquoise);
 
@@ -534,12 +592,17 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   // Facade strips are collected first so overlapping strips (at inside
   // corners) can be cut back: two paver planes on one spot would flicker.
   const strips: Array<{ minX: number; maxX: number; minZ: number; maxZ: number }> = [];
-  /** Paving and kerb along a facade run (out to 1.4 m), cut where an earlier strip already lies. */
-  function paveFront(b: MapBox, side: Side, a0: number, a1: number): void {
+  /**
+   * Paving and kerb along a facade run (out to 1.4 m), cut where an earlier
+   * strip already lies. As an apron (`apron` = its depth), a narrow course of
+   * the same slabs along a wall foot with no paving, darker at the wall:
+   * where any plaster meets the ground it stands on a stone base course.
+   */
+  function paveFront(b: MapBox, side: Side, a0: number, a1: number, apron = 0): void {
     const f = frameOf(b, side), fc = faceOf(b, side);
     const rect = (p: number, q: number) => {
       const w0 = side === 's' || side === 'w' ? fc.lo + p : fc.hi - q, w1 = side === 's' || side === 'w' ? fc.lo + q : fc.hi - p;
-      const n0 = fc.plane, n1 = fc.plane + fc.out * 1.55;
+      const n0 = fc.plane, n1 = fc.plane + fc.out * (apron || 1.55);
       return fc.axis === 'z' ? { minX: w0, maxX: w1, minZ: Math.min(n0, n1), maxZ: Math.max(n0, n1) } : { minX: Math.min(n0, n1), maxX: Math.max(n0, n1), minZ: w0, maxZ: w1 };
     };
     let pieces: Array<[number, number]> = [[a0, a1]];
@@ -557,8 +620,11 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       pieces = next;
     }
     for (const [p, q] of pieces) {
-      paving(f, p, q, 1.4, 0.7, 2.4);
-      fbox(f, M.cantera, p, 0, 1.4, q, 0.03, 1.55, 0.8);                           // flush curb line
+      if (apron) paving(f, p, q, apron, apron, 2.4);
+      else {
+        paving(f, p, q, 1.4, 0.7, 2.4);
+        fbox(f, M.cantera, p, 0, 1.4, q, 0.03, 1.55, 0.8);                         // flush curb line
+      }
       strips.push(rect(p, q));
     }
   }
@@ -571,6 +637,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     const h = b.maxY - b.minY;
     const col = STUCCO[b.mat]!;
     walls(wallMat(col), b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 2, 63, true);
+    wallOf = { col, minY: b.minY, maxY: b.maxY, eave: true };
     const fs = b.facade!;
     const f = frameOf(b, fs);
     const side = frameOf(b, RIGHT_OF[fs]);
@@ -591,6 +658,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       if (k === Math.floor(cols / 2)) doorUnit(f, a); else windowUnit(f, a, 1.55, shutter, true, false);
       windowUnit(f, a, 4.6, shutter, false, k !== Math.floor(cols / 2));
     }
+    wallOf = null;
     signFrame(f);
     paving(f, 0, f.len, 1.4, 0.7, 2.4);
     fbox(f, M.cantera, 0, 0, 1.4, f.len, 0.03, 1.55, 0.8);
@@ -611,6 +679,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   function building(b: MapBox, col: number): void {
     const h = b.maxY, fs = b.facade!, ff = frameOf(b, fs);
     body(b, wallMat(col), 2, true, b.maxY, true);
+    wallOf = { col, minY: b.minY, maxY: b.maxY, eave: true };
     const band = bandOf(col), shutter = shutterOf(col), up = Math.min(4.6, h - 1.34);
     // Bays as in the arena's generic facades: a door in the middle bay, barred
     // windows beside it, shuttered windows above (balconies on alternate bays).
@@ -624,11 +693,12 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       for (const s of spansOf(b, side, 0, 0.88)) bandRun(f, s, band, side === fs && door !== undefined ? [doorGap(door)] : []);
       for (const s of spansOf(b, side, h - 0.45, h)) eaveRun(f, s, h, side === fs);
       if (side === fs) continue;
-      // Long backs and ends seen from an alley get a row of upper windows
+      // Backs and ends seen from an alley get a row of upper windows
       // (no ground floor, no door), kept clear of the team banners.
+      // A short end (2.6 m or more, such as a house's flank on an opening) gets a single window, so no tall face is left blank.
       for (const s of spansOf(b, side, up - 0.85, up + 0.85)) {
-        if (s.a1 - s.a0 < 5) continue;
-        const n = Math.floor((s.a1 - s.a0) / 2.7), sp = (s.a1 - s.a0) / n;
+        if (s.a1 - s.a0 < 2.6) continue;
+        const n = Math.max(1, Math.floor((s.a1 - s.a0) / 2.7)), sp = (s.a1 - s.a0) / n;
         for (let k = 0; k < n; k++) {
           const a = s.a0 + sp * (k + 0.5);
           if (!bannerClear(b, side, a)) continue;
@@ -645,6 +715,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       if (a === door) doorUnit(ff, a); else windowUnit(ff, a, 1.55, shutter, true, false);
       windowUnit(ff, a, up, shutter, false, a !== door && Math.round(a / spacing - 0.5) % 2 === 0);
     }
+    wallOf = null;
     if (b.sign && ff.len >= 2) signFrame(ff);
     if (ff.len >= 2) for (const s of spansOf(b, fs, 0, 0.1)) paveFront(b, fs, s.a0, s.a1);
   }
@@ -715,8 +786,8 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     }
     // The wall over the passage continues the house: same plaster, cornice and eave.
     const col = neighbourColour(b);
-    body(b, wallMat(col), 2, true, b.maxY, true);
-    batch.add(M.wood, boxGeo(b.minX + 0.001, b.minY - 0.004, b.minZ + 0.001, b.maxX - 0.001, b.minY, b.maxZ - 0.001, 1.2, 8)); // a timber ceiling over the passage
+    body(b, wallMat(col), 2, true, b.maxY, true, false); // no underside: the timber ceiling is drawn instead
+    passageCeiling(b);
     for (const side of SIDES) {
       const f = frameOf(b, side);
       for (const s of spansOf(b, side, b.minY, b.minY + 0.3)) sbox(f, s, M.wood, b.minY, 0, b.minY + 0.3, 0.06, 1.2);
@@ -735,6 +806,46 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       if (!(o.mat in STUCCO) || !o.facade || faceOf(o, o.facade).plane !== faceOf(b, o.facade).plane) continue;
       const fl = frameOf(b, o.facade).len;
       if (o.minY === 0 && Math.abs(o.maxY - b.maxY) < 0.01) { paveFront(b, o.facade, 0, fl); break; }
+    }
+  }
+
+  /**
+   * A timber ceiling over a passage: beams (vigas) across it with their
+   * soffits at the box's underside and the boards recessed between them, up
+   * inside the box (nothing hangs lower than the collision ceiling). The
+   * boards darken toward each beam; the two end beams close the recess at
+   * the passage mouths.
+   */
+  function passageCeiling(b: MapBox): void {
+    const alongX = b.maxX - b.minX >= b.maxZ - b.minZ;
+    const L = alongX ? b.maxX - b.minX : b.maxZ - b.minZ, y = b.minY, deep = 0.16, bw = 0.16;
+    const n = Math.max(2, Math.round(L / 0.62)), sp = (L - bw) / n;
+    // In passage coordinates: t along the passage, w across it (0..W).
+    const [t0, w0, w1] = alongX ? [b.minX, b.minZ, b.maxZ] : [b.minZ, b.minX, b.maxX];
+    const tbox = (ta: number, ya: number, tb: number, yb: number, faces: number, sh?: ShadeFn) => {
+      const g = alongX ? boxGeo(t0 + ta, ya, w0 + 0.001, t0 + tb, yb, w1 - 0.001, 1.2, faces) : boxGeo(w0 + 0.001, ya, t0 + ta, w1 - 0.001, yb, t0 + tb, 1.2, faces);
+      return sh ? shadeGeo(g, sh) : g;
+    };
+    // The beam faces that look along the passage (±x when it runs along x, else ±z); the mouths' are left out.
+    const [tPlus, tMinus] = alongX ? [1, 2] : [16, 32];
+    // The box's underside, just above the boards and hidden by them: it is what casts the passage's shadow (the shadow map draws back faces).
+    batch.add(wallMat(neighbourColour(b)), boxGeo(b.minX, y + deep + 0.01, b.minZ, b.maxX, y + deep + 0.02, b.maxZ, 2, 8));
+    for (let i = 0; i <= n; i++) {
+      const ta = i * sp, faces = 8 | (i > 0 ? tMinus : 0) | (i < n ? tPlus : 0);
+      batch.add(M.wood, tbox(ta, y, ta + bw, y + deep, faces, (_x, yy, _z, _nx, ny) => (ny < -0.5 ? 1 : 0.7 + 0.25 * (yy - y) / deep)));
+    }
+    // The boards between the beams, a step darker toward each beam (the bay's own shade).
+    for (let i = 0; i < n; i++) {
+      const ta = i * sp + bw, tb = (i + 1) * sp;
+      const g = new THREE.PlaneGeometry(tb - ta, w1 - w0, 2, 1);
+      g.rotateX(Math.PI / 2); // facing down; x runs along the passage
+      shadeGeo(g, (x) => (Math.abs(x) < 0.01 ? 1 : 0.8));
+      const uv = g.getAttribute('uv') as THREE.BufferAttribute, p = g.getAttribute('position') as THREE.BufferAttribute;
+      for (let k = 0; k < p.count; k++) uv.setXY(k, p.getZ(k) / 1.2, (p.getX(k) + ta) / 1.2); // the grain runs along the passage, board by board
+      if (!alongX) g.rotateY(-Math.PI / 2);
+      const c = t0 + (ta + tb) / 2, m = (w0 + w1) / 2;
+      g.translate(alongX ? c : m, y + deep, alongX ? m : c);
+      batch.add(M.wood, g);
     }
   }
 
@@ -933,6 +1044,13 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       case 'bin': bin(b); break;
       default: batch.add(M.cantera, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 1));
     }
+  }
+
+  // Stone aprons along every other wall foot, once all the facade paving is down.
+  for (const b of order) {
+    if (!(b.mat in STUCCO || b.mat === 'stone') || b.minY > 0 || b.maxY < 1.5) continue;
+    batch.chunk = chunkOf(b);
+    for (const side of SIDES) for (const sp of spansOf(b, side, 0, 0.1)) if (sp.a1 - sp.a0 > 0.3) paveFront(b, side, sp.a0, sp.a1, APRON);
   }
 
   const calls = batch.build(group, materials);

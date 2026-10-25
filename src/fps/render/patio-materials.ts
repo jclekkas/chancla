@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { toonRamp } from './materials';
 import type { Quality } from '../settings';
+import { EL_PATIO } from '../../../shared/map';
 
 // ------------------------------------------------------------------ textures
 // Small procedural canvases, cached, white or neutral where a colour tints them.
@@ -73,10 +74,10 @@ function plasterTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 256 * SCALE[quality], k = S / 256;
   return q(tex(`plaster${S}-${quality}`, S, S, (c) => {
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, S, S);
-    mottle(c, S, 11, 26, 60 * k, 110 * k, (r) => { const g = 228 + Math.floor(r() * 16); return [g, g - 7, g - 18, 0.12 + r() * 0.1]; });
+    mottle(c, S, 11, 26, 60 * k, 110 * k, (r) => { const g = 214 + Math.floor(r() * 22); return [g, g - 8, g - 20, 0.16 + r() * 0.14]; });
     // Warm and cool washes: the lime's own unevenness, a hue shift more than a value one.
-    mottle(c, S, 13, 8, 70 * k, 120 * k, (r) => (r() < 0.5 ? [236, 214, 190, 0.12 + r() * 0.06] : [208, 214, 222, 0.1 + r() * 0.06]));
-    mottle(c, S, 12, 60, 18 * k, 46 * k, (r) => { const g = 222 + Math.floor(r() * 22); return [g, g - 6, g - 15, 0.1 + r() * 0.08]; });
+    mottle(c, S, 13, 8, 70 * k, 120 * k, (r) => (r() < 0.5 ? [232, 206, 178, 0.14 + r() * 0.08] : [200, 208, 220, 0.12 + r() * 0.08]));
+    mottle(c, S, 12, 60, 18 * k, 46 * k, (r) => { const g = 214 + Math.floor(r() * 26); return [g, g - 7, g - 17, 0.12 + r() * 0.1]; });
     // Trowel sweeps: long, soft, faint arcs (wrapped so the texture still tiles).
     const r = rng(14);
     for (let i = 0; i < 14; i++) {
@@ -193,17 +194,41 @@ function louverTexture(quality: Quality): THREE.CanvasTexture | null {
   }), quality);
 }
 
-/** Window glass: deep interior with a muntin cross and a soft sky reflection. */
+/**
+ * A window, fitted to the opening (UVs 0..1 across each window): a painted
+ * wooden casement frame with a centre stile and a transom, the panes a deep
+ * interior with a soft sky reflection, and the reveal's shadow on it: darker
+ * under the lintel and along one jamb, so the glass reads set back in a
+ * thick wall rather than painted on it.
+ */
 function glassTexture(quality: Quality): THREE.CanvasTexture | null {
   const k = SCALE[quality], W = 128 * k, H = 160 * k;
-  return q(tex(`glass${W}-${quality}`, W, H, (c) => {
-    const g = c.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, '#6b5a86'); g.addColorStop(0.45, '#2c2140'); g.addColorStop(1, '#1d1530');
+  return q(tex(`glass2-${W}-${quality}`, W, H, (c) => {
+    // Canvas y runs down; the window's top (v = 1) is the canvas's top row.
+    const g = c.createLinearGradient(0, 0, W * 0.4, H);
+    g.addColorStop(0, '#2a2038'); g.addColorStop(0.5, '#3a2d4e'); g.addColorStop(1, '#4a3c5c');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
-    c.fillStyle = 'rgba(255,230,200,0.12)';
-    c.beginPath(); c.moveTo(10 * k, 0); c.lineTo(52 * k, 0); c.lineTo(14 * k, H); c.lineTo(0, H); c.closePath(); c.fill();
-    c.fillStyle = '#f1e2c4';
-    c.fillRect(60 * k, 0, 8 * k, H); c.fillRect(0, 74 * k, W, 8 * k);
+    // Sky reflection: one soft diagonal sheen.
+    const sh = c.createLinearGradient(0, H * 0.2, W, H * 0.6);
+    sh.addColorStop(0.15, 'rgba(255,226,196,0)'); sh.addColorStop(0.35, 'rgba(255,226,196,0.14)'); sh.addColorStop(0.55, 'rgba(255,226,196,0)');
+    c.fillStyle = sh; c.fillRect(0, 0, W, H);
+    // Frame: outer border, centre stile, transom (painted wood, a warm cream).
+    const fw = 9 * k, st = 7 * k, ty = H * 0.3;
+    c.fillStyle = '#e8d6b4';
+    c.fillRect(0, 0, W, fw); c.fillRect(0, H - fw, W, fw); c.fillRect(0, 0, fw, H); c.fillRect(W - fw, 0, fw, H);
+    c.fillRect(W / 2 - st / 2, ty, st, H - ty); c.fillRect(0, ty - st / 2, W, st);
+    // Thin glazing bars in the lower lights.
+    c.fillRect(W * 0.25 - 2 * k, ty, 4 * k, H - ty); c.fillRect(W * 0.75 - 2 * k, ty, 4 * k, H - ty);
+    c.fillRect(0, ty + (H - ty) / 2 - 2 * k, W, 4 * k);
+    // The frame's inner edge a step darker (a rebate), the panes' edges darker still.
+    c.strokeStyle = 'rgba(40,28,36,0.35)'; c.lineWidth = 2 * k; c.strokeRect(fw, fw, W - 2 * fw, H - 2 * fw);
+    // The reveal's shadow: down from the lintel, and in from one jamb.
+    const top = c.createLinearGradient(0, 0, 0, H * 0.36);
+    top.addColorStop(0, 'rgba(20,12,24,0.55)'); top.addColorStop(1, 'rgba(20,12,24,0)');
+    c.fillStyle = top; c.fillRect(0, 0, W, H * 0.36);
+    const side = c.createLinearGradient(0, 0, W * 0.2, 0);
+    side.addColorStop(0, 'rgba(20,12,24,0.4)'); side.addColorStop(1, 'rgba(20,12,24,0)');
+    c.fillStyle = side; c.fillRect(0, 0, W * 0.2, H);
   }), quality);
 }
 
@@ -255,28 +280,92 @@ function woodTexture(quality: Quality): THREE.CanvasTexture | null {
   }), quality);
 }
 
-/** Large rectangular pavers in running bond, warm grey-beige (1 texture = 2.4 m). */
+/**
+ * Sidewalk slabs of pale cantera (1 texture = 2.4 m) in courses of 0.6 m,
+ * the slabs of uneven length (0.6 to 1.1 m) so no regular grid shows. Each
+ * slab its own tone, a little warmer or cooler, worn rounder and darker at
+ * its edges; the joints a dusty mid tone close to the stone, never a bright
+ * line.
+ */
 function paverTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = 256 * SCALE[quality], k = S / 256;
   return q(tex(`pavers${S}-${quality}`, S, S, (c) => {
     const r = rng(41);
-    c.fillStyle = '#b7a68a'; c.fillRect(0, 0, S, S);
-    const rowH = 64 * k, bw = 96 * k, gap = 3 * k;
+    c.fillStyle = '#b3a386'; c.fillRect(0, 0, S, S); // joints: dust, a step below the stone
+    const rowH = 64 * k, gap = 2.5 * k;
     for (let row = 0; row < 4; row++) {
-      const off = row % 2 ? 48 * k : 0;
-      for (let x = -bw + off; x < S; x += bw) {
-        const g = 206 + Math.floor(r() * 22);
-        c.fillStyle = `rgb(${g},${g - 10},${g - 25})`;
-        const px = x + gap, py = row * rowH + gap, pw = bw - 2 * gap, ph = rowH - 2 * gap;
-        c.fillRect(px, py, pw, ph);
-        // Worn edges: each stone a touch darker toward its rim, lighter where feet polish it.
-        const d = c.createRadialGradient(px + pw * (0.35 + r() * 0.3), py + ph * 0.5, ph * 0.1, px + pw / 2, py + ph / 2, pw * 0.62);
-        d.addColorStop(0, 'rgba(250,240,222,0.12)'); d.addColorStop(1, 'rgba(96,78,58,0.14)');
-        c.fillStyle = d; c.fillRect(px, py, pw, ph);
+      // Slabs of uneven length that sum to the texture's width, from a random start (wrapped).
+      let x = r() * S;
+      const end = x + S;
+      while (x < end - 1) {
+        let w = (64 + r() * 54) * k;
+        if (end - x - w < 50 * k) w = end - x;
+        const g = 196 + Math.floor(r() * 34), warm = (r() - 0.5) * 12;
+        const py = row * rowH + gap, pw = w - 2 * gap, ph = rowH - 2 * gap;
+        for (const ox of [-S, 0]) {
+          const px = x + ox + gap;
+          if (px > S || px + pw < 0) continue;
+          c.fillStyle = `rgb(${(g + warm) | 0},${g - 9},${(g - 24 - warm * 0.6) | 0})`;
+          c.beginPath(); c.roundRect(px, py, pw, ph, 3 * k); c.fill();
+          // Worn edges: each stone a touch darker toward its rim, lighter where feet polish it.
+          const d = c.createRadialGradient(px + pw * (0.35 + r() * 0.3), py + ph * 0.5, ph * 0.1, px + pw / 2, py + ph / 2, pw * 0.62);
+          d.addColorStop(0, 'rgba(250,240,222,0.1)'); d.addColorStop(0.7, 'rgba(96,78,58,0.04)'); d.addColorStop(1, 'rgba(96,78,58,0.18)');
+          c.fillStyle = d; c.beginPath(); c.roundRect(px, py, pw, ph, 3 * k); c.fill();
+        }
+        x += w;
       }
     }
     mottle(c, S, 42, 40, 8 * k, 24 * k, (rr) => [120, 100, 80, 0.05 + rr() * 0.06]);
+    mottle(c, S, 44, 10, 40 * k, 80 * k, (rr) => (rr() < 0.5 ? [250, 240, 220, 0.06] : [110, 92, 70, 0.07])); // broad dust and polish
     mottle(c, S, 43, 40, 2.5 * k, 4 * k, () => [104, 88, 70, 0.2]); // sparse pits
+  }), quality);
+}
+
+/**
+ * Street flagstones (laja), 1 texture = 4 m: courses 0.25 to 0.45 m deep,
+ * slabs 0.3 to 0.75 m long, each its own grey-beige (a few warmer, a few
+ * darker), edges worn round and a shade darker, joints a muted dusty grey a
+ * step below the stone (never a bright grid), and broad dust over it all.
+ * Darker and greyer than the sidewalk cantera and the plaza's barro, so the
+ * three floors read apart.
+ */
+const STREET_M = 4;
+function streetTexture(quality: Quality): THREE.CanvasTexture | null {
+  const S = quality === 'low' ? 256 : 512, k = S / 512;
+  return q(tex(`street${S}-${quality}`, S, S, (c) => {
+    const r = rng(91);
+    c.fillStyle = 'rgb(118,110,100)'; c.fillRect(0, 0, S, S); // joints
+    const gap = Math.max(1.5, 3 * k);
+    let y0 = 0;
+    while (y0 < S - 1) {
+      let h = (32 + r() * 26) * k;
+      if (S - y0 - h < 32 * k) h = S - y0;
+      let x = r() * S;
+      const end = x + S;
+      while (x < end - 1) {
+        let w = (38 + r() * 58) * k;
+        if (end - x - w < 30 * k) w = end - x;
+        const odd = r(), g = 150 + (r() - 0.5) * 36;
+        const [R, G, B] = odd < 0.12 ? [g + 14, g, g - 18] : odd < 0.22 ? [g - 18, g - 18, g - 16] : [g + 4, g, g - 7 + (r() - 0.5) * 6];
+        const pw = w - 2 * gap, ph = h - 2 * gap;
+        const cx0 = x + pw * (0.3 + r() * 0.4), cy0 = y0 + gap + ph * (0.3 + r() * 0.4);
+        for (const ox of [-S, 0]) {
+          const px = x + ox + gap, py = y0 + gap;
+          if (px > S || px + pw < 0) continue;
+          c.fillStyle = `rgb(${R | 0},${G | 0},${B | 0})`;
+          c.beginPath(); c.roundRect(px, py, pw, ph, 4 * k); c.fill();
+          // Worn: a little polish where the slab is crossed most, darker and rounder at the rim.
+          const d = c.createRadialGradient(cx0 + ox + gap, cy0, ph * 0.1, px + pw / 2, py + ph / 2, Math.max(pw, ph) * 0.62);
+          d.addColorStop(0, 'rgba(230,224,210,0.1)'); d.addColorStop(0.65, 'rgba(60,54,46,0.03)'); d.addColorStop(1, 'rgba(60,54,46,0.2)');
+          c.fillStyle = d; c.beginPath(); c.roundRect(px, py, pw, ph, 4 * k); c.fill();
+        }
+        x += w;
+      }
+      y0 += h;
+    }
+    mottle(c, S, 92, 50, 6 * k, 18 * k, (rr) => [90, 82, 72, 0.05 + rr() * 0.06]);
+    mottle(c, S, 93, 14, 60 * k, 140 * k, (rr) => (rr() < 0.5 ? [196, 182, 160, 0.08 + rr() * 0.06] : [80, 74, 66, 0.06 + rr() * 0.05])); // dust and damp
+    mottle(c, S, 94, 60, 2.5 * k, 4 * k, () => [70, 64, 58, 0.22]); // pits
   }), quality);
 }
 
@@ -293,11 +382,11 @@ function pavingTexture(quality: Quality): THREE.CanvasTexture | null {
   const S = quality === 'low' ? 256 : 512, t = S / GROUND_TILES, k = S / 512;
   return q(tex(`paving${S}-${quality}`, S, S, (c) => {
     const r = rng(77);
-    c.fillStyle = '#8a5e50'; c.fillRect(0, 0, S, S); // grout
+    c.fillStyle = '#946454'; c.fillRect(0, 0, S, S); // grout: a step below the tiles, never a bright line
     const gw = Math.max(2, Math.round(4 * k)), inset = gw / 2;
     for (let ty = 0; ty < GROUND_TILES; ty++) for (let tx = 0; tx < GROUND_TILES; tx++) {
       const x = tx * t + inset, y = ty * t + inset, w = t - gw;
-      const v = (r() - 0.5) * 16, warm = (r() - 0.5) * 10;
+      const v = (r() - 0.5) * 24, warm = (r() - 0.5) * 12;
       const worn = r() < 0.09;
       let R = 174 + v + warm, G = 112 + v * 0.8, B = 92 + v * 0.7 - warm * 0.4;
       if (worn) { R += 14; G += 22; B += 22; }
@@ -310,10 +399,10 @@ function pavingTexture(quality: Quality): THREE.CanvasTexture | null {
       c.fillStyle = d; c.fillRect(x, y, w, w);
       // A soft bevel: the edge toward the light a little paler, the far edge a little deeper (about 4 cm).
       const e = Math.max(3, 6 * k), lit = c.createLinearGradient(x, y, x + e, y + e);
-      lit.addColorStop(0, 'rgba(236,196,168,0.2)'); lit.addColorStop(1, 'rgba(236,196,168,0)');
+      lit.addColorStop(0, 'rgba(236,196,168,0.08)'); lit.addColorStop(1, 'rgba(236,196,168,0)');
       c.fillStyle = lit; c.fillRect(x, y, w - e, e); c.fillRect(x, y + e, e, w - 2 * e);
       const dk = c.createLinearGradient(x + w, y + w, x + w - e, y + w - e);
-      dk.addColorStop(0, 'rgba(96,52,38,0.2)'); dk.addColorStop(1, 'rgba(96,52,38,0)');
+      dk.addColorStop(0, 'rgba(96,52,38,0.16)'); dk.addColorStop(1, 'rgba(96,52,38,0)');
       c.fillStyle = dk; c.fillRect(x + e, y + w - e, w - e, e); c.fillRect(x + w - e, y + e, e, w - 2 * e);
     }
     // Sparse pits and a little grit in the fired clay.
@@ -345,6 +434,49 @@ function leafRamp(): THREE.DataTexture {
 }
 
 /**
+ * Chains a shader patch onto a material: an earlier onBeforeCompile (and its
+ * program cache key) is kept and runs first, so patches compose (the
+ * backface-shadow fix, the plaster's macro variation, a later baked-light
+ * pass) instead of replacing one another.
+ */
+export function patchShader<T extends THREE.Material>(m: T, key: string, fn: (sh: THREE.WebGLProgramParametersWithUniforms) => void): T {
+  const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+  m.onBeforeCompile = function (sh, r) { prev.call(this, sh, r); fn(sh); };
+  m.customProgramCacheKey = function () { return `${prevKey.call(this)}|${key}`; };
+  return m;
+}
+
+/**
+ * Plaster's broad tonal variation: the plaster texture sampled a second
+ * time, rotated and about four times larger (its soft clouds become patches
+ * a few metres across), as a gentle multiplier around 1. The UVs are world
+ * scale, so neighbouring walls never repeat in step, and the 2 m repeat of
+ * the texture itself no longer reads as a pattern. One extra texture read.
+ */
+function plasterMacro<T extends THREE.Material>(m: T, mean: number): T {
+  return patchShader(m, `plaster-macro-${mean.toFixed(4)}`, (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+#ifdef USE_MAP
+  {
+    vec2 mu = mat2(0.80, -0.60, 0.60, 0.80) * vMapUv * 0.23 + vec2(0.37, 0.11);
+    float mm = texture2D(map, mu).g / ${mean.toFixed(4)};
+    diffuseColor.rgb *= clamp(1.0 + (mm - 1.0) * 3.2, 0.82, 1.1);
+  }
+#endif`);
+  });
+}
+
+/** Mean of a texture canvas's green channel in linear terms (for normalising a texture used as a multiplier). */
+function meanLinearG(t: THREE.CanvasTexture | null): number {
+  const el = t?.image as HTMLCanvasElement | undefined, c = el?.getContext?.('2d');
+  if (!el || !c) return 1;
+  const d = c.getImageData(0, 0, el.width, el.height).data;
+  let sum = 0;
+  for (let i = 1; i < d.length; i += 4) { const v = d[i]! / 255; sum += v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+  return sum / (d.length / 4) || 1;
+}
+
+/**
  * Shadow acne fix for toon materials. Toon shading still lights a face turned
  * away from the sun (the ramp's darkest band is about 47 %, not black), and
  * those same faces are what three.js draws into the shadow map (back faces by
@@ -354,16 +486,14 @@ function leafRamp(): THREE.DataTexture {
  * shadows exactly as before. No change to the shadow map or its resolution.
  */
 export function noBackfaceShadow<T extends THREE.Material>(m: T): T {
-  m.onBeforeCompile = (sh) => {
+  return patchShader(m, 'no-backface-shadow', (sh) => {
     // Includes are still unexpanded here: patch the chunk's own text.
     const from = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ]';
     const chunk = THREE.ShaderChunk.lights_fragment_begin;
     if (!chunk.includes(from)) return; // three.js changed the chunk: leave the material as it was
     sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', chunk.replace(from,
       'directLight.color *= ( directLight.visible && receiveShadow && dot( geometryNormal, directLight.direction ) > 0.05 ) ? getShadow( directionalShadowMap[ i ]'));
-  };
-  m.customProgramCacheKey = () => 'no-backface-shadow';
-  return m;
+  });
 }
 
 /** One material per kind for the kit's merged meshes. */
@@ -371,7 +501,7 @@ export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
   const ramp = toonRamp();
   const toonOf = (opts: THREE.MeshToonMaterialParameters) => noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: ramp, ...opts }));
   return {
-    plaster: toonOf({ vertexColors: true, map: plasterTexture(quality) }),
+    plaster: plasterMacro(toonOf({ vertexColors: true, map: plasterTexture(quality) }), meanLinearG(plasterTexture(quality))),
     cantera: toonOf({ vertexColors: true, map: canteraTexture(quality) }),
     flat: toonOf({ vertexColors: true }),
     detail: toonOf({ vertexColors: true }),
@@ -430,23 +560,63 @@ export function patioGround(quality: Quality, ground: { w: number; d: number } =
   geometry.rotateX(-Math.PI / 2); // lies in XZ; the caller must not rotate it again
   const p = geometry.getAttribute('position') as THREE.BufferAttribute;
   const col = new Float32Array(p.count * 3);
-  // Linear-space multipliers on the terracotta paving (tile ≈ sRGB 174,112,92); >1 is fine in a float attribute.
-  const PLAZA = [1, 1, 1], STREET = [0.78, 1.3, 1.45], SOL = [1.05, 1.32, 1.12], LUNA = [0.55, 1.4, 1.9];
+  // Linear-space multipliers. The plaza and the courts are the terracotta
+  // paving (tile ≈ sRGB 174,112,92), the courts tinted; the streets are the
+  // flagstone texture (the shader picks it outside the zones), left near its
+  // own colour.
+  // Other maps (La Plaza, La Fiesta) keep the terracotta tinted grey in their streets, as before.
+  const flags = zn === GROUND_ZONES.patio;
+  const PLAZA = [1, 1, 1], STREET = flags ? [1, 1, 1] : [0.78, 1.3, 1.45], SOL = [1.05, 1.32, 1.12], LUNA = [0.55, 1.4, 1.9];
   const inBox = (x: number, z: number, x0: number, z0: number, x1: number, z1: number) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+  // El Patio's lanes: worn paler down the middle, dustier toward the walls (by distance to the nearest wall).
+  const walls = zn === GROUND_ZONES.patio ? EL_PATIO.boxes.filter((b) => b.minY === 0 && b.maxY > 1.5) : [];
+  const wallDist = (x: number, z: number) => {
+    let d = 9;
+    for (const b of walls) d = Math.min(d, Math.hypot(Math.max(b.minX - x, 0, x - b.maxX), Math.max(b.minZ - z, 0, z - b.maxZ)));
+    return d;
+  };
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
-    let m = PLAZA;
+    let m = PLAZA, street = false;
     if (zn) {
       const at = (r: readonly number[]) => inBox(x, z, r[0]!, r[1]!, r[2]!, r[3]!);
       if (at(zn.sol)) m = SOL;
       else if (at(zn.luna)) m = LUNA;
-      else if (!at(zn.plaza)) m = STREET;
+      else if (!at(zn.plaza)) { m = STREET; street = true; }
     }
     const e = Math.min(1, Math.max(0, (Math.hypot(x / (ground.w / 2), z / (ground.d / 2)) - 0.55) / 0.6));
-    const dim = 1 - 0.14 * e;
+    // Broad patches of dust and damp a few metres across, so the repeat never lines up.
+    const n = 0.5 * Math.sin(x * 0.61 + z * 0.23) * Math.sin(z * 0.47 - x * 0.19 + 1.3) + 0.5 * Math.sin(x * 0.17 - z * 0.29 + 0.4);
+    let dim = (1 - 0.14 * e) * (1 + 0.05 * n);
+    if (street && walls.length) dim *= 0.9 + 0.1 * Math.min(1, wallDist(x, z) / 1.6);
+    if (!flags) dim = 1 - 0.14 * e;
+    dim = Math.min(1, dim);
     col[i * 3] = m[0]! * dim; col[i * 3 + 1] = m[1]! * dim; col[i * 3 + 2] = m[2]! * dim;
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const material = new THREE.MeshToonMaterial({ gradientMap: toonRamp(), map: patioGroundTexture(quality, ground), vertexColors: true });
+  const street = streetTexture(quality);
+  if (flags && street) {
+    const rect = (r: readonly number[]) => new THREE.Vector4(r[0]!, r[1]!, r[2]!, r[3]!);
+    patchShader(material, 'patio-ground-street', (sh) => {
+      sh.uniforms.gStreetMap = { value: street };
+      sh.uniforms.gZone = { value: [rect(zn.plaza), rect(zn.sol), rect(zn.luna)] };
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vGXZ;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGXZ = ( modelMatrix * vec4( transformed, 1.0 ) ).xz;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+varying vec2 vGXZ;
+uniform sampler2D gStreetMap;
+uniform vec4 gZone[3];
+float gIn( vec4 r ) { return step( r.x, vGXZ.x ) * step( vGXZ.x, r.z ) * step( r.y, vGXZ.y ) * step( vGXZ.y, r.w ); }`)
+        .replace('#include <map_fragment>', `#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  vec4 gStreet = texture2D( gStreetMap, vGXZ * ${(1 / STREET_M).toFixed(4)} );
+  float gS = 1.0 - max( gIn( gZone[0] ), max( gIn( gZone[1] ), gIn( gZone[2] ) ) );
+  diffuseColor *= mix( sampledDiffuseColor, gStreet, gS );
+#endif`);
+    });
+  }
   return { geometry, material };
 }

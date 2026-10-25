@@ -286,8 +286,9 @@ ${lite ? `
     const mm = isSharedMaterial(m) ? m.clone() : m;
     // Chain whatever the material already patches (and extend its cache key, never replace it).
     // three's default key is the onBeforeCompile source, so it is read before ours replaces it.
-    const prevKeyFn = mm.customProgramCacheKey;
-    const prevKey = prevKeyFn === THREE.Material.prototype.customProgramCacheKey ? mm.customProgramCacheKey() : null;
+    // Both come from the original: a clone carries neither its patch nor its key.
+    const prevKeyFn = m.customProgramCacheKey;
+    const prevKey = prevKeyFn === THREE.Material.prototype.customProgramCacheKey ? m.customProgramCacheKey() : null;
     const prev = m.onBeforeCompile;
     mm.onBeforeCompile = function (sh, rr) {
       prev.call(this, sh, rr);
@@ -296,7 +297,7 @@ ${lite ? `
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + vertPars).replace('#include <fog_vertex>', '#include <fog_vertex>' + vertMain);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + fragPars).replace('#include <aomap_fragment>', '#include <aomap_fragment>' + fragApply);
     };
-    mm.customProgramCacheKey = function () { return (prevKey ?? prevKeyFn.call(this)) + key; };
+    mm.customProgramCacheKey = function () { return (prevKey ?? prevKeyFn.call(m)) + key; };
     const tm = mm as THREE.MeshToonMaterial;
     if (tune.ramp && tm.gradientMap === toonRamp()) tm.gradientMap = worldRamp();
     mm.userData.aoField = true;

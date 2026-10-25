@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createHash } from 'node:crypto';
-import { rosaMaterial } from '../src/fps/render/rosa-materials';
+import { ROSA_SHARED, rosaMaterial } from '../src/fps/render/rosa-materials';
 import { toonRamp } from '../src/fps/render/materials';
 import { buildRosaModel } from '../src/fps/render/rosa-model';
 
@@ -46,5 +46,28 @@ describe('rosa shading', () => {
     expect(arena.customProgramCacheKey()).toContain(':skin:');
     // The home look ignores `arena` and keeps the campaign material.
     expect((buildRosaModel(0, { arena: true, home: true }).flashMats[0] as THREE.MeshToonMaterial).customProgramCacheKey()).not.toContain('skin');
+  });
+
+  it('lifts the head\'s pieces only: their colours appear on no other joint', () => {
+    const head = [ROSA_SHARED.hair, ROSA_SHARED.hairHi, ROSA_SHARED.eyeWhite, ROSA_SHARED.iris, ROSA_SHARED.frames, ROSA_SHARED.lips].map((h) => new THREE.Color(h));
+    const c = new THREE.Color();
+    for (const team of [0, 1] as const) for (const quality of ['high', 'medium', 'low'] as const) {
+      const r = buildRosaModel(team, { arena: true, quality });
+      let onHead = 0;
+      r.root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || m.material !== r.flashMats[0]) return;
+        const col = m.geometry.attributes.color!, ink = m.geometry.attributes.ink!;
+        for (let i = 0; i < col.count; i++) {
+          if (ink.getX(i) > 0.5) continue; // the hull paints flat ink
+          c.fromBufferAttribute(col, i);
+          const near = head.some((h) => Math.hypot(c.r - h.r, c.g - h.g, c.b - h.b) < 0.008);
+          if (!near) continue;
+          if (m.parent === r.head) onHead++;
+          else expect.fail(`head colour on a non-head joint (team ${team}, ${quality})`);
+        }
+      });
+      expect(onHead).toBeGreaterThan(0);
+    }
   });
 });

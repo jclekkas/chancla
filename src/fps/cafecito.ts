@@ -89,21 +89,28 @@ export function placeCafeLabel(x: number, y: number, lw: number, lh: number, vw:
       clampAll();
     }
   }
-  // Name tags: never on top of one. Try under the cup, then just above or below the tag in the way.
+  // Name tags and HUD pieces: never on top of one.
   const hits = (l: number, t: number) => avoid.some((r) => l < r.right + 4 && l + lw > r.left - 4 && t < r.bottom + 4 && t + lh > r.top - 4)
     || (l < cx + hx && l + lw > cx - hx && t < cy + hy && t + lh > cy - hy);
   if (avoid.length && hits(left, top)) {
-    const r = avoid.find((q) => left < q.right + 4 && left + lw > q.left - 4 && top < q.bottom + 4 && top + lh > q.top - 4);
-    const tries = [y + LIFT_PX, ...(r ? [r.top - 6 - lh, r.bottom + 6] : [])];
-    const keep = top;
-    for (const t of tries) {
-      top = t; clampAll();
+    // Candidates: under the cup, then just above, below or beside any tag or HUD piece, least moved first.
+    const keepL = left, keepT = top;
+    const tops = [keepT, y + LIFT_PX, ...avoid.flatMap((q) => [q.top - 6 - lh, q.bottom + 6])];
+    const lefts = [keepL, ...avoid.flatMap((q) => [q.left - 6 - lw, q.right + 6])];
+    const tries: Array<[number, number]> = [];
+    for (const t of tops) for (const l of lefts) if (t !== keepT || l !== keepL) tries.push([l, t]);
+    tries.sort((a, b) => Math.hypot(a[0] - keepL, a[1] - keepT) - Math.hypot(b[0] - keepL, b[1] - keepT));
+    for (const [l, t] of tries) {
+      left = l; top = t; clampAll();
       if (!hits(left, top)) return { left, top };
     }
-    top = keep;
+    left = keepL; top = keepT;
   }
   return { left, top };
 }
+
+/** HUD pieces the hint keeps off, besides the name tags and the crosshair. */
+const CHROME = '#hud .hud-ident, #minimap, #btn-menu, #ft-score, #hud .hud-bl';
 
 /** The cup's hint on screen. One element, restyled in place; pointer events pass through. */
 export class CafecitoLabel {
@@ -114,7 +121,9 @@ export class CafecitoLabel {
   private state: CafeState | '' = '';
   private size = { w: 0, h: 0 };
   private shown = false;
-  private onResize = () => { this.safe = null; this.size.w = 0; };
+  private chromeRects: Rect[] | null = null;
+  private chromeT = 0;
+  private onResize = () => { this.safe = null; this.size.w = 0; this.chromeRects = null; };
 
   constructor(private root: HTMLElement) {
     this.el = document.createElement('div');
@@ -137,6 +146,24 @@ export class CafecitoLabel {
     return this.safe;
   }
 
+  /**
+   * Fixed HUD pieces the hint must not cover (team and mode chips, minimap,
+   * Menu and the touch Scores pill), relative to the root. Measured at most
+   * twice a second, and again after a resize.
+   */
+  private chrome(): Rect[] {
+    const now = performance.now();
+    if (this.chromeRects && now - this.chromeT < 500) return this.chromeRects;
+    this.chromeT = now;
+    const base = this.root.getBoundingClientRect();
+    const out: Rect[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(CHROME)) {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height) out.push({ left: r.left - base.left, top: r.top - base.top, right: r.right - base.left, bottom: r.bottom - base.top });
+    }
+    return (this.chromeRects = out);
+  }
+
   /** (x, y): the cup's screen position in px, relative to the root. */
   show(x: number, y: number, text: string, state: CafeState, avoid: readonly Rect[] = []): void {
     if (text !== this.text) { this.el.textContent = text; this.text = text; this.size.w = 0; }
@@ -144,7 +171,7 @@ export class CafecitoLabel {
     if (!this.shown) { this.el.hidden = false; this.shown = true; }
     if (!this.size.w) { this.size.w = this.el.offsetWidth; this.size.h = this.el.offsetHeight; }
     const vw = this.root.clientWidth || window.innerWidth, vh = this.root.clientHeight || window.innerHeight;
-    const p = placeCafeLabel(x, y, this.size.w, this.size.h, vw, vh, this.insets(), avoid);
+    const p = placeCafeLabel(x, y, this.size.w, this.size.h, vw, vh, this.insets(), [...avoid, ...this.chrome()]);
     this.el.style.transform = `translate(${p.left.toFixed(1)}px, ${p.top.toFixed(1)}px)`;
   }
 

@@ -119,3 +119,20 @@ describe('buildCafecito', () => {
     expect(c.group.parent).toBeNull();
   });
 });
+
+describe('placeCafeLabel among stacked name tags and HUD pieces', () => {
+  it('finds a free slot past two tags in the way, nearest to the cup', () => {
+    const vw = 844, vh = 390;
+    // Cup up and left of the crosshair; two tags stacked over and under where the hint wants to go.
+    const tags = [
+      { left: 330, top: 100, right: 540, bottom: 120 },
+      { left: 250, top: 135, right: 420, bottom: 155 },
+    ];
+    const p = placeCafeLabel(380, 150, 180, 18, vw, vh, undefined, tags);
+    const overlaps = tags.some((r) => p.left < r.right + 4 && p.left + 180 > r.left - 4 && p.top < r.bottom + 4 && p.top + 18 > r.top - 4);
+    expect(overlaps).toBe(false);
+    const cx = vw / 2, cy = vh / 2;
+    const onCentre = p.left < cx + CENTRE_CLEAR.hx && p.left + 180 > cx - CENTRE_CLEAR.hx && p.top < cy + CENTRE_CLEAR.hy && p.top + 18 > cy - CENTRE_CLEAR.hy;
+    expect(onCentre).toBe(false);
+  });
+});

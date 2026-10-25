@@ -233,6 +233,8 @@ const en = {
   'hud.ally': 'ALLY',
   'hud.enemy': 'ENEMY',
   'hud.modeStory': 'STORY · SOLO',
+  // HUD readability: the touch scoreboard button's spoken name.
+  'touch.scoresAria': 'Show or hide the scoreboard',
   'score.yourTeam': 'YOUR TEAM',
   'score.opponents': 'OPPONENTS',
   'hud.clickAgain': 'Click again to aim',
@@ -777,6 +779,8 @@ const es: Record<Key, string> = {
   'hud.ally': 'ALIADO',
   'hud.enemy': 'RIVAL',
   'hud.modeStory': 'HISTORIA · EN SOLITARIO',
+  // HUD readability: the touch scoreboard button's spoken name.
+  'touch.scoresAria': 'Mostrar u ocultar el marcador',
   'score.yourTeam': 'TU EQUIPO',
   'score.opponents': 'RIVALES',
   'hud.clickAgain': 'Haz clic otra vez para apuntar',

@@ -42,7 +42,9 @@ def build_parts(tier):
     parts += hp
     hr = hair.build(tier)
     parts += hr
-    SHair = Surface(hr[0].v, hr[0].f)
+    # Seats from the High hair in every tier, so the rollers sit in the same place on all of them.
+    hv, hf, _ = hair.hair_mass(hair.RES['high']['cols'], hair.RES['high']['rows'])
+    SHair = Surface(hv, hf)
     spots = hair.seat_spots(SHair)
     parts += hat.build(tier)
     sk = skirt.build(tier)

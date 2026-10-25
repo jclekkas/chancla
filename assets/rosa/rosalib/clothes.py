@@ -20,12 +20,13 @@ def collar_edge(a, scallops=9):
 
 def collar(S, cols, rows, scallops=9, lift0=0.0065):
     C = COLLAR_C
-    e0 = math.radians(73)
     top, under = [], []
     for j in range(cols):
         a = 2 * math.pi * j / cols
         # The scalloped outer edge: a little lower at each scallop's middle; deeper at the front.
         e1 = collar_edge(a, scallops)
+        # The neckline scoops at the front so a short band of neck shows above the collar.
+        e0 = math.radians(73 - 11 * max(0.0, math.cos(a)) ** 2)
         rt, ru = [], []
         for i in range(rows + 1):
             e = e0 + (e1 - e0) * i / rows

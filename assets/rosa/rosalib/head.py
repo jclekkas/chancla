@@ -27,12 +27,12 @@ KEYS = [
     (1.522, 0.178, 0.160, 0.152, -0.002),  # the cheeks, widest
     (1.482, 0.176, 0.158, 0.132, -0.004),  # jowls
     (1.447, 0.155, 0.150, 0.104, -0.007),  # a soft, wide jaw
-    (1.417, 0.110, 0.136, 0.074, -0.010),  # chin
-    (1.398, 0.056, 0.110, 0.040, -0.014),
-    (1.389, 0.0, 0.0, 0.0, -0.05),
+    (1.418, 0.106, 0.134, 0.072, -0.010),  # chin
+    (1.405, 0.050, 0.104, 0.036, -0.016),  # a short under-chin, so the neck shows
+    (1.399, 0.0, 0.0, 0.0, -0.055),
 ]
-EYE = (0.057, 1.579)
-BROW = {'in': (0.022, 1.628), 'top': (0.064, 1.654), 'out': (0.111, 1.641)}
+EYE = (0.059, 1.579)
+BROW = {'in': (0.024, 1.635), 'top': (0.078, 1.670), 'out': (0.116, 1.648)}
 NOSE_Y = 1.522
 MOUTH_Y = 1.479
 
@@ -121,7 +121,7 @@ def _cat_eye_outline(n):
     """The bold cat-eye frame (old arena shape at 1.12): outer and inner contours, polar about its centre."""
     def quad(p0, p1, p2, k=12):
         return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]) for t in np.linspace(0, 1, k, endpoint=False)]
-    s = 1.12
+    s = 1.12 * 1.1
     o = []
     o += quad((-0.043, -0.004), (-0.042, -0.033), (-0.004, -0.031))
     o += quad((-0.004, -0.031), (0.039, -0.029), (0.047, 0.004))
@@ -163,7 +163,7 @@ def glasses(S, side, n, ey):
         inner[:, 0] *= -1
     ex = side * EYE[0]
     pc, _ = S.front(ex, ey)
-    zc = pc[2] - 0.024
+    zc = pc[2] - 0.027
 
     def place(uv, dz):
         X, Y = ex + uv[0], ey + 0.001 + uv[1]
@@ -208,16 +208,16 @@ def build(tier):
     for side in (1, -1):
         ex, ey = side * EYE[0], EYE[1]
         p, n = on(ex, ey, 0.0005)
-        ev, ef, efc = ellipsoid(0.031, 0.0235, 0.0125, R['eye'][0], R['eye'][1], 'eyeWhite')
+        ev, ef, efc = ellipsoid(0.040, 0.0300, 0.0150, R['eye'][0], R['eye'][1], 'eyeWhite')
         e = Part('eye', ev, ef, efc, tag=-1, weights=head_weights).transform(frame(p, n))
         parts.append(e)
-        p2, n2 = on(ex - side * 0.004, ey - 0.002, 0.0)
-        iv, i_f, ifc = ellipsoid(0.0158, 0.0192, 0.006, R['iris'][0], R['iris'][1], 'iris')
-        parts.append(Part('iris', iv, i_f, ifc, tag=-1, weights=head_weights).transform(frame(p2 + n2 * 0.0108, n2)))
+        p2, n2 = on(ex - side * 0.005, ey - 0.002, 0.0)
+        iv, i_f, ifc = ellipsoid(0.0213, 0.0259, 0.007, R['iris'][0], R['iris'][1], 'iris')
+        parts.append(Part('iris', iv, i_f, ifc, tag=-1, weights=head_weights).transform(frame(p2 + n2 * 0.0128, n2)))
         if R['hilite']:
-            p3, n3 = on(ex - side * 0.009, ey + 0.006, 0.0)
-            gv, gf, gfc = ellipsoid(0.0048, 0.0048, 0.002, 5, 3, 'eyeWhite')
-            parts.append(Part('glint', gv, gf, gfc, tag=-1, weights=head_weights).transform(frame(p3 + n3 * 0.0168, n3)))
+            p3, n3 = on(ex - side * 0.012, ey + 0.008, 0.0)
+            gv, gf, gfc = ellipsoid(0.0062, 0.0062, 0.002, 5, 3, 'eyeWhite')
+            parts.append(Part('glint', gv, gf, gfc, tag=-1, weights=head_weights).transform(frame(p3 + n3 * 0.0196, n3)))
     # ---- brows (her left -2 at -x, right -3): bold arches, inner ends low
     for side in (1, -1):
         pts = []
@@ -235,9 +235,9 @@ def build(tier):
         parts.append(Part('brow', bv, bf, bfc, tag=-2 if side < 0 else -3, weights=head_weights))
     # ---- lips: a full red upper and lower lip, the corners up in a knowing smirk
     def ym(x):
-        return MOUTH_Y + 2.6 * x * x - 0.05 * x
+        return MOUTH_Y + 2.4 * x * x + 900.0 * x ** 4 - 0.04 * x
     nl = R['lip'] + 2
-    for upper, (y0, w, th, dep) in ((True, (0.0060, 0.039, 0.0086, 0.0072)), (False, (-0.0060, 0.032, 0.0102, 0.0080))):
+    for upper, (y0, w, th, dep) in ((True, (0.0068, 0.047, 0.0098, 0.0080)), (False, (-0.0068, 0.038, 0.0118, 0.0090))):
         xs = np.linspace(-w, w, nl)
         def yoff(x):
             k = y0 * (1 - 0.55 * (x / w) ** 2)
@@ -274,13 +274,13 @@ def build(tier):
         fp, outer, inner = glasses(S, side, R['frame'], ey)
         parts.append(fp)
     zb = on(0, ey + 0.004, 0)[0][2] - 0.012
-    bp = [np.array([-0.019, ey + 0.004, zb + 0.004]), np.array([0, ey + 0.007, zb]), np.array([0.019, ey + 0.004, zb + 0.004])]
+    bp = [np.array([-0.012, ey + 0.005, zb + 0.003]), np.array([0, ey + 0.008, zb]), np.array([0.012, ey + 0.005, zb + 0.003])]
     bv, bf, bfc = tube(bp, [0.0042] * 3, 5, 'frames', up=(0, 0, -1))
     parts.append(Part('bridge', bv, bf, bfc, weights=head_weights))
     if tier != 'low':
         for side in (1, -1):
-            a = on(side * 0.108, ey + 0.016, 0.0)[0]
-            a = np.array([side * 0.110, ey + 0.016, a[2] - 0.016])
+            a = on(side * 0.118, ey + 0.018, 0.0)[0]
+            a = np.array([side * 0.120, ey + 0.018, a[2] - 0.018])
             b = np.array([side * 0.160, ey + 0.006, -0.03])
             c = np.array([side * 0.163, ey - 0.004, 0.012])
             tv, tf, tfc = tube([a, b, c], [0.0032, 0.003, 0.0028], 4, 'frames', up=(0, 1, 0))

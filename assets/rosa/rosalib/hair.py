@@ -166,7 +166,7 @@ def seat_spots(S):
         pos = m[:3, 3].copy()
         if k < 2:
             # The front pair rides up onto the rolled front (clear of the brows, under the brim).
-            pos += np.array([0.0, 0.006, 0.014])
+            pos += np.array([0.0, 0.015, 0.020])
         d = pos - c
         hit, hn = S.toward(c, d)
         if hit is None or np.dot(hit - c, d) <= 0:

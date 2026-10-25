@@ -784,11 +784,39 @@ export class Engine {
     this.showcase = { pos: pos ?? [0, 30, 26], look: look ?? [0, 0, 0] };
   }
 
+  /**
+   * Review and measurement only (preview builds): `n` Sol characters standing
+   * in a fixed formation in the showcase view, all current models or all
+   * candidates, built through the normal Avatar path. Each is stepped to the
+   * same idle pose and then held, so two runs differ only in the model.
+   * Resolves once they are in the scene; `n` = 0 removes and disposes them.
+   */
+  private crowd: Avatar[] = [];
+  async setCrowd(n: number, candidate: boolean, at: [number, number, number] = [0, 0, 0], yaw = 0): Promise<number> {
+    for (const av of this.crowd) { this.scene.remove(av.root); av.dispose(); }
+    this.crowd = [];
+    if (n <= 0) return 0;
+    if (candidate) await loadRosaCandidate(this.quality);
+    const cols = Math.min(n, 4), sp = 1.15, rowSp = 1.5;
+    for (let i = 0; i < n; i++) {
+      const av = new Avatar(0, { quality: this.quality, arena: true, candidate });
+      const c = i % cols, r = Math.floor(i / cols);
+      const lx = (c - (cols - 1) / 2) * sp + (r % 2) * sp * 0.5, lz = r * rowSp;
+      av.root.position.set(at[0] + Math.cos(yaw) * lx + Math.sin(yaw) * lz, at[1], at[2] - Math.sin(yaw) * lx + Math.cos(yaw) * lz);
+      av.root.rotation.y = yaw;
+      for (let k = 0; k < 120; k++) av.update(idleState(1e6), 1 / 60, false);
+      this.crowd.push(av);
+      this.scene.add(av.root);
+    }
+    return this.crowd.filter((a) => a.isCandidate).length;
+  }
+
   private menuFrame(dt: number): void {
     if (this.showcase) {
       this.camera.position.set(...this.showcase.pos);
       this.camera.lookAt(...this.showcase.look);
       this.world.update(this.time);
+      for (const av of this.crowd) av.update(idleState(1e6), 0, true);
       return;
     }
     const a = this.time * 0.05 + 0.6;
@@ -1289,6 +1317,7 @@ export class Engine {
   }
 
   dispose(): void {
+    void this.setCrowd(0, false);
     this.disposed = true;
     this.avatarGen++;
     cancelAnimationFrame(this.raf);

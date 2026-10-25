@@ -21,7 +21,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const costs: Record<string, unknown> = {};
 
-type Scene = { map: 'patio' | 'plaza' | 'fiesta'; me: [number, number, number]; yaw: number; pitch: number; hp: number; ally: [number, number]; enemy: [number, number]; lang?: 'en' | 'es' };
+type Scene = { map: 'patio' | 'plaza' | 'fiesta'; me: [number, number, number]; yaw: number; pitch: number; hp: number; ally: [number, number]; enemy: [number, number]; lang?: 'en' | 'es'; weapon?: 0 | 1 };
 // me: x, z, (unused); the first cafecito on each map is in view where it matters.
 const SCENES: Record<string, Scene> = {
   // El Patio: hurt, a few steps from the west cafecito, a teammate and an opponent in the square.
@@ -31,6 +31,9 @@ const SCENES: Record<string, Scene> = {
   // Character read at combat distance: both teams facing you.
   mates: { map: 'patio', me: [-4, 3, 0], yaw: Math.PI / 2, pitch: 0, hp: 100, ally: [-7.2, 2.2], enemy: [-7.6, 4.2] },
   plaza: { map: 'plaza', me: [-4.5, -12.8, 0], yaw: Math.PI / 2, pitch: -0.1, hp: 55, ally: [-10, -10.5], enemy: [-12, -14] },
+  // First-person grip, each chancla in hand, nothing else near: the plaza's open floor, looking slightly down.
+  gripChancla: { map: 'patio', me: [4, 4, 0], yaw: Math.PI / 2, pitch: -0.18, hp: 100, ally: [20, -8], enemy: [-20, 8], weapon: 0 },
+  gripPesada: { map: 'patio', me: [4, 4, 0], yaw: Math.PI / 2, pitch: -0.18, hp: 100, ally: [20, -8], enemy: [-20, 8], weapon: 1 },
   fiesta: { map: 'fiesta', me: [-9.2, -9.5, 0], yaw: Math.PI / 2, pitch: -0.1, hp: 55, ally: [-14.5, -7.5], enemy: [-16, -11] },
 };
 
@@ -73,6 +76,8 @@ async function shoot(browser: Browser, name: string, sc: Scene, phone: boolean):
     if (ally) put(ally, sc.ally[0], sc.ally[1], face(sc.ally[0], sc.ally[1]));
     if (enemy) put(enemy, sc.enemy[0], sc.enemy[1], face(sc.enemy[0], sc.enemy[1]));
     f.input().yaw = sc.yaw; f.input().pitch = sc.pitch;
+    // The chancla in hand: set on the host and the input together, so any build shows it (no switch in flight).
+    if (sc.weapon !== undefined) { f.input().weapon = sc.weapon; me.weapon = sc.weapon; me.switchMs = 0; }
   }, sc);
   // 4.5 s: long enough for the spawn banners to fade in every build, so only lasting changes differ.
   for (let t = 0; t < 4500; t += 50) await p.clock.runFor(50);
@@ -99,7 +104,7 @@ const procs: ChildProcess[] = [spawn(process.execPath, ['node_modules/vite/bin/v
 const browser = await launch(['--mute-audio']);
 try {
   for (let i = 0; i < 80; i++) { try { if ((await fetch(SITE)).ok) break; } catch { /* not yet */ } await sleep(250); }
-  const want = (process.env.SCENES || 'cafe,full,mates,plaza,fiesta').split(',');
+  const want = (process.env.SCENES || 'cafe,full,mates,plaza,fiesta,gripChancla,gripPesada').split(',');
   for (const name of want) {
     const sc = SCENES[name];
     if (!sc) continue;

@@ -64,7 +64,7 @@ export class Engine {
   private avatars = new Map<number, Avatar>();
   private menuAvatars: Avatar[] = [];
   readonly proj = new ProjectileView();
-  readonly vm = new ViewModel();
+  readonly vm = new ViewModel({ arena: true });
   /** Flying ruleros (cosmetic, pooled, capped). */
   readonly ruleros = new RuleroFx();
   /** Melee contact, miss and shielded effects (cosmetic, pooled). */
@@ -284,6 +284,8 @@ export class Engine {
     const l = this.world.light;
     // The arena maps use the deeper shadow band; campaign layouts keep the original.
     setToonRamp(l ? 'arena' : 'classic');
+    // The sculpted arena hand for arena maps; campaign layouts keep the original hand.
+    this.vm.setArena(!!l);
     // Campaign layouts keep the hand's original light.
     this.vmHemi.color.setHex(l ? l.hemi[0] : 0xffe7c4);
     this.vmHemi.groundColor.setHex(l ? l.hemi[1] : 0x7a4a5a);
@@ -295,7 +297,7 @@ export class Engine {
   private buildMenuAvatars(): void {
     this.menuAvatars = [];
     for (const team of [0, 1] as const) {
-      const a = new Avatar(team, { quality: this.quality });
+      const a = new Avatar(team, { quality: this.quality, arena: true });
       a.root.position.set(team === 0 ? -1.6 : 1.6, 0, 3.4);
       a.root.rotation.y = team === 0 ? -0.5 : 0.5;
       this.menuAvatars.push(a);
@@ -891,7 +893,7 @@ export class Engine {
       const team = this.teamOf(r.id);
       let av = this.avatars.get(r.id);
       if (av && av.team !== team) { this.scene.remove(av.root); av.dispose(); av = undefined; }
-      if (!av) { av = new Avatar(team, { quality: this.quality }); this.avatars.set(r.id, av); this.scene.add(av.root); }
+      if (!av) { av = new Avatar(team, { quality: this.quality, arena: true }); this.avatars.set(r.id, av); this.scene.add(av.root); }
       seen.add(r.id);
       driveAvatar(av, r, (masks.get(r.id) ?? r.ruleros) | (this.heldRuleros.get(r.id) ?? 0), dt, reduced);
       // During a replay the live characters keep animating, out of sight.
@@ -986,7 +988,7 @@ export class Engine {
     if (av) return av;
     const used = new Set(r.avatars.values());
     av = this.replayPool.find((a) => a.team === team && !used.has(a));
-    if (!av) { av = new Avatar(team, { quality: this.quality }); this.replayPool.push(av); this.scene.add(av.root); }
+    if (!av) { av = new Avatar(team, { quality: this.quality, arena: true }); this.replayPool.push(av); this.scene.add(av.root); }
     av.reset(); // a pooled one keeps nothing from the live scene or an earlier replay
     r.avatars.set(id, av);
     return av;

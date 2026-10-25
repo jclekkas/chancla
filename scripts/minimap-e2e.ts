@@ -121,7 +121,7 @@ async function desktop(browser: Browser): Promise<void> {
 
   // Cafecitos. West cup (-13, -6.6): hurt at 80, three metres away, facing it.
   await stage(p, [-10, -6.6, 0], Math.PI / 2, 80, [-11, -2], [-20, 6]);
-  await sleep(700);
+  await p.waitForFunction(() => { const e = document.querySelector('.cafe-label') as HTMLElement | null; return !!e && !e.hidden && e.classList.contains('walk'); }, undefined, { timeout: 4000, polling: 50 }).catch(() => null);
   const hint = await cafeText(p);
   check('hurt, cup in view: "Cafecito · Walk over to heal"', hint?.text === 'Cafecito · Walk over to heal', hint);
   await p.screenshot({ path: path.join(OUT, 'cafe-walk-desktop.png') });
@@ -160,6 +160,7 @@ async function desktop(browser: Browser): Promise<void> {
     sim.queueInput = (id: number, inp: any) => { if (id === s.id && (inp.buttons & 1)) (window as any).__log.push(['host', inp.seq, me.cooldownMs, me.switchMs, me.meleeMs, me.weapon, inp.weapon]); return q(id, inp); };
   });
   let accepted = 0;
+  const throwsAtStart = (await state(p)).throws;
   const presses = [];
   for (let i = 0; i < 4; i++) {
     const pre = await p.evaluate(() => { const f = (window as any).__fps, s = f.session(), e = f.engine(), inp = f.input(); return { cd: s.cooldownMs, sw: s.switchMs, me: s.meleeMs, w: s.weapon, enabled: inp.enabled, active: e.inputActive, alive: s.alive, held: inp.heldCount }; });
@@ -175,9 +176,13 @@ async function desktop(browser: Browser): Promise<void> {
   // frame), so presses a second apart on the clock can land inside one cooldown in game time: that is a refusal, not a loss.
   const host = await p.evaluate(() => (window as any).__log as Array<[string, number, number, number, number, number, number]>);
   const fps = await p.evaluate(() => (window as any).__fps.engine().debugInfo().fps);
+  // The host may apply a throw after the per-press window on a slow renderer, so compare totals: every press that
+  // reached the host with the chancla ready threw, and nothing else did.
+  await sleep(1200);
   const reached = host.length;
   const legalRefusals = host.filter((h) => h[2] > 0 || h[3] > 0 || h[4] > 0).length;
-  check('brief primary presses (Classic): every one reaches the host and throws unless the chancla is cooling', reached === 4 && accepted + legalRefusals === 4, { accepted, legalRefusals, reached, fps, frameMs: fm, presses, host });
+  const thrown = (await state(p)).throws - throwsAtStart;
+  check('brief primary presses (Classic): every one reaches the host and throws unless the chancla is cooling', reached === 4 && thrown === reached - legalRefusals, { thrown, perWindowAccepted: accepted, legalRefusals, reached, fps, frameMs: fm, presses, host });
   const b2 = (await state(p)).throws;
   await p.keyboard.down('KeyF'); await p.keyboard.up('KeyF'); await sleep(40);
   await p.keyboard.down('KeyF'); await p.keyboard.up('KeyF'); await sleep(900);

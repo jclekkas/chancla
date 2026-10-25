@@ -56,7 +56,9 @@ function lineup(dist: number, tag: string, view: string, yaw: number): Shot {
   };
 }
 const SHOTS: Shot[] = [
-  ...[[1.5, '1m5'], [4, '4m'], [8, '8m']].flatMap(([d, tag]) => VIEWS.map(([v, yaw]) => lineup(d as number, tag as string, v, yaw))),
+  // DISTS=1.5,5,10 picks other distances (tag: 1m5, 5m, 10m).
+  ...(process.env.DISTS ? process.env.DISTS.split(',').map(Number) : [1.5, 4, 8]).map((d) => [d, `${String(d).replace('.', 'm')}${Number.isInteger(d) ? 'm' : ''}`] as const)
+    .flatMap(([d, tag]) => VIEWS.map(([v, yaw]) => lineup(d, tag, v, yaw))),
   // Against the café door (the facade is the plane z = -8, the door near x = -1.2), seen from the plaza.
   { name: 'door-sol', label: 'Sol at the café door, 4 m', sol: { x: -1.2, z: -7.4, yaw: Math.PI - 0.3 }, luna: { x: 30, z: 30, yaw: 0 }, eye: [-0.2, -3.5], look: [-1.2, 1.0, -7.4] },
   { name: 'door-luna', label: 'Luna at the café door, 4 m', sol: { x: 30, z: 30, yaw: 0 }, luna: { x: -1.2, z: -7.4, yaw: Math.PI - 0.3 }, eye: [-0.2, -3.5], look: [-1.2, 1.0, -7.4] },

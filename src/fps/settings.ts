@@ -23,6 +23,8 @@ export interface FpsSettings {
   showStats: boolean;
   /** After you are eliminated, a short replay of the blow (from the attacker's view when possible). */
   killcam: boolean;
+  /** The compact map in Practice and Online matches (the expanded map stays in the menu). */
+  minimap: boolean;
   voice: number; // dialogue volume
   banter: boolean; // automatic reaction lines
   subtitles: 'auto' | 'es' | 'en' | 'off';
@@ -41,7 +43,7 @@ const KEY = 'chancla.mp.settings.v1';
 export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): FpsSettings {
   return {
     lang, name: '', sensitivity: 1, touchSensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium', qualityMode: 'auto',
-    music: 0.45, sfx: 0.85, showStats: false, killcam: true, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
+    music: 0.45, sfx: 0.85, showStats: false, killcam: true, minimap: true, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
     practiceRules: 'classic', roomRules: 'classic',
   };
 }
@@ -68,6 +70,7 @@ export class FpsSettingsStore {
       sfx: num(r.sfx, d.sfx, 0, 1),
       showStats: bool(r.showStats, d.showStats),
       killcam: bool(r.killcam, d.killcam),
+      minimap: bool(r.minimap, d.minimap),
       voice: num(r.voice, d.voice, 0, 1),
       banter: bool(r.banter, d.banter),
       subtitles: r.subtitles === 'es' || r.subtitles === 'en' || r.subtitles === 'off' || r.subtitles === 'auto' ? r.subtitles : d.subtitles,

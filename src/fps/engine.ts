@@ -8,6 +8,9 @@ import { MATCH, MOVE, NET, WEAPONS, type WeaponId } from '../../shared/config';
 import { EL_PATIO, regionAt, type MapData, type Team } from '../../shared/map';
 import { mapEntry } from '../../shared/maps';
 import { lineOfSight } from '../../shared/collision';
+import { buildCafecito, type CafecitoModel } from './render/cafecito-model';
+import { CafecitoLabel, pickCafecitoGuide } from './cafecito';
+import { teammateMarkers, type MiniMarkers } from './minimap';
 import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '../net/session';
 import { audio } from '../audio/audio';
@@ -20,7 +23,7 @@ import { ViewModel } from './render/viewmodel';
 import { ProjectileView } from './render/projectiles';
 import { RuleroFx } from './render/ruleros';
 import { ContactShadows } from './render/contact-shadows';
-import { COLORS, toon, flat, OUTLINE, setToonRamp } from './render/materials';
+import { setToonRamp } from './render/materials';
 import type { Hud } from './hud';
 import type { FpsInput } from './input';
 import type { FpsSettings, Quality } from './settings';
@@ -90,6 +93,10 @@ export class Engine {
   private tmpV = new THREE.Vector3();
   private tmpD = new THREE.Vector3();
   private pickups: THREE.Group[] = [];
+  private cups: CafecitoModel[] = [];
+  /** "Cafecito · Walk over to heal" and its siblings, near the nearest cup in plain sight. */
+  private cafeLabel = new CafecitoLabel(document.getElementById('names') ?? document.body);
+  private cafeLos = { t: 0, i: -1 };
   /** The arena being played (El Patio for menus and the campaign). */
   private map: MapData = EL_PATIO;
   private pinataHits = new Set<string>();
@@ -373,6 +380,8 @@ export class Engine {
   private clearMatch(): void {
     this.endReplay('match');
     this.killcam.reset();
+    this.cafeLabel.hide();
+    this.cafeLos.i = -1;
     for (const a of this.avatars.values()) { this.scene.remove(a.root); a.dispose(); }
     this.avatars.clear();
     this.disposeReplayPool();
@@ -515,7 +524,9 @@ export class Engine {
         if (e.id === me) {
           audio.play('pickup');
           const p = this.map.pickups[e.i];
-          if (p) this.hud.floatText(t('hud.pickup', { n: MATCH.pickupHeal }), new THREE.Vector3(p.x, 1.2, p.z), 'heal');
+          // The health actually restored (a cup near full health gives less than the full amount).
+          const n = e.n;
+          if (p && n > 0) this.hud.floatText(t('hud.pickup', { n }), new THREE.Vector3(p.x, 1.2, p.z), 'heal');
         }
         break;
       case 'end': {
@@ -831,6 +842,7 @@ export class Engine {
       weapon: s.weapon, cooldownMs: s.cooldownMs, switchMs: s.switchMs, speed, onGround: s.body.onGround,
       crouched: s.body.crouched, alive: s.alive && s.phase !== 'results', msSinceThrow: performance.now() - this.lastLocalThrow,
       msSinceMelee: performance.now() - this.lastLocalMelee, meleeWeapon: s.swingWeapon === null ? null : this.localMeleeWeapon,
+      lookYaw: this.input.yaw, lookPitch: this.input.pitch,
     }, dt, reduced);
 
     this.movementSounds(s, dt, speed);
@@ -866,6 +878,7 @@ export class Engine {
       labels.push({ id: r.id, name: m.name, team: m.team, pos, hp: r.hp, visible, bot: m.bot });
     }
     this.hud.placeLabels(cam, w, h, labels, dt, team);
+    this.placeCafeHint(s, cam, w, h, !!replay, dt);
   }
 
   private syncAvatars(s: GameSession, dt: number, reduced: boolean): void {
@@ -974,6 +987,7 @@ export class Engine {
     const used = new Set(r.avatars.values());
     av = this.replayPool.find((a) => a.team === team && !used.has(a));
     if (!av) { av = new Avatar(team, { quality: this.quality }); this.replayPool.push(av); this.scene.add(av.root); }
+    av.reset(); // a pooled one keeps nothing from the live scene or an earlier replay
     r.avatars.set(id, av);
     return av;
   }
@@ -1140,38 +1154,19 @@ export class Engine {
   // Cafecito pickups: a steaming cup on a saucer, hidden while recharging.
 
   private buildPickups(): void {
-    const cupGeo = new THREE.CylinderGeometry(0.16, 0.12, 0.22, 16);
-    const saucerGeo = new THREE.CylinderGeometry(0.26, 0.22, 0.04, 20);
-    const handleGeo = new THREE.TorusGeometry(0.07, 0.022, 6, 12);
-    const glowGeo = new THREE.RingGeometry(0.4, 0.55, 28);
-    const cupMat = toon(COLORS.cream), saucerMat = toon(COLORS.turquoise), coffee = toon(COLORS.woodDark);
+    for (const c of this.cups) { this.scene.remove(c.group); c.dispose(); }
+    this.cups = []; this.pickups = [];
     for (const p of this.map.pickups) {
-      const g = new THREE.Group();
-      const spin = new THREE.Group();
-      const cup = new THREE.Mesh(cupGeo, cupMat);
-      cup.position.y = 0.13;
-      const outline = new THREE.Mesh(cupGeo, OUTLINE);
-      outline.position.y = 0.13;
-      outline.scale.setScalar(1.08);
-      const top = new THREE.Mesh(new THREE.CircleGeometry(0.15, 16), coffee);
-      top.rotation.x = -Math.PI / 2;
-      top.position.y = 0.235;
-      const handle = new THREE.Mesh(handleGeo, cupMat);
-      handle.position.set(0.17, 0.13, 0);
-      const saucer = new THREE.Mesh(saucerGeo, saucerMat);
-      spin.add(cup, outline, top, handle, saucer);
-      spin.position.y = 0.7;
-      const glow = new THREE.Mesh(glowGeo, flat(COLORS.marigold, { transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-      glow.rotation.x = -Math.PI / 2;
-      glow.position.y = 0.03;
-      g.add(spin, glow);
-      g.position.set(p.x, p.y, p.z);
-      this.pickups.push(g);
-      this.scene.add(g);
+      const c = buildCafecito();
+      c.group.position.set(p.x, p.y, p.z);
+      this.cups.push(c);
+      this.pickups.push(c.group);
+      this.scene.add(c.group);
     }
   }
 
   private placePickups(): void {
+    if (this.pickups.length !== this.map.pickups.length) { this.buildPickups(); return; }
     this.pickups.forEach((g, i) => {
       const p = this.map.pickups[i];
       g.visible = !!p;
@@ -1179,16 +1174,47 @@ export class Engine {
     });
   }
 
-  private syncPickups(s: GameSession, dt: number): void {
+  private syncPickups(s: GameSession, _dt: number): void {
     const pk = s.snap?.pk ?? [];
-    this.pickups.forEach((g, i) => {
-      const ready = (pk[i] ?? 0) <= 0;
-      const spin = g.children[0]!;
-      spin.visible = ready;
-      spin.rotation.y += dt * 1.6;
-      spin.position.y = 0.7 + Math.sin(this.time * 2.2 + i) * 0.06;
-      (g.children[1] as THREE.Mesh).visible = ready;
+    this.cups.forEach((c, i) => {
+      const ms = pk[i] ?? 0;
+      c.setState(ms <= 0, this.time, 1 - ms / MATCH.pickupRespawnMs);
     });
+  }
+
+  /** What the minimap shows: you, your living teammates and the cafecitos (never an opponent). */
+  miniMarkers(): MiniMarkers | null {
+    const s = this.session;
+    if (!s) return null;
+    const pk = s.snap?.pk ?? [];
+    return {
+      me: { x: s.body.x, z: s.body.z, yaw: this.input.yaw, alive: s.alive, team: s.team },
+      mates: teammateMarkers(s.remotes.values(), (id) => s.room?.members.find((m) => m.id === id)?.team ?? null, s.id, s.team),
+      pickups: this.map.pickups.map((p, i) => ({ x: p.x, z: p.z, ready: (pk[i] ?? 0) <= 0 })),
+    };
+  }
+
+  /** The cafecito hint: the nearest cup in plain sight and in front, at most one, never during a replay. */
+  private placeCafeHint(s: GameSession, cam: THREE.Camera, w: number, h: number, replaying: boolean, dt: number): void {
+    const pk = s.snap?.pk ?? [];
+    const cups = this.map.pickups.map((p, i) => ({ x: p.x, y: p.y, z: p.z, ready: (pk[i] ?? 0) <= 0 }));
+    if (replaying || !s.alive || s.phase !== 'playing' || !cups.length) { this.cafeLabel.hide(); return; }
+    // Which cup (if any) is chosen ten times a second, like the name tags' line of sight;
+    // its state (ready, your health) is read every frame.
+    this.cafeLos.t -= dt;
+    if (this.cafeLos.t <= 0) {
+      this.cafeLos.t = 0.1;
+      const g = pickCafecitoGuide({ ...this.eye, yaw: this.input.yaw, hp: s.hp, maxHp: MATCH.maxHealth, alive: s.alive }, cups,
+        (a, b) => lineOfSight(a, b, s.world.boxes, (bx) => bx.tag !== 'floor'));
+      this.cafeLos.i = g ? g.i : -1;
+    }
+    const i = this.cafeLos.i;
+    if (i < 0 || !cups[i]) { this.cafeLabel.hide(); return; }
+    const g = { i, state: !cups[i]!.ready ? 'unavailable' as const : s.hp >= MATCH.maxHealth ? 'full' as const : 'walk' as const };
+    const c = cups[g.i]!;
+    const v = new THREE.Vector3(c.x, c.y + 1.15, c.z).project(cam);
+    if (v.z >= 1) { this.cafeLabel.hide(); return; }
+    this.cafeLabel.show((v.x + 1) / 2 * w, (1 - v.y) / 2 * h, t(`cafe.${g.state}` as const), g.state, this.hud.nameRects());
   }
 
   // ------------------------------------------------------------------
@@ -1211,6 +1237,8 @@ export class Engine {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.clearMatch();
+    this.cafeLabel.dispose();
+    for (const c of this.cups) c.dispose();
     disposeTree(this.scene);
     this.renderer.dispose();
     this.renderer.domElement.remove();

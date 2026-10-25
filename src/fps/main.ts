@@ -28,7 +28,8 @@ import { SoundtrackPanel } from '../ui/soundtrackPanel';
 import { SoundGate } from '../ui/soundGate';
 import { renderMapCards, type MapChoice } from '../ui/mapSelect';
 import { copyLink, inputProfile, watchInputProfile, type InputProfile } from '../ui/device';
-import { isMapId, mapEntry, randomMapId, type MapId } from '../../shared/maps';
+import { isMapId, mapData, mapEntry, randomMapId, type MapId } from '../../shared/maps';
+import { Minimap, type MiniLegend } from './minimap';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
@@ -37,9 +38,9 @@ import type { SimEvent } from '../../shared/sim';
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let soundtrack: SoundtrackPanel | null = null;
 
-type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
-const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
-const OVERLAYS = new Set<ScreenId>(['settings', 'controls', 'confirm']);
+type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'map' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
+const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'map', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
+const OVERLAYS = new Set<ScreenId>(['settings', 'controls', 'confirm', 'map']);
 
 // ---------------------------------------------------------------------
 // Environment
@@ -123,6 +124,35 @@ const MELEE_MAP: MapId = 'fiesta';
  */
 let activeRules: RulesetId = 'classic';
 let appliedRulesKey = '';
+/** The compact map (arena matches in Practice and Online), and the expanded one in the menu. */
+let minimap: Minimap | null = null;
+let minimapKey = '';
+let mapDrawnAt = 0;
+const miniLegend = (): MiniLegend => ({ you: t('minimap.you'), mate: t('minimap.mate'), cafe: t('minimap.cafe'), cafeOff: t('minimap.cafeOff'), wall: t('minimap.wall'), low: t('minimap.low'), raised: t('minimap.raised'), over: t('minimap.over') });
+function arenaMatch(): boolean { return inMatch && !!session && !campaign?.active; }
+function syncMinimap(now: number): void {
+  if (!minimap) return;
+  const room = lastRoom;
+  if (!arenaMatch() || !room) { minimap.setVisible(false); minimapKey = ''; return; }
+  const key = `${room.map}:${getLang()}`;
+  if (key !== minimapKey) { minimap.setMap(mapData(room.map), t(mapEntry(room.map).nameKey as Key)); minimapKey = key; }
+  // Live positions only while you are alive and not watching a replay (it restores on respawn).
+  const marks = engine?.miniMarkers() ?? null;
+  const show = store.value.minimap && !!marks && !!session?.alive && !engine?.replaying && !$('hud').hidden;
+  minimap.setVisible(show);
+  if (show && marks) minimap.update(marks);
+  // The expanded map follows an online match while it is open.
+  if (top() === 'map' && marks && now - mapDrawnAt > 200) { mapDrawnAt = now; minimap.drawExpanded($('map-canvas') as HTMLCanvasElement, marks, miniLegend()); }
+}
+/** The expanded map, over the menu: practice pauses, online keeps going (the menu's own rules). */
+function openMap(): void {
+  if (!arenaMatch()) return;
+  if (base !== 'pause') openPause();
+  pushOverlay('map');
+  mapDrawnAt = 0;
+  requestAnimationFrame(() => { const m = engine?.miniMarkers(); if (m && minimap) minimap.drawExpanded($('map-canvas') as HTMLCanvasElement, m, miniLegend()); });
+}
+
 function applyRules(): void {
   const rules: RulesetId = session && !campaign?.active ? session.rules : 'classic';
   const touchOn = !!input?.touchMode;
@@ -417,6 +447,7 @@ async function boot(): Promise<void> {
     if (!campaign.active) dialogue.update();
     const s = session;
     applyRules();
+    syncMinimap(performance.now());
     if (touch?.visible && s) {
       const def = WEAPONS[s.weapon];
       const swingReady = s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0;
@@ -478,6 +509,8 @@ async function boot(): Promise<void> {
       input = new FpsInput($('stage'));
       input.touchMode = touchMode;
       touch = new FpsTouch(input);
+      // A tap on the compact map (touch only) opens the expanded one; the map consumes the tap.
+      minimap = new Minimap($('minimap'), { onTap: () => { if (touchMode) openMap(); } });
       bindInput(input);
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
@@ -1032,6 +1065,7 @@ function renderSettings(): void {
   $('out-sfx').textContent = `${Math.round(v.sfx * 100)}%`;
   ($('set-stats') as HTMLInputElement).checked = v.showStats;
   ($('set-killcam') as HTMLInputElement).checked = v.killcam;
+  ($('set-minimap') as HTMLInputElement).checked = v.minimap;
 }
 
 function renderPracticeSetup(): void {
@@ -1102,6 +1136,7 @@ function openPause(): void {
   rb.dataset.t = m ? 'pause.restart' : 'pause.restartMatch';
   rb.textContent = t(rb.dataset.t as Key);
   ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
+  ($('btn-pause-map') as HTMLButtonElement).hidden = m;
   // Match information: the combat rules of this match (not shown for missions).
   $('pause-mode').hidden = m;
   $('pause-mode-text').textContent = t('mode.pause', { mode: t(activeRules === 'melee' ? 'mode.melee' : 'mode.classic') });
@@ -1326,6 +1361,8 @@ function bindUi(): void {
   on('btn-mi-reload', () => location.reload());
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
+  on('btn-pause-map', () => openMap());
+  on('btn-map-back', () => popOverlay());
   on('btn-fullscreen', toggleFullscreen);
   on('btn-pause-leave', askHome);
   on('btn-pause-select', () => campaign.leave());
@@ -1363,6 +1400,7 @@ function bindUi(): void {
   check('set-motion', (v) => store.update({ reducedMotion: v }));
   check('set-stats', (v) => store.update({ showStats: v }));
   check('set-killcam', (v) => store.update({ killcam: v }));
+  check('set-minimap', (v) => store.update({ minimap: v }));
   // The replay's Skip button (mouse, when the pointer is free) and the touch "Tap to skip" layer.
   for (const id of ['kc-skip', 'kc-tap']) $(id).addEventListener('click', (e) => { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); engine?.skipReplay(); });
   range('set-voice', (v) => store.update({ voice: v / 100 }));
@@ -1483,6 +1521,7 @@ function debugApi() {
     get touchMode() { return touchMode; },
     engine: () => engine,
     input: () => input,
+    minimap: () => ({ created: !!minimap, key: minimapKey, setting: store.value.minimap, arena: arenaMatch(), hidden: $('minimap').hidden }),
     campaign: () => campaign,
     dialogue: () => dialogue,
     music: () => music,

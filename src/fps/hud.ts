@@ -259,6 +259,18 @@ export class Hud {
     for (const k of this.el.root.querySelectorAll<HTMLElement>('.wmelee kbd')) k.textContent = melee ? t('mode.keys') : 'V';
   }
 
+  /** Where the visible name tags are, in px relative to the label layer (the cafecito hint keeps off them). */
+  nameRects(): Array<{ left: number; top: number; right: number; bottom: number }> {
+    const base = this.el.names.getBoundingClientRect();
+    const out = [];
+    for (const el of this.nameEls.values()) {
+      if (el.hidden || el.style.display === 'none') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width) out.push({ left: r.left - base.left, top: r.top - base.top, right: r.right - base.left, bottom: r.bottom - base.top });
+    }
+    return out;
+  }
+
   /** At spawn and respawn: a short reminder of the player's team (and, on the first, of melee-only rules). */
   spawnBanner(team: number, first: boolean): void {
     const rulesLine = first && this.rules === 'melee';

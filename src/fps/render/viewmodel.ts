@@ -12,6 +12,13 @@
 // right across the view, El Revés a backhand drawn across the chest and
 // swung out to the right. The strike passes the centre of the view inside
 // each attack's contact window (config.ts MELEE).
+//
+// Around the attacks, everything is stepped on dt (exponential smoothing,
+// dt clamped) so it reads the same at any frame rate: the walk bob eases in
+// and out, a landing dips and recovers, the hand trails a turn slightly
+// (off with reduced motion, and it steps aside during an attack), and a
+// switch lowers the chancla in hand, swaps it out of sight and raises the
+// other one on its own clock.
 import * as THREE from 'three';
 import { MELEE, WEAPONS, WEAPON_SWITCH_MS, type WeaponId } from '../../../shared/config';
 import type { Team } from '../../../shared/map';
@@ -30,6 +37,9 @@ export interface ViewState {
   /** Your swing in progress (predicted): time since it started, and the chancla it uses. */
   msSinceMelee?: number;
   meleeWeapon?: WeaponId | null;
+  /** Your look direction (radians, as the camera's yaw and pitch): the hand trails a turn slightly. Optional. */
+  lookYaw?: number;
+  lookPitch?: number;
 }
 
 /** Offsets from the rest pose: position (camera space), root rotation, wrist flick. */
@@ -121,14 +131,23 @@ function sample(keys: Key[], t: number, out: Pose): void {
   for (const f of FIELDS) { const va = a.p[f] ?? 0, vb = b.p[f] ?? 0; out[f] = va + (vb - va) * k; }
 }
 
+const ZERO: Pose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, flick: 0 };
+/** Longest frame the motion is stepped over (a stall must not fling the hand). */
+const DT_MAX = 0.1;
+/** Fraction left of a gap after `dt` seconds of exponential smoothing with time constant `tau`. */
+const keep = (dt: number, tau: number) => Math.exp(-dt / tau);
+const clamp = THREE.MathUtils.clamp;
+const smooth = (k: number) => { const c = clamp(k, 0, 1); return c * c * (3 - 2 * c); };
+
+/** Layer of the timeline that drives the hand this frame. */
+const enum Layer { Idle, Throw, Melee }
+
 export class ViewModel {
   readonly root = new THREE.Group();
   private rig: FpRig;
   private phase = 0;
-  private landing = 0;
-  private wasGround = true;
   private team: Team | null = null;
-  private pose: Pose = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, flick: 0 };
+  private pose: Pose = { ...ZERO };
   /** A confirmed miss: the hand overruns the way the swing was going, then settles (seconds since, strength, weapon). */
   private miss = { t: 1e9, k: 0, weapon: 0 as WeaponId };
   private keys = new Map<string, Key[]>();
@@ -141,6 +160,41 @@ export class ViewModel {
   private pivot = new THREE.Vector3();
   /** Rest pose of the arm and grips (kept on the instance so it can be tuned live while reviewing). */
   private rest: FpPose = JSON.parse(JSON.stringify(FP_REST)) as FpPose;
+
+  // Secondary motion, all stepped on dt so it reads the same at any frame rate.
+  private clock = 0;
+  /** Walk amount 0..1 (eased in and out, so the bob never starts or stops at once). */
+  private walk = 0;
+  private crouch = 0;
+  private wasGround = true;
+  private sinceLand = 1e9;
+  /** Smoothed look rate (rad/s), for the hand's lag behind a turn. */
+  private look = { yaw: 0, pitch: 0, vy: 0, vp: 0, known: false };
+  /** How engaged the hand is in an attack 0..1 (secondary motion steps aside). */
+  private engaged = 0;
+
+  // Weapon switch on the view model's own clock: lower the chancla in hand,
+  // swap at the bottom, raise the other one.
+  /** The chancla the hand holds on screen, and the one asked for. */
+  private shown: WeaponId = 0;
+  private target: WeaponId | -1 = -1;
+  private swOn = false;
+  private swMs = 0;
+  private swFrom = 0;
+  private swBack = false;
+  private sw = 0;
+
+  // A throw belongs to the chancla thrown; switching away ends its animation.
+  private throwWeapon: WeaponId = 0;
+  private throwCut = false;
+  private lastThrowT = Infinity;
+
+  /** What the last frame's timeline left behind when it changed layer, fading out. */
+  private layer = Layer.Idle;
+  private layerPose: Pose = { ...ZERO };
+  private missPose: Pose = { ...ZERO };
+  private missOn = false;
+  private carry: Pose = { ...ZERO };
 
   constructor() {
     this.rig = buildFpHand();
@@ -182,96 +236,184 @@ export class ViewModel {
   /** Ends a miss cue at once (death, respawn, a new round). */
   cancelMiss(): void { this.miss.t = 1e9; }
 
+  /** Back to a still hand holding `weapon` (while dead, so a respawn starts clean). */
+  private settleAt(weapon: WeaponId): void {
+    this.walk = 0; this.crouch = 0; this.engaged = 0; this.sinceLand = 1e9; this.wasGround = true;
+    this.look.known = false; this.look.vy = this.look.vp = 0;
+    this.shown = weapon; this.target = weapon; this.swOn = false; this.sw = 0;
+    this.throwCut = true; this.layer = Layer.Idle; this.missOn = false;
+    for (const f of FIELDS) this.carry[f] = this.layerPose[f] = this.missPose[f] = 0;
+  }
+
+  /** The switch drop 0..1 this frame (and which chancla is in hand). */
+  private switching(s: ViewState, dt: number): number {
+    if (this.swOn) this.swMs += dt * 1000;
+    if (s.weapon !== this.target) {
+      const first = this.target === -1;
+      this.target = s.weapon;
+      if (first || s.switchMs <= 0) {
+        // Not a switch (spawn, a correction): take it as it is.
+        this.shown = s.weapon; this.swOn = false; this.sw = 0;
+      } else {
+        // Starts from wherever the hand is, so a quick switch back never pops.
+        // Its clock starts where the simulation's is (it began during this frame).
+        this.swOn = true; this.swMs = Math.max(0, WEAPON_SWITCH_MS - s.switchMs); this.swFrom = this.sw; this.swBack = s.weapon === this.shown;
+      }
+    }
+    if (!this.swOn) return (this.sw = 0);
+    // Own clock (smooth at any frame rate), never far behind the simulation's.
+    const simK = s.switchMs > 0 ? 1 - s.switchMs / WEAPON_SWITCH_MS : 1;
+    const k = Math.min(1, Math.max(this.swMs / WEAPON_SWITCH_MS, simK - 0.08));
+    let sw: number;
+    if (this.swBack) sw = this.swFrom * (1 - smooth(k));
+    else if (k < 0.5) sw = this.swFrom + (1 - this.swFrom) * smooth(k * 2);
+    else { this.shown = this.target as WeaponId; sw = 1 - smooth(k * 2 - 1); }
+    if (k >= 1) { this.swOn = false; this.shown = this.target as WeaponId; sw = 0; }
+    return (this.sw = sw);
+  }
+
   update(s: ViewState, dt: number, reducedMotion: boolean): void {
     this.root.visible = s.alive;
-    if (!s.alive) { this.cancelMiss(); return; }
+    if (!s.alive) { this.cancelMiss(); this.settleAt(s.weapon); return; }
+    dt = clamp(dt, 0, DT_MAX);
+    this.clock += dt;
     // A miss cue belongs to the chancla that missed: switching ends it.
     if (s.weapon !== this.miss.weapon) this.cancelMiss();
-    const def = WEAPONS[s.weapon]!;
-    if (!this.wasGround && s.onGround) this.landing = 1;
-    this.wasGround = s.onGround;
-    this.landing = Math.max(0, this.landing - dt * 5);
-    const moving = s.speed > 0.5 && s.onGround;
-    this.phase += dt * (moving ? 7 + s.speed : 0);
     const motion = reducedMotion ? 0.25 : 1;
-    const bobX = moving ? Math.sin(this.phase) * 0.012 * motion : 0;
-    const bobY = moving ? Math.abs(Math.cos(this.phase)) * 0.012 * motion : Math.sin(performance.now() * 0.0018) * 0.003 * motion;
-    const sway = moving ? Math.sin(this.phase) * 0.03 * motion : 0;
 
-    // Throw timeline.
-    const release = s.weapon === 1 ? 160 : 90;
+    // Walk bob and idle breathing, crossfaded on the walk amount.
+    const moving = s.speed > 0.5 && s.onGround;
+    this.walk += ((moving ? 1 : 0) - this.walk) * (1 - keep(dt, 0.12));
+    this.phase += dt * (7 + s.speed) * (this.walk > 0.01 ? 1 : 0);
+    const w = this.walk * motion;
+    const bobX = Math.sin(this.phase) * 0.012 * w;
+    const bobY = Math.abs(Math.cos(this.phase)) * 0.012 * w + Math.sin(this.clock * 1.8) * 0.003 * motion * (1 - this.walk);
+    const sway = Math.sin(this.phase) * 0.03 * w;
+    // Landing: a dip that eases in and out over a few tenths of a second.
+    if (!this.wasGround && s.onGround) this.sinceLand = 0;
+    this.wasGround = s.onGround;
+    this.sinceLand += dt;
+    const u = this.sinceLand / 0.06;
+    const landing = u < 12 ? u * Math.exp(1 - u) : 0;
+    this.crouch += ((s.crouched ? 1 : 0) - this.crouch) * (1 - keep(dt, 0.08));
+
+    const sw = this.switching(s, dt);
+
+    // Throw timeline, on the chancla that was thrown.
     const t = s.msSinceThrow;
+    if (t < this.lastThrowT) { this.throwWeapon = s.weapon; this.throwCut = false; }
+    this.lastThrowT = t;
+    if (this.shown !== this.throwWeapon) this.throwCut = true;
+    const tw = this.throwWeapon, cooldown = WEAPONS[tw]!.cooldownMs;
+    const release = tw === 1 ? 160 : 90;
     let visible = true;
+    let layer = Layer.Idle;
     const p = this.pose;
-    if (t < def.cooldownMs) {
+    for (const f of FIELDS) p[f] = 0;
+    if (t < cooldown && !this.throwCut) {
+      layer = Layer.Throw;
       if (t >= release) {
-        const k = (t - release) / Math.max(1, def.cooldownMs - release);
+        const k = (t - release) / Math.max(1, cooldown - release);
         // Empty hand comes back down, then a fresh chancla rises into it.
         visible = k > 0.45;
       }
-      sample(this.timeline(s.weapon, release, def.cooldownMs), t, p);
+      sample(this.timeline(tw, release, cooldown), t, p);
       if (reducedMotion) {
         // Smaller swing; the drop that hides the swap stays deep enough to read.
         const drop = p.y;
         for (const f of FIELDS) p[f] *= 0.4;
         if (t >= release) p.y = Math.min(p.y, drop * 0.75);
       }
-    } else {
-      for (const f of FIELDS) p[f] = 0;
+      // Switching away mid-throw: the throw fades as the hand goes down.
+      if (this.swOn && this.target !== tw) for (const f of FIELDS) p[f] *= 1 - sw;
     }
     // A melee swing overrides the throw pose, and the item never leaves the hand.
     const mt = s.msSinceMelee ?? 1e9, mw = s.meleeWeapon;
     if (mw !== undefined && mw !== null && mt < MELEE[mw]!.cycleMs) {
+      layer = Layer.Melee;
       sample(MELEE_KEYS[mw], mt, p);
       if (reducedMotion) for (const f of FIELDS) p[f] *= 0.5;
       visible = true;
     }
+    // Every layer starts and ends at rest, so a change of layer is smooth;
+    // only one cut short (a swing over a throw's last moments) leaves a gap,
+    // which fades out from where the hand was instead of jumping.
+    const ck = keep(dt, 0.07);
+    for (const f of FIELDS) this.carry[f] *= ck;
+    if (layer !== this.layer) for (const f of FIELDS) this.carry[f] += this.layerPose[f] * ck;
+    this.layer = layer;
+    for (const f of FIELDS) this.layerPose[f] = p[f];
+
     // A confirmed miss. Both swings end with the hand at the edge of the
     // view (El Revés to the right, El Chanclazo low to the left), so going
     // further would not be seen: it gives a short push past the end, then
     // the arm swings back into view toward the middle, off balance, the
     // chancla wobbling, as if it met nothing. Added to the pose in progress,
     // so nothing restarts; a late miss arrives weaker (strength).
+    const m = this.missPose;
     this.miss.t += dt;
     const md = this.miss.weapon === 1 ? 0.5 : 0.4;
-    if (this.miss.t < md) {
+    const missing = this.miss.t < md;
+    // Cut short (a switch, a new round): ease out of it instead.
+    if (!missing && this.missOn) for (const f of FIELDS) this.carry[f] += m[f] * ck;
+    this.missOn = missing;
+    for (const f of FIELDS) m[f] = 0;
+    if (missing) {
       const u = this.miss.t / md;
       const push = u < 0.22 ? Math.sin((u / 0.22) * Math.PI) : 0;
       const back = u > 0.15 ? Math.sin(((u - 0.15) / 0.85) * Math.PI) * (1 - 0.35 * u) : 0;
       const wob = Math.sin(u * Math.PI * 5) * (1 - u) * (u > 0.15 ? 1 : 0);
       const dir = this.miss.weapon === 1 ? 1 : -1, k = this.miss.k * (reducedMotion ? 0.4 : 1) * (this.miss.weapon === 1 ? 1 : 0.85);
       const lobe = 0.6 * push - back; // + past the end, - back toward the middle
-      p.x += dir * 0.11 * lobe * k; p.yaw -= dir * 0.3 * lobe * k;
-      p.y += (0.07 * back - 0.02 * push) * k; p.pitch -= 0.1 * back * k;
-      p.roll += dir * 0.22 * wob * k; p.flick += 0.45 * wob * k;
+      m.x = dir * 0.11 * lobe * k; m.yaw = -dir * 0.3 * lobe * k;
+      m.y = (0.07 * back - 0.02 * push) * k; m.pitch = -0.1 * back * k;
+      m.roll = dir * 0.22 * wob * k; m.flick = 0.45 * wob * k;
     }
-    // Weapon switch: lower out, raise in (eased, with a small tilt).
-    let sw = 0;
-    if (s.switchMs > 0) {
-      const k = 1 - s.switchMs / WEAPON_SWITCH_MS;
-      sw = k < 0.5 ? k * 2 : (1 - k) * 2;
-      sw = sw * sw * (3 - 2 * sw);
+    for (const f of FIELDS) p[f] += m[f] + this.carry[f];
+
+    // Look lag: the hand trails a turn slightly and catches up. Kept small
+    // and mostly away from the crosshair; off with reduced motion, and it
+    // steps aside during an attack so the swing reads as authored.
+    this.engaged += ((layer !== Layer.Idle || missing ? 1 : 0) - this.engaged) * (1 - keep(dt, 0.1));
+    const L = this.look;
+    if (s.lookYaw !== undefined && s.lookPitch !== undefined) {
+      if (L.known && dt > 0) {
+        const dy = Math.atan2(Math.sin(s.lookYaw - L.yaw), Math.cos(s.lookYaw - L.yaw));
+        const a = 1 - keep(dt, 0.09);
+        L.vy += (clamp(dy / dt, -8, 8) - L.vy) * a;
+        L.vp += (clamp((s.lookPitch - L.pitch) / dt, -8, 8) - L.vp) * a;
+      }
+      L.yaw = s.lookYaw; L.pitch = s.lookPitch; L.known = true;
+    } else {
+      L.known = false; L.vy *= keep(dt, 0.09); L.vp *= keep(dt, 0.09);
     }
+    const lag = reducedMotion ? 0 : 1 - 0.7 * this.engaged;
+    const lagX = clamp(L.vy * 0.0035, -0.008, 0.016) * lag;
+    const lagY = clamp(-L.vp * 0.003, -0.01, 0.01) * lag;
+    const lagYaw = clamp(-L.vy * 0.01, -0.035, 0.035) * lag;
+    const lagPitch = clamp(-L.vp * 0.008, -0.025, 0.025) * lag;
+
     // Swings turn about the elbow (behind and below the wrist), so a forward
     // pitch sends the hand forward and down instead of lifting the elbow.
     const r = this.rig.root;
     this.qRest.setFromEuler(this.restRot);
     this.pivot.set(...this.rest.elbow).normalize().applyQuaternion(this.qRest).multiplyScalar(PIVOT).add(this.restPos);
-    this.e.set(p.pitch - sw * 0.35 * (reducedMotion ? 0.5 : 1) - this.landing * 0.05 * motion, p.yaw, p.roll + sway - sw * 0.2);
+    this.e.set(p.pitch - sw * 0.35 * (reducedMotion ? 0.5 : 1) - landing * 0.05 * motion + lagPitch, p.yaw + lagYaw, p.roll + sway - sw * 0.2);
     this.qOff.setFromEuler(this.e);
     r.quaternion.copy(this.qOff).multiply(this.qRest);
     r.position.copy(this.restPos).sub(this.pivot).applyQuaternion(this.qOff).add(this.pivot);
-    r.position.x += bobX + p.x + sw * 0.03;
-    r.position.y += bobY + p.y - sw * 0.26 - this.landing * 0.03 * motion - (s.crouched ? 0.02 : 0);
+    r.position.x += bobX + p.x + sw * 0.03 + lagX;
+    r.position.y += bobY + p.y - sw * 0.26 - landing * 0.03 * motion - this.crouch * 0.02 + lagY;
     r.position.z += p.z;
-    const grip = this.rig.grips[s.weapon];
+    const held = this.shown;
+    const grip = this.rig.grips[held];
     this.rig.hand.quaternion.copy(this.q.setFromAxisAngle(grip.userData.flickAxis as THREE.Vector3, p.flick));
-    this.rig.grips[0].visible = s.weapon === 0;
-    this.rig.grips[1].visible = s.weapon === 1;
+    this.rig.grips[0].visible = held === 0;
+    this.rig.grips[1].visible = held === 1;
     // Without the chancla the fingers close into a loose fist instead of
     // gripping air (the hand is built round the sole).
     this.rig.skins[0].scale.set(visible ? 1 : 0.86, visible ? 1 : 0.55, 1);
-    this.rig.items[0].visible = visible && s.weapon === 0;
-    this.rig.items[1].visible = visible && s.weapon === 1;
+    this.rig.items[0].visible = visible && held === 0;
+    this.rig.items[1].visible = visible && held === 1;
   }
 }

@@ -50,7 +50,7 @@ export function toonRamp(): THREE.DataTexture {
  * A wall turned from the sun keeps less of it, so a face in shade is lit by
  * the cool sky fill and reads as shade, not as dimmer sunlight.
  */
-export const WORLD_RAMP: readonly [number, number, number] = [30, 112, 255];
+export const WORLD_RAMP: readonly [number, number, number] = [46, 112, 255];
 let wramp: THREE.DataTexture | null = null;
 export function worldRamp(): THREE.DataTexture {
   if (wramp) return wramp;

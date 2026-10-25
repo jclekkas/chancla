@@ -773,16 +773,10 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
         }
       }
     }
-    // The house's other convex corners (an alley entrance, a flank on the plaza) get a flat
-    // pilaster strip in the trim colour: the wall's thickness reads at the arris. Base-band depth.
+    // (Flat trim-colour strips on the other convex corners were tried and removed: in shade
+    // they read as pale boards stuck on the arris, as quoins did.)
     for (const side of SIDES) {
       if (side === fs) continue;
-      const f = frameOf(b, side);
-      for (const s of spansOf(b, side, 0.88, h - 0.52)) {
-        if (s.a1 - s.a0 < 1.2) continue;
-        if (s.e0 === 'c') fbox(f, M.trim, s.a0, 0.88, 0, s.a0 + 0.3, h - 0.52, 0.03, 2, 0, (_x, y) => weatherAt(y, 0, h, true));
-        if (s.e1 === 'c') fbox(f, M.trim, s.a1 - 0.3, 0.88, 0, s.a1 + 0.03, h - 0.52, 0.03, 2, 0, (_x, y) => weatherAt(y, 0, h, true));
-      }
       wallPatches(b, side, col);
     }
     for (const s of spansOf(b, fs, 0, h - 0.42)) {

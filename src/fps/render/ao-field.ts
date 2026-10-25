@@ -271,7 +271,8 @@ ${lite ? `
   const fragApply = `
   {
     float aoF = aoFieldFill();
-    reflectedLight.indirectDiffuse *= aoF;
+    // Occluded fill is bounced courtyard light: it warms as it darkens instead of going grey.
+    reflectedLight.indirectDiffuse *= aoF * mix( vec3( 1.0, 0.88, 0.76 ), vec3( 1.0 ), aoF );
     reflectedLight.directDiffuse *= ( 1.0 - aoCoverDirect * aoCover ) * aoSunVis;
     if ( aoDebug > 0.5 ) { reflectedLight.directDiffuse = vec3( 0.0 ); totalEmissiveRadiance = vec3( 0.0 ); reflectedLight.indirectDiffuse = vec3( aoDebug > 1.5 ? aoSunVis : aoF ); }
   }`;

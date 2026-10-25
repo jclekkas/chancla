@@ -1,4 +1,5 @@
 import './styles.css';
+import { inject } from '@vercel/analytics';
 import { applyDom, detectLang, setLang, t } from './i18n/i18n';
 import type { StringKey } from './i18n/strings';
 import { SafeStorage, SettingsStore, ProgressStore, defaultSettings } from './persistence/storage';
@@ -96,5 +97,8 @@ async function boot(): Promise<void> {
   }
   clearTimeout(slow);
 }
+
+// Initialize Vercel Analytics
+inject();
 
 void boot();

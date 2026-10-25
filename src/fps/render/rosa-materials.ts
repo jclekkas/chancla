@@ -4,6 +4,9 @@
 // the same mesh: an inverted hull whose vertices carry ink = 1. The shader
 // paints those flat ink and nudges them 1 cm away from the camera, so the
 // hull only shows at the silhouette, not in the creases where parts meet.
+// The face's eyes and brows carry a negative ink (a feature tag) instead:
+// the vertex shader closes the eyes and moves the brows from one per-avatar
+// uniform, so blinks and expressions cost no draw call and no geometry.
 import * as THREE from 'three';
 import type { Team } from '../../../shared/map';
 import { COLORS, toonRamp } from './materials';
@@ -40,11 +43,32 @@ export const ROSA_SHARED = {
 /** How far (m) the hull is pushed from the camera so that only its silhouette shows. */
 const INK_PUSH = 0.011;
 
+/** Feature tags (stored as ink = -tag on the face's pieces). */
+export const FACE_TAG = { eye: 1, browL: 2, browR: 3 } as const;
+
+/**
+ * Where the face's features sit (head-local, as drawn): the eyes' lid line
+ * (they close onto it) and each brow's inner and outer x (her left brow at -x).
+ */
+export interface FaceRig { lidY: number; browIn: number; browOut: number }
+
+const f4 = (x: number) => x.toFixed(4);
 const inkRGB = new THREE.Color(ROSA_SHARED.ink);
-function inkShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
+function inkShader(sh: THREE.WebGLProgramParametersWithUniforms, fr: FaceRig): void {
+  // rosaFace: x eyes closed (0..1), y brows raised (m, - lowered), z brows knitted (0..1).
+  const span = fr.browOut - fr.browIn;
   sh.vertexShader = sh.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute float ink;\nvarying float vInk;')
-    .replace('#include <project_vertex>', `#include <project_vertex>\n\tvInk = ink;\n\tmvPosition.z -= ink * ${INK_PUSH.toFixed(4)};\n\tgl_Position = projectionMatrix * mvPosition;`);
+    .replace('#include <common>', '#include <common>\nattribute float ink;\nvarying float vInk;\nuniform vec4 rosaFace;')
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+\tif (ink < -0.5) {
+\t\tif (ink > -1.5) transformed.y = ${f4(fr.lidY)} + (transformed.y - ${f4(fr.lidY)}) * (1.0 - 0.9 * rosaFace.x);
+\t\telse {
+\t\t\tfloat inner = clamp(1.0 - (abs(transformed.x) - ${f4(fr.browIn)}) / ${f4(span)}, 0.0, 1.0);
+\t\t\ttransformed.y += rosaFace.y - rosaFace.z * 0.014 * inner;
+\t\t\ttransformed.x -= sign(transformed.x) * rosaFace.z * 0.005 * inner;
+\t\t}
+\t}`)
+    .replace('#include <project_vertex>', `#include <project_vertex>\n\tvInk = ink;\n\tmvPosition.z -= max(ink, 0.0) * ${INK_PUSH.toFixed(4)};\n\tgl_Position = projectionMatrix * mvPosition;`);
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', '#include <common>\nvarying float vInk;')
     .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(${inkRGB.r.toFixed(4)}, ${inkRGB.g.toFixed(4)}, ${inkRGB.b.toFixed(4)}), step(0.5, vInk));\n#include <tonemapping_fragment>`);
@@ -52,11 +76,13 @@ function inkShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
 
 /**
  * Rosa's material: vertex-coloured toon with the ink hull. One per avatar
- * (its emissive is the hit flash); all of them share one shader program.
+ * (its colour is the hit flash, `face` her expression); all of them share
+ * one shader program (`fr` is the same for every look).
  */
-export function rosaMaterial(): THREE.MeshToonMaterial {
+export function rosaMaterial(fr: FaceRig, face = new THREE.Vector4()): THREE.MeshToonMaterial {
   const m = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toonRamp() });
-  m.onBeforeCompile = inkShader;
+  const u = { value: face };
+  m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); };
   m.customProgramCacheKey = () => 'rosa-ink';
   return m;
 }

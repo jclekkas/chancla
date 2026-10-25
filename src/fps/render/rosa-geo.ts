@@ -117,9 +117,10 @@ export class Parts {
   /**
    * g: the piece (not consumed). color: flat colour, or null to keep g's
    * vertex colours. ink: hull width in metres (0: none). proxy: what the
-   * hull is made from (default g; consumed).
+   * hull is made from (default g; consumed). tag: a face feature
+   * (rosa-materials FACE_TAG), stored as ink = -tag.
    */
-  add(g: THREE.BufferGeometry, color: number | null, m?: THREE.Matrix4, ink = 0, proxy?: THREE.BufferGeometry): this {
+  add(g: THREE.BufferGeometry, color: number | null, m?: THREE.Matrix4, ink = 0, proxy?: THREE.BufferGeometry, tag = 0): this {
     const src = g.clone();
     if (m) src.applyMatrix4(m);
     if (!src.attributes.normal) src.computeVertexNormals();
@@ -132,7 +133,7 @@ export class Parts {
       for (let i = 0; i < n; i++) a.set([cc.r, cc.g, cc.b], i * 3);
       body.setAttribute('color', new THREE.BufferAttribute(a, 3));
     }
-    body.setAttribute('ink', new THREE.BufferAttribute(new Float32Array(n), 1));
+    body.setAttribute('ink', new THREE.BufferAttribute(new Float32Array(n).fill(-tag), 1));
     body.morphAttributes = {};
     this.list.push(body);
     this.tris += n / 3;

@@ -14,7 +14,11 @@
 // Everything else is layered on with critically damped springs (a lightly
 // underdamped one for the comic wobble of a hit), and the rare hard cuts (a
 // weapon change mid-action, the pratfall) are blended out by
-// inertialization, so the pose never pops.
+// inertialization, so the pose never pops. Cloth (the skirt) swings on
+// lightly underdamped pendulums, and the face blinks and reacts through the
+// material (rosa-materials.ts). Every spring is solved exactly for the
+// frame's dt, so the motion is the same at 30, 60 or 144 fps, and all of it
+// lives on the instance: reset() (or a teleport) starts her afresh.
 import * as THREE from 'three';
 import { MELEE, WEAPONS, type WeaponId } from '../../../shared/config';
 import { RIG, type AvatarState, type RosaRig } from './rosa-rig';
@@ -148,6 +152,10 @@ const SOFT_REACH = REACH * 0.995;
 const TOE_OUT = 0.12;
 /** Fastest an upper-body joint may turn (rad/s): the throw's own whip is just under it. */
 const SLEW = 48;
+/** Fastest a swinging leg's joints turn (rad/s): well above a run's own swing. */
+const LEG_SLEW = 36;
+/** Fastest the feet's pull on the hips lets go (m/s): above the walk's own bob. */
+const HIP_RISE = 1.6;
 
 /** A critically damped spring toward a target (exact, so stable at any dt). */
 class Spring {
@@ -156,6 +164,19 @@ class Spring {
     const x0 = this.x - target, j = this.v + omega * x0, e = Math.exp(-omega * dt);
     this.x = target + (x0 + j * dt) * e;
     this.v = (this.v - omega * j * dt) * e;
+    return this.x;
+  }
+  set(x: number): void { this.x = x; this.v = 0; }
+}
+
+/** A damped spring with damping ratio z < 1 (a pendulum that overshoots a little), also exact. */
+class Pend {
+  x = 0; v = 0;
+  to(target: number, omega: number, z: number, dt: number): number {
+    const wd = omega * Math.sqrt(1 - z * z), x0 = this.x - target, e = Math.exp(-z * omega * dt);
+    const c = Math.cos(wd * dt), sn = Math.sin(wd * dt), k = (this.v + z * omega * x0) / wd;
+    this.x = target + e * (x0 * c + k * sn);
+    this.v = e * (this.v * c - sn * (z * omega * k + wd * x0));
     return this.x;
   }
   set(x: number): void { this.x = x; this.v = 0; }
@@ -175,6 +196,7 @@ interface Foot {
   stx: number; stz: number; // a stumble's offset from the rest spot (world)
   lift: number; pitch: number;
   down: boolean; // the swing has reached its spot
+  err: number; // standing: how far out of place it was last frame (1: enough for a settling step)
   yOff: Spring; // a foot set down above the paving settles onto it
   ax: Spring; ay: Spring; az: Spring; // airborne: root-local position
   lx: number; ly: number; lz: number; // root-local result
@@ -209,6 +231,9 @@ export class RosaAnimator {
   private lean = new Spring(); private roll = new Spring();
   // Gait.
   private walking = false;
+  private prevSpeed = 0;
+  /** The part of this frame since the walk began (a step that starts between frames starts part way in). */
+  private walkFrac = 1;
   private gaitIdle = true;
   private splay = 0;
   private bx = 0; private bz = 0; // her ground position this frame (world, plus any walk-on-the-spot offset)
@@ -217,6 +242,7 @@ export class RosaAnimator {
   private phase = 0;
   private backMode = false;
   private hipWorld = 0; private hipWorldV = 0;
+  private hipDef = 0;
   private sideness = new Spring();
   private crouch = new Spring();
   private onGround = true;
@@ -233,7 +259,13 @@ export class RosaAnimator {
   // The startled flinch of a hit: hands up and splayed, leaning away from the blow.
   private flinchT = 1e9; private flinchK = 1; private flinchSide = 0; private flinchDur = 0.42;
   private wob = new Float64Array(R_N); private wobV = new Float64Array(R_N);
-  private extX = new Spring(); private extZ = new Spring();
+  // The skirt: pitch and roll pendulums, and a lag behind the hips' turn and roll (the swish).
+  private extX = new Pend(); private extZ = new Pend();
+  private skirtYaw = new Pend(); private skirtRoll = new Pend(); private skirtInit = false;
+  // The face: blinks on her own clock, and the expression's springs.
+  private blinkAt = 0; private blinkN = 0;
+  private lid = new Spring(); private browUp = new Spring(); private browKnit = new Spring();
+  private readonly simple: boolean;
   // Inertialization.
   private raw = new Float64Array(CH_N);
   private out = new Float64Array(CH_N);
@@ -242,6 +274,7 @@ export class RosaAnimator {
   private offOmega = 20;
   private offActive = false;
   private pendingCapture = 0; // 1: upper body, 2: everything
+  private snap = true; // the next pose is shown as is (a fresh start: nothing to blend or slew from)
   // Scratch (no allocation per frame).
   private arm: ThrowKey = { t: 0, ...REST, ...STILL };
   private body: BodyKey = { t: 0, ...STILL };
@@ -249,10 +282,18 @@ export class RosaAnimator {
   private eu = new THREE.Euler();
   private extrasBase: Array<{ o: THREE.Object3D; g: number; skirt: boolean; rx: number; ry: number; rz: number; sx: number; sy: number; sz: number }> = [];
 
-  constructor(private readonly rig: RosaRig) {
-    this.seed = (seedCounter++ * 2.399) % (Math.PI * 2); // Rosas side by side do not breathe in step
+  /**
+   * `seed`: the idle's (and the blinks') phase (default: a new one per
+   * avatar, so Rosas side by side do not breathe or blink in step).
+   * `simple`: lighter secondary motion (Low quality): no skirt swish.
+   */
+  constructor(private readonly rig: RosaRig, opts: { seed?: number; simple?: boolean } = {}) {
+    const seed = opts.seed ?? seedCounter++;
+    this.seed = (seed * 2.399) % (Math.PI * 2);
+    this.simple = !!opts.simple;
+    this.blinkAt = 0.6 + 2 * hash(this.seed, 0);
     const mk = (side: number): Foot => ({
-      side, planted: true, wx: 0, wz: 0, yaw: 0, sx: 0, sz: 0, syaw: 0, s: 1, q0: 0, dur: 0, stx: 0, stz: 0, lift: 0, pitch: 0, down: false,
+      side, planted: true, wx: 0, wz: 0, yaw: 0, sx: 0, sz: 0, syaw: 0, s: 1, q0: 0, dur: 0, stx: 0, stz: 0, lift: 0, pitch: 0, down: false, err: 0,
       yOff: new Spring(), ax: new Spring(), ay: new Spring(), az: new Spring(), lx: side * STANCE_W, ly: GROUND, lz: 0,
     });
     this.feet = [mk(-1), mk(1)];
@@ -262,7 +303,7 @@ export class RosaAnimator {
     rig.armR.rotation.order = 'YXZ'; // the sweep turns about the vertical, outside the arm's lift
     rig.legL.rotation.order = 'YZX'; // the IK: yaw, then out to the side, then forward
     rig.legR.rotation.order = 'YZX';
-    const gains = { skirt: 0.5, shawlTail: 1.6, hatBrim: 0.35, bun: 0.6 } as const;
+    const gains = { skirt: 1, shawlTail: 3.2, hatBrim: 0.7, bun: 1.2 } as const;
     for (const key of Object.keys(gains) as Array<keyof typeof gains>) {
       const o = rig.extras[key];
       if (o) this.extrasBase.push({ o, g: gains[key], skirt: key === 'skirt', rx: o.rotation.x, ry: o.rotation.y, rz: o.rotation.z, sx: o.scale.x, sy: o.scale.y, sz: o.scale.z });
@@ -282,6 +323,41 @@ export class RosaAnimator {
     this.flinchT = 0; this.flinchK = k * (head ? 1 : 0.75); this.flinchSide = sd; this.flinchDur = head ? 0.46 : 0.38;
     if (head) this.kick(k, sd * 13, sd * 7, 6, sd * 3.5, sd * 2.2, 3.2, 9, 0.35);
     else this.kick(k, sd * 6, sd * 3, -2, sd * 5, sd * 1.5, -3.5, 6, 0.45);
+  }
+
+  /**
+   * Forgets everything carried from earlier frames (pose smoothing, cloth,
+   * gait, reactions, the action history): the next update poses her afresh
+   * wherever the root is, as a new avatar would. For an avatar reused for
+   * another character or moment (a replay, a seek, a new match).
+   */
+  reset(): void {
+    this.deadT = -1; this.spawnT = 1; this.wasAlive = true;
+    this.clearMotion();
+    this.rootMoved = false; this.ox = this.oz = 0;
+    this.prevMelee = this.prevHit = 1e9; this.prevWeapon = 0;
+    this.sinceReact = this.sinceHit = 1e9;
+    this.blinkAt = this.time + 0.6 + 2 * hash(this.seed, ++this.blinkN);
+    this.rig.root.scale.setScalar(1);
+  }
+
+  /** The transient motion (shared by reset, respawn and a teleport's restart). */
+  private clearMotion(): void {
+    this.off.fill(0); this.offV.fill(0); this.offActive = false; this.pendingCapture = 0;
+    this.wob.fill(0); this.wobV.fill(0);
+    for (const sp of [this.squash, this.crouch, this.air, this.tuck, this.lean, this.roll, this.vx, this.vz, this.gait, this.run, this.sideness, this.lid, this.browUp, this.browKnit]) sp.set(0);
+    this.clearCloth();
+    this.whiffT = 1e9; this.flinchT = 1e9;
+    this.vy = this.airVy = 0;
+    this.walking = false; this.prevSpeed = 0; this.walkFrac = 1; this.backMode = false; this.phase = 0; this.settleHold = 0;
+    this.onGround = true;
+    this.init = false; // planted afresh wherever she appears
+    this.snap = true;
+  }
+
+  private clearCloth(): void {
+    this.extX.set(0); this.extZ.set(0); this.skirtInit = false;
+    this.hipDef = 0;
   }
 
   /** A confirmed miss: a short off-balance overrun of the follow-through. */
@@ -330,7 +406,10 @@ export class RosaAnimator {
     if (!s.onGround) this.airVy = this.vy;
     const cr = this.crouch.to(s.crouched ? 1 : 0, 16, dt);
     const airW = this.air.to(s.onGround ? 0 : 1, 14, dt);
+    const wasWalking = this.walking;
     this.walking = s.onGround && (this.walking ? speed > 0.2 : speed > 0.35);
+    this.walkFrac = !wasWalking && this.walking ? clamp((speed - 0.35) / Math.max(1e-6, speed - this.prevSpeed), 0, 1) : 1;
+    this.prevSpeed = speed;
     const gw = this.gait.to(this.walking ? Math.min(1, speed / 1.2) : 0, 9, dt);
     const run = this.run.to(clamp((speed - 2.2) / 2.8, 0, 1) * (1 - cr), 6, dt);
 
@@ -379,7 +458,11 @@ export class RosaAnimator {
     if (s.msSinceHit < this.prevHit - 30 && s.msSinceHit < 300) {
       // A hit (a throw, or the snapshot side of a melee blow): a recoil back,
       // unless react() already gave this blow its own.
-      if (this.sinceReact > 0.25) { this.kick(1, 0, 0, 5, 0, 0, 4.5, 7, 0.3); this.flinchT = 0; this.flinchK = 0.55; this.flinchSide = 0; this.flinchDur = 0.34; }
+      if (this.sinceReact > 0.25) {
+        this.kick(1, 0, 0, 5, 0, 0, 4.5, 7, 0.3);
+        // On the hit's own clock (it may have landed between frames).
+        this.flinchT = clamp(s.msSinceHit / 1000, 0, dt) - dt; this.flinchK = 0.55; this.flinchSide = 0; this.flinchDur = 0.34;
+      }
       this.sinceHit = 0;
     }
     this.prevHit = s.msSinceHit;
@@ -431,8 +514,18 @@ export class RosaAnimator {
       fl *= this.flinchK * (rm ? 0.45 : 1);
     }
     const fs = this.flinchSide;
-    const face = (r.extras as Record<string, THREE.Object3D | undefined>)['faceHit'];
-    if (face) face.visible = fl > 0.25;
+    // ---- Face: blinks; a narrowed, knitted look of effort through a swing or
+    // a throw's wind-up; eyes squeezed shut and brows up when she is hit.
+    if (r.face) {
+      let effort = 0;
+      if (swinging) { const c1 = mdef.windupMs + mdef.activeMs; effort = tm < c1 ? smooth(tm / 70) : 1 - smooth((tm - c1) / 220); }
+      else if (throwing) effort = 0.8 * (1 - smooth(tThrow / 260));
+      const wince = Math.min(1, fl * 1.5), fk = rm ? 0.7 : 1;
+      const lid = this.lid.to((0.3 * effort + 0.62 * wince) * fk, 32, dt);
+      const up = this.browUp.to((0.007 * wince - 0.0025 * effort) * fk, 26, dt);
+      const knit = this.browKnit.to((0.9 * effort + 0.35 * wince) * fk, 26, dt);
+      r.face.set(Math.min(1, Math.max(this.blink(), lid)), up, knit, 0);
+    }
     const wsgn = this.whiffW === 1 ? -1 : 1; // the Revés overruns to her right, the Chanclazo to her left
     const bodyW = swinging || throwing ? 1 - 0.4 * gw : 0;
 
@@ -483,6 +576,7 @@ export class RosaAnimator {
     // The legs must reach the feet: the hips come down as far as needed (a
     // smooth minimum, so the bob of the walk comes from the feet themselves).
     if (airW < 0.5) {
+      const base = hipsY;
       for (let fi = 0; fi < ft.length; fi++) { const f = ft[fi]!;
         const hx = f.side * RIG.legX * Math.cos(hipYaw), hz = -f.side * RIG.legX * Math.sin(hipYaw);
         const dx = f.lx - hx, dz = f.lz - hz;
@@ -491,7 +585,13 @@ export class RosaAnimator {
         hipsY = smin(hipsY, cap, 0.03);
       }
       hipsY = Math.max(hipsY, hipFloor - (body.hd * bodyW + 0.05 * wf) * mAmp - this.squash.x - 0.03 * fl);
-    }
+      // How far the feet pull the hips down: at once (a leg must reach), but
+      // let go no faster than HIP_RISE, so a foot leaving a long reach does
+      // not pop the hips (and every knee) up in one frame.
+      const def = Math.max(base - hipsY, this.hipDef - HIP_RISE * dt);
+      this.hipDef = Math.min(def, Math.max(0, base - (hipFloor - (body.hd * bodyW + 0.05 * wf) * mAmp - this.squash.x - 0.03 * fl)));
+      hipsY = base - this.hipDef;
+    } else this.hipDef = 0;
     // A flinch drops the weight back onto the leg away from the blow.
     raw[HY] = hipsY - 0.03 * fl; raw[HRX] = 0; raw[HRY] = hipYaw + fs * 0.1 * fl; raw[HRZ] = hipRoll + fs * 0.06 * fl;
     for (let i = HY; i <= HRZ; i++) o[i] = raw[i]! + this.off[i]!;
@@ -500,12 +600,18 @@ export class RosaAnimator {
     this.splay = 0.22 * cr; // more and the knees push out through the sides of the skirt
     this.solveLeg(ft[0], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LLX);
     this.solveLeg(ft[1], o[HY]!, o[HRX]!, o[HRY]!, o[HRZ]!, yaw, LRX);
-    for (let i = LLX; i <= SRX; i++) o[i] = raw[i]! + this.off[i]!;
+    // A swinging foot has no spot to hold until it comes down: its leg is
+    // slew-limited there, so a foot leaving a long reach (a crouch-walk, a
+    // dragged foot) folds up quickly but not in one frame.
+    for (let fi = 0; fi < 2; fi++) {
+      const f = ft[fi]!, c0 = fi === 0 ? LLX : LRX, lim = !this.snap && s.onGround && !f.planted && f.s < 0.75 ? LEG_SLEW * dt : Infinity;
+      for (let i = c0; i < c0 + 4; i++) { const v = raw[i]! + this.off[i]!, p = o[i]!; o[i] = v > p + lim ? p + lim : v < p - lim ? p - lim : v; }
+    }
 
     // ---- Torso and head ----
     const tw = (act * arm.tw - 0.3 * wsgn * wf) * mAmp;
     const pitch = s.pitch;
-    let torsoX = leanF - 0.03 * run * gw - 0.2 * cr + 0.012 * breath * idleW + pitch * 0.18 + (body.lx * bodyW - 0.14 * wf) * mAmp;
+    let torsoX = leanF - 0.075 * run * gw - 0.2 * cr + 0.012 * breath * idleW + pitch * 0.18 + (body.lx * bodyW - 0.14 * wf) * mAmp;
     if (this.backMode && this.walking) torsoX += 0.07 * gw;
     torsoX += -this.squash.x * 1.4 + airW * (this.tuck.x * 0.12 - 0.06);
     raw[TX] = torsoX + wob[R_TORX]! + 0.2 * fl;
@@ -552,11 +658,12 @@ export class RosaAnimator {
     this.resolveCapture();
     // A slew limit on the upper body: where two fast things meet (a throw
     // starting out of a flinch) no joint turns faster than a whip.
-    const lim = SLEW * dt;
+    const lim = this.snap ? Infinity : SLEW * dt;
     for (let i = TX; i <= WRZ; i++) { const v = raw[i]! + this.off[i]!, p = o[i]!; o[i] = v > p + lim ? p + lim : v < p - lim ? p - lim : v; }
+    this.snap = false;
 
     this.apply(true, yaw);
-    this.secondary(dt, aF, aR, cr, rm);
+    this.secondary(dt, aF, aR, vF, vR, cr, rm);
 
     // Weapons: the chancla in hand reappears when the weapon is ready.
     const inHand = swinging || tThrow > def.cooldownMs * 0.55 || tThrow < (s.weapon === 1 ? 160 : 90);
@@ -582,6 +689,21 @@ export class RosaAnimator {
     }
   }
 
+  /**
+   * How closed a blink has her eyes now (0..1): one every 2 to 5 s on her
+   * own clock, now and then two in a row, each 0.16 s (fast down, slower up).
+   */
+  private blink(): number {
+    const D = 0.16;
+    while (this.time > this.blinkAt + D) {
+      const n = ++this.blinkN;
+      this.blinkAt += D + (hash(this.seed, n * 2) < 0.15 ? 0.1 : 2 + 3 * hash(this.seed, n * 2 + 1));
+    }
+    const u = (this.time - this.blinkAt) / D;
+    if (u < 0) return 0;
+    return u < 0.35 ? smooth(u / 0.35) : 1 - smooth((u - 0.35) / 0.65);
+  }
+
   // ---------------------------------------------------------------- root
 
   /** Velocity from the root's motion since last frame (`s` null: only keep track). */
@@ -593,8 +715,10 @@ export class RosaAnimator {
     this.px = p.x; this.py = p.y; this.pz = p.z;
     if (!s || dt <= 0) return;
     if (dx * dx + dz * dz > 2.5 * 2.5 || Math.abs(dy) > 3) {
-      // A teleport (a snapshot jump): start again under her.
+      // A teleport (a snapshot jump): start again under her, cloth and lean at rest.
       this.vx.set(0); this.vz.set(0); this.vy = 0;
+      this.lean.set(0); this.roll.set(0); this.squash.set(0);
+      this.clearCloth();
       this.resetFeet();
       return;
     }
@@ -609,16 +733,12 @@ export class RosaAnimator {
     }
     this.vx.to(dx / dt, 30, dt);
     this.vz.to(dz / dt, 30, dt);
-    this.vy += (dy / dt - this.vy) * Math.min(1, dt * 40);
+    this.vy += (dy / dt - this.vy) * (1 - Math.exp(-40 * dt));
   }
 
   private respawn(): void {
-    this.off.fill(0); this.offV.fill(0); this.offActive = false; this.pendingCapture = 0;
-    this.wob.fill(0); this.wobV.fill(0);
-    for (const sp of [this.squash, this.crouch, this.air, this.tuck, this.lean, this.roll, this.vx, this.vz]) sp.set(0);
-    this.whiffT = 1e9; this.flinchT = 1e9;
-    this.onGround = true;
-    this.init = false; // planted afresh wherever she appears
+    this.clearMotion();
+    this.blinkAt = this.time + 0.12; // she blinks as she appears
   }
 
   // ---------------------------------------------------------------- feet
@@ -651,15 +771,20 @@ export class RosaAnimator {
     const ux = speed > 1e-3 ? vx / speed : 0, uz = speed > 1e-3 ? vz / speed : 0;
     const ft = this.feet;
     if (this.walking) {
+      let adv = dt;
       if (this.gaitIdle) {
-        // Setting off: the foot that trails goes first.
+        // Setting off: the foot that trails goes first; feet side by side,
+        // the one on the side she heads to (else the right), so the choice
+        // never hangs on a millimetre (or on the frame rate).
         const trailL = (ft[0].wx - bx) * ux + (ft[0].wz - bz) * uz, trailR = (ft[1].wx - bx) * ux + (ft[1].wz - bz) * uz;
-        const first = trailL < trailR ? 0 : 1;
+        const lat = ux * hc - uz * hs; // her heading's component to the pelvis's right
+        const first = Math.abs(trailL - trailR) > 0.03 ? (trailL < trailR ? 0 : 1) : lat < -0.3 ? 0 : 1;
         this.phase = beta - 0.5 * first + 0.001;
         this.phase -= Math.floor(this.phase);
         this.gaitIdle = false;
+        adv = dt * this.walkFrac;
       }
-      this.phase = (this.phase + freq * dt) % 1;
+      this.phase = (this.phase + freq * adv) % 1;
       for (let i = 0; i < 2; i++) {
         const f = ft[i]!;
         const ph = (this.phase + 0.5 * i) % 1;
@@ -686,14 +811,20 @@ export class RosaAnimator {
       this.swingTo(f, f.stx, f.stz, hc, hs, W, 0.075 * (rm ? 0.7 : 1));
       if (f.s >= 1) this.plant(f);
     }
-    if (busy || this.settleHold > 0) return;
-    let worst: Foot | null = null, worstE = 1;
+    let worst: Foot | null = null, worstE = 1, frac = 1;
     for (let fi = 0; fi < ft.length; fi++) { const f = ft[fi]!;
       const rx = bx + f.side * W * hc, rz = bz - f.side * W * hs;
       const e = Math.max(Math.hypot(f.wx - rx, f.wz - rz) / 0.09, Math.abs(wrapAngle(f.yaw - this.hipWorld - f.side * TOE_OUT)) / 0.5);
-      if (e > worstE) { worst = f; worstE = e; }
+      // The part of this frame since the foot went out of place (or the hold ran out).
+      if (e > worstE) { worst = f; worstE = e; frac = Math.min(f.err < 1 ? (e - 1) / Math.max(1e-6, e - f.err) : 1, this.settleHold < 0 ? -this.settleHold / dt : 1); }
+      f.err = e;
     }
-    if (worst) this.lift(worst, 0, rm ? 0.26 : 0.2);
+    if (busy || this.settleHold > 0 || !worst) return;
+    // The step starts between frames: it is already that far along.
+    const dur = rm ? 0.26 : 0.2;
+    this.lift(worst, 0, dur);
+    worst.s = clamp(frac, 0, 1) * dt / dur;
+    this.swingTo(worst, worst.stx, worst.stz, hc, hs, W, 0.075 * (rm ? 0.7 : 1));
   }
 
   /**
@@ -878,15 +1009,29 @@ export class RosaAnimator {
     }
   }
 
-  /** Cloth and hair (rig.extras, when the model has them): a pendulum that lags her acceleration. */
-  private secondary(dt: number, aF: number, aR: number, cr: number, rm: boolean): void {
+  /**
+   * Cloth and hair (rig.extras, when the model has them): a pendulum that
+   * trails her motion (the hem lags behind a start, swings on past a stop,
+   * flares on a landing or a blow), and the skirt swishes a beat behind the
+   * hips' turn and roll. Crouched, the hem stays over the knees.
+   */
+  private secondary(dt: number, aF: number, aR: number, vF: number, vR: number, cr: number, rm: boolean): void {
     if (this.extrasBase.length === 0) return;
-    const k = rm ? 0.4 : 1;
-    const px = this.extX.to(clamp(aF * 0.004, -0.15, 0.15) * k, 10, dt), pz = this.extZ.to(clamp(-aR * 0.004, -0.12, 0.12) * k, 10, dt);
+    const k = rm ? 0.4 : 1, z = rm ? 0.9 : 0.42, free = 1 - 0.8 * cr;
+    const px = this.extX.to(clamp(-aF * 0.0032 - vF * 0.011 * free, -0.14, 0.12) * k, 8.5, z, dt);
+    const pz = this.extZ.to(clamp(aR * 0.0032 - vR * 0.009 * free, -0.12, 0.12) * k, 8.5, z, dt);
+    let sy = 0, sr = 0;
+    if (!this.simple) {
+      const hy = this.out[HRY]!, hr = this.out[HRZ]!;
+      if (!this.skirtInit) { this.skirtInit = true; this.skirtYaw.set(hy); this.skirtRoll.set(hr); }
+      const sw = (rm ? 0.3 : 0.6) * (1 - 0.7 * cr);
+      sy = clamp(this.skirtYaw.to(hy, 9, rm ? 0.9 : 0.5, dt) - hy, -0.3, 0.3) * sw;
+      sr = clamp(this.skirtRoll.to(hr, 10, rm ? 0.9 : 0.5, dt) - hr, -0.12, 0.12) * sw;
+    }
     for (let bi = 0; bi < this.extrasBase.length; bi++) { const b = this.extrasBase[bi]!;
       // A crouch drapes the skirt forward over the knees (they travel about
       // 0.4 m ahead of the hips) instead of pushing it into the paving.
-      b.o.rotation.set(b.rx + px * b.g + (b.skirt ? CROUCH_SKIRT.tilt * cr : 0), b.ry, b.rz + pz * b.g);
+      b.o.rotation.set(b.rx + px * b.g + (b.skirt ? CROUCH_SKIRT.tilt * cr : 0), b.ry + (b.skirt ? sy : 0), b.rz + pz * b.g + (b.skirt ? sr : 0));
       if (b.skirt) b.o.scale.set(b.sx * (1 + CROUCH_SKIRT.wide * cr), b.sy * (1 - CROUCH_SKIRT.drop * cr), b.sz * (1 + CROUCH_SKIRT.deep * cr));
     }
   }
@@ -925,6 +1070,8 @@ export class RosaAnimator {
     this.apply(false, 0);
     r.stars.visible = t > 0.4;
     r.stars.rotation.y += dt * 5;
+    // Startled wide, then dazed: eyes half shut under the stars.
+    if (r.face) r.face.set(t < 0.4 ? 0 : 0.55 * dizzy / (rm ? 0.5 : 1), t < 0.4 ? 0.008 : 0.004, 0, 0);
     for (let wi = 0; wi < r.weapons.length; wi++) { const w = r.weapons[wi]!; w.visible = false; }
     const fade = t > 2.2 ? Math.max(0, 1 - (t - 2.2) / 0.3) : 1;
     r.root.scale.setScalar(Math.max(0.001, fade));
@@ -933,6 +1080,8 @@ export class RosaAnimator {
   }
 }
 
+/** A fixed pseudo-random number in [0, 1) for (seed, n). */
+function hash(seed: number, n: number): number { const x = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453; return x - Math.floor(x); }
 function clamp(x: number, a: number, b: number): number { return x < a ? a : x > b ? b : x; }
 function ease(k: number): number { return k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; }
 function smooth(k: number): number { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); }

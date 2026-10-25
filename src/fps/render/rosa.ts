@@ -29,7 +29,7 @@ export class Avatar {
     this.quality = opts.quality ?? 'high';
     this.model = buildRosaModel(team, { home: opts.home, quality: this.quality });
     this.root = this.model.root;
-    this.anim = new RosaAnimator(this.model);
+    this.anim = new RosaAnimator(this.model, { simple: this.quality === 'low' });
     if (this.model.rulMesh) {
       this.setRulerosMask((1 << this.model.rulPlace.length) - 1);
       // Bounds would come from the bare geometry, not the instances: never cull (four tiny pieces).
@@ -72,6 +72,12 @@ export class Avatar {
    * body twists, for a third of a second. `side`: +1 knocked to her left, -1 to her right.
    */
   react(head: boolean, side: number): void { this.anim.react(head, side); }
+
+  /**
+   * Starts her motion afresh (smoothing, cloth, gait, reactions): for an
+   * avatar reused for another character or moment, such as a replay's.
+   */
+  reset(): void { this.anim.reset(); }
 
   /** A confirmed miss: a short off-balance follow-through. */
   whiff(weapon: WeaponId): void { this.anim.whiff(weapon); }

@@ -22,7 +22,7 @@ import { sweep } from './fp-geo';
 import { RULERO_COLORS, ruleroGeometry } from './ruleros';
 import { RIG, type RosaRig } from './rosa-rig';
 import { Parts, blob, catEyeFrame, crescentShape, ellipsoidRings, limb, loft, trs, type Ring } from './rosa-geo';
-import { ROSA_COLORS, ROSA_SHARED as S, propMaterial, rosaMaterial } from './rosa-materials';
+import { FACE_TAG, ROSA_COLORS, ROSA_SHARED as S, propMaterial, rosaMaterial, type FaceRig } from './rosa-materials';
 
 /** The team accent colour (the protection bubble, and anything else that names her team). */
 export function teamAccent(team: Team): number { return team === 0 ? 0xf2a33a : 0x36b9c9; }
@@ -97,6 +97,8 @@ const TEMPLE = new THREE.Vector3(0, 0.55, 0.84);
 const HEAD_SCALE = 1.12;
 /** Luna's rebozo sits back on her head, so the hair and rollers show at the front and top. */
 const HOOD_TILT = trs(0, 0.05, 0.03, 0.16).multiply(trs(0, -0.05, -0.03));
+/** The face's features as drawn (the head scaled up), for the expression shader. */
+const FACE_RIG: FaceRig = { lidY: (at(face(0.05, 0.125, 0.002)).y - 0.004) * HEAD_SCALE, browIn: 0.018 * HEAD_SCALE, browOut: 0.09 * HEAD_SCALE };
 const bigHead = (m: THREE.Matrix4): THREE.Matrix4 => { const p = new THREE.Vector3().setFromMatrixPosition(m).multiplyScalar(HEAD_SCALE); return m.clone().setPosition(p); };
 
 // The four match ruleros (head-local), in roller-index order: two across
@@ -250,9 +252,10 @@ function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
   }
   for (const s of [-1, 1]) {
     const ex = s * 0.05, ey = 0.125;
-    p.add(blob(0.028, 0.021, 0.012, sw, sh), S.eyeWhite, face(ex, ey, 0.002));
-    p.add(blob(0.0135, 0.0155, 0.006, tw, th), S.iris, face(ex - s * 0.004, ey - 0.002, 0.0115));
-    if (d.fine) p.add(blob(0.0045, 0.0045, 0.002, 4, 3), 0xffffff, face(ex - s * 0.009, ey + 0.005, 0.0172));
+    // The eyes and brows are tagged for the shader (blinks, expressions: rosa-materials.ts).
+    p.add(blob(0.028, 0.021, 0.012, sw, sh), S.eyeWhite, face(ex, ey, 0.002), 0, undefined, FACE_TAG.eye);
+    p.add(blob(0.0135, 0.0155, 0.006, tw, th), S.iris, face(ex - s * 0.004, ey - 0.002, 0.0115), 0, undefined, FACE_TAG.eye);
+    if (d.fine) p.add(blob(0.0045, 0.0045, 0.002, 4, 3), 0xffffff, face(ex - s * 0.009, ey + 0.005, 0.0172), 0, undefined, FACE_TAG.eye);
     const f = catEyeFrame(s, d.fine ? 3 : 2);
     f.applyMatrix4(face(ex, ey + 0.001, 0.0178).multiply(new THREE.Matrix4().makeScale(1.08, 1.08, 1)));
     p.add(f, S.frames);
@@ -260,7 +263,7 @@ function buildHead(team: Team, d: Detail, p: Parts, home: boolean): void {
     // Brows: thick, the inner ends lower (she means business).
     const pts = [face(s * 0.018, 0.168, 0.004), face(s * 0.05, 0.192, 0.004), face(s * 0.09, 0.184, 0.004)].map(at);
     const brow = sweep(new THREE.QuadraticBezierCurve3(pts[0]!, pts[1]!, pts[2]!), new THREE.Vector3(0, 0.15, -1).normalize(), [[-0.009, 0], [0, 0.005], [0.009, 0], [0, -0.002]], [S.hair], d.fine ? 6 : 3);
-    p.add(brow, null);
+    p.add(brow, null, undefined, 0, undefined, s < 0 ? FACE_TAG.browL : FACE_TAG.browR);
     brow.dispose();
     if (d.mid) p.add(blob(0.021, 0.013, 0.004, tw, th), S.blush, face(s * 0.09, 0.07, 0.001));
   }
@@ -584,7 +587,8 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
   const d = DETAIL[q];
   const home = !!opts.home;
   const look = lookFor(team, q, home);
-  const mat = rosaMaterial();
+  const faceState = new THREE.Vector4();
+  const mat = rosaMaterial(FACE_RIG, faceState);
   const G = () => new THREE.Group();
   const root = G(), hips = G(), torso = G(), head = G();
   const armL = G(), armR = G(), foreL = G(), foreR = G(), wristL = G(), wristR = G();
@@ -671,7 +675,7 @@ export function buildRosaModel(team: Team, opts: { home?: boolean; quality?: Qua
   stars.position.y = 0.45;
   head.add(stars);
 
-  return { root, hips, torso, head, armL, armR, foreL, foreR, wristL, wristR, legL, legR, shinL, shinR, footL, footR, weapons, stars, bubble, flashMats: [mat], extras, rulMesh, rulOutline, rulPlace, rulOutlineScale: 1.14, curlers };
+  return { root, hips, torso, head, armL, armR, foreL, foreR, wristL, wristR, legL, legR, shinL, shinR, footL, footR, weapons, stars, bubble, flashMats: [mat], face: faceState, extras, rulMesh, rulOutline, rulPlace, rulOutlineScale: 1.14, curlers };
 }
 
 let rulMat: THREE.MeshToonMaterial | null = null;

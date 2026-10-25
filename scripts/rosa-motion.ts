@@ -39,7 +39,7 @@ async function waitHttp(url: string, ms = 20000): Promise<boolean> {
 }
 
 type View = 'side' | '3q';
-interface Scene { name: string; dur: number; pre: number; fps: number; views: View[]; strip: number }
+interface Scene { name: string; dur: number; pre: number; fps: number; views: View[]; strip: number; cam?: number }
 // Durations in seconds; `pre`: a lead-in that is played but not filmed.
 const SCENES: Scene[] = [
   { name: 'walk1.5', dur: 1.6, pre: 1.0, fps: 30, views: ['side', '3q'], strip: 10 },
@@ -64,6 +64,8 @@ const SCENES: Scene[] = [
   { name: 'throwhit', dur: 0.6, pre: 0.4, fps: 60, views: ['side'], strip: 10 },
   { name: 'elim', dur: 3.4, pre: 0.4, fps: 30, views: ['side'], strip: 12 },
   { name: 'idle', dur: 4.0, pre: 0.4, fps: 15, views: ['side'], strip: 8 },
+  // Close on her face (1.6 m): idle blinks, a swing's effort, a blow to the head.
+  { name: 'face', dur: 3.0, pre: 0.4, fps: 30, views: ['3q'], strip: 12, cam: 1.6 },
 ];
 const MEASURED = ['walk1.5', 'walk3', 'walk6', 'crouch', 'strafeR', 'back'];
 
@@ -147,6 +149,7 @@ function install(): void {
     throwhit: (t) => ({ me: still({ msSinceHit: t >= 0.1 ? (t - 0.1) * 1000 : 1e6 }) }),
     elim: (t) => ({ me: still({ alive: !(t >= 0.1 && t < 2.9) }) }),
     idle: () => ({ me: { x: -3, z: Z, yaw: FWD } }),
+    face: (t) => ({ me: still({ weapon: 1, msSinceMelee: t >= 0.6 ? (t - 0.6) * 1000 : 1e6, msSinceHit: t >= 2.0 ? (t - 2.0) * 1000 : 1e6 }), ev: [[2.0, 'react', () => subjectAv()?.react(true, -1)]] }),
   };
   const subjectAv = () => e.avatars.get(M.ids[0]);
   const partnerAv = () => e.avatars.get(M.ids[1]);
@@ -176,7 +179,7 @@ function install(): void {
     else if (me.vx) { cx = me.x + 2.0 * cd; cz = me.z + 3.3 * cd; } // walks: ahead of her on her right (clear of the planters)
     else { cx = me.x + 2.9 * cd; cz = me.z - 2.75 * cd; }
     for (const bd of [s.body]) { bd.x = cx; bd.z = cz; bd.y = 0; bd.vx = bd.vz = bd.vy = 0; }
-    const lx = me.x - cx, lz = me.z - cz, ly = 0.95 - 1.58;
+    const lx = me.x - cx, lz = me.z - cz, ly = (M.scene === 'face' ? 1.4 : 0.95) - 1.58;
     f.input().yaw = Math.atan2(-lx, -lz); f.input().pitch = Math.atan2(ly, Math.hypot(lx, lz));
     e.vm.root.scale.setScalar(1e-4); // your own first-person hand stays out of the shot
     s.meleeMs = 0;
@@ -222,6 +225,7 @@ async function main(): Promise<void> {
     await p.evaluate(() => { (window as any).__mo.scene = ''; });
 
     const run = async (sc: Scene, view: View, shots: boolean): Promise<number[][]> => {
+      await p.evaluate((d) => { (window as any).__camDist = d; }, sc.cam ?? Number(process.env.CAM || 4));
       await p.evaluate(({ name, view, pre, dur }) => { const M = (window as any).__mo; M.scene = name; M.view = view; M.dur = dur; M.t0 = performance.now() + pre * 1000; M.samples = []; M.fired = {}; M.lastT = -1e9; }, { name: sc.name, view, pre: sc.pre, dur: sc.dur });
       // Lead-in, unfilmed, at 60 fps.
       for (let t = 0; t < sc.pre * 1000; t += 1000 / 60) await p.clock.runFor(1000 / 60);

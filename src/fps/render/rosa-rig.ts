@@ -60,6 +60,11 @@ export interface RosaRig {
    * being absent): skirt (pivot at the waist), shawlTail, hatBrim, bun.
    */
   extras: Partial<Record<'skirt' | 'shawlTail' | 'hatBrim' | 'bun', THREE.Object3D>>;
+  /**
+   * Optional expression the material reads (rosa-materials.ts): x eyes
+   * closed 0..1, y brows raised (m; negative lowered), z brows knitted 0..1.
+   */
+  face?: THREE.Vector4;
 }
 
 export interface AvatarState {

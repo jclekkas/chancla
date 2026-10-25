@@ -64,7 +64,7 @@ export class Engine {
   private avatars = new Map<number, Avatar>();
   private menuAvatars: Avatar[] = [];
   readonly proj = new ProjectileView();
-  readonly vm = new ViewModel({ arena: true });
+  readonly vm: ViewModel;
   /** Flying ruleros (cosmetic, pooled, capped). */
   readonly ruleros = new RuleroFx();
   /** Melee contact, miss and shielded effects (cosmetic, pooled). */
@@ -130,6 +130,8 @@ export class Engine {
   ) {
     const s = settings();
     this.quality = s.quality;
+    // The arena hand is built at the quality tier (fewer rings on Medium and Low, same grip and motion).
+    this.vm = new ViewModel({ arena: true, quality: s.quality });
     this.renderer = new THREE.WebGLRenderer({ antialias: s.quality !== 'low', powerPreference: 'high-performance', alpha: false, stencil: false });
     this.renderer.autoClear = false;
     this.renderer.shadowMap.enabled = s.quality !== 'low';
@@ -254,6 +256,7 @@ export class Engine {
     if (s.quality !== this.quality) {
       this.quality = s.quality;
       this.fx.setQuality(s.quality);
+      this.vm.setQuality(s.quality);
       this.contact.setStrength(contactStrength(s.quality));
       this.renderer.shadowMap.enabled = s.quality !== 'low';
       this.scene.remove(this.world.group);

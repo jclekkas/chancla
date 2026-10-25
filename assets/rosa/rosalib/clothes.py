@@ -9,21 +9,29 @@ from .mesh import Part, ellipsoid, frame, trs, tube, vertex_normals
 from .skirt import skirt_weights
 
 
-def collar(S, cols, rows, scallops=9):
-    C = np.array([0.0, 1.20, 0.004])
+COLLAR_C = np.array([0.0, 1.20, 0.004])
+
+
+def collar_edge(a, scallops=9):
+    """Elevation (rad, from COLLAR_C) of the collar's scalloped outer edge at angle a (0: front)."""
+    sc = abs(math.cos(scallops * a / 2))
+    return math.radians(40 - 5.0 * sc - 3.0 * max(0.0, math.cos(a)))
+
+
+def collar(S, cols, rows, scallops=9, lift0=0.0065):
+    C = COLLAR_C
     e0 = math.radians(73)
     top, under = [], []
     for j in range(cols):
         a = 2 * math.pi * j / cols
         # The scalloped outer edge: a little lower at each scallop's middle; deeper at the front.
-        sc = abs(math.cos(scallops * a / 2))
-        e1 = math.radians(40 - 5.0 * sc - 3.0 * max(0.0, math.cos(a)))
+        e1 = collar_edge(a, scallops)
         rt, ru = [], []
         for i in range(rows + 1):
             e = e0 + (e1 - e0) * i / rows
             d = np.array([math.sin(a) * math.cos(e), math.sin(e), -math.cos(a) * math.cos(e)])
             p, n = S.toward(C, d)
-            lift = 0.0065 + 0.004 * i / rows  # the collar stands off a little more at its edge
+            lift = lift0 + 0.004 * i / rows  # the collar stands off a little more at its edge
             rt.append(p + n * lift)
             if i in (0, rows):
                 ru.append(p + n * 0.0012)

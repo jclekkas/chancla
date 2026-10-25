@@ -8,7 +8,7 @@ files follow is `docs/rosa-asset/CONTRACT.md`.
 ```sh
 /home/user/bpyenv/bin/python assets/rosa/build.py            # three GLBs + assets/rosa/rosa-sol.blend
 /home/user/bpyenv/bin/python assets/rosa/build.py --no-blend # GLBs only
-node assets/rosa/verify.mjs                                   # contract checks (loads each GLB with three's GLTFLoader)
+node assets/rosa/verify.mjs                                   # contract checks (three's GLTFLoader): bones, attributes, weights, winding, tris, empties, faceRig, bounds
 /home/user/bpyenv/bin/python assets/rosa/preview.py --tier high --out /tmp/rosa-renders  # views + pose tests
 ```
 

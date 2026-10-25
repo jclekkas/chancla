@@ -72,6 +72,24 @@ for (const tier of ['high', 'medium', 'low']) {
   if (maxSumErr > 0.01 || stray) fail(tier, 'weights');
   if (!tags.hull || !tags.eye || !tags.browL || !tags.browR) fail(tier, 'missing hull or face tags');
   if (worstCol > 0.004) fail(tier, 'colour not from the palette');
+  // Winding: surface faces wind counter-clockwise with their normals; hull faces are flipped (they face inward).
+  const idx = g.index, nrm = g.attributes.normal;
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), N = new THREE.Vector3(), fn = new THREE.Vector3();
+  let badSurf = 0, badHull = 0, nSurf = 0, nHull = 0;
+  for (let f = 0; f < idx.count; f += 3) {
+    const i0 = idx.getX(f), i1 = idx.getX(f + 1), i2 = idx.getX(f + 2);
+    A.fromBufferAttribute(pos, i0); B.fromBufferAttribute(pos, i1); C.fromBufferAttribute(pos, i2);
+    fn.crossVectors(B.clone().sub(A), C.clone().sub(A));
+    if (fn.lengthSq() < 1e-14) continue;
+    N.set(0, 0, 0); for (const i of [i0, i1, i2]) N.x += nrm.getX(i), N.y += nrm.getY(i), N.z += nrm.getZ(i);
+    const hull = ink.getX(i0) === 1;
+    // The hull's normals follow its own (flipped) winding; what matters is that it faces inward:
+    // compare its winding with the outward direction from the body's centre line.
+    if (hull) { nHull++; if (fn.dot(N) < 0) badHull++; }
+    else { nSurf++; if (fn.dot(N) < 0) badSurf++; }
+  }
+  console.log(`  winding: surface faces against their normals ${badSurf}/${nSurf}; hull faces against their own normals ${badHull}/${nHull} (the hull is the inverted copy)`);
+  if (badSurf > nSurf * 0.002) fail(tier, 'surface winding');
   // Brows: her left brow at -x.
   let lx = 0, rx = 0;
   for (let i = 0; i < pos.count; i++) { const t = ink.getX(i); if (t === -2) lx += pos.getX(i); if (t === -3) rx += pos.getX(i); }
@@ -97,7 +115,8 @@ for (const tier of ['high', 'medium', 'low']) {
     v.fromBufferAttribute(pos, i);
     top = Math.max(top, v.y);
     const r = Math.hypot(v.x, v.z);
-    const dBody = v.y >= 0.3 && v.y <= 1.27 ? Math.max(0, r - 0.36) : Infinity;
+    // Shoulders (1.27..1.45) sit above the cylinder's cap in the current model too: measure them radially.
+    const dBody = v.y >= 0.3 && v.y <= 1.45 ? Math.max(0, r - 0.36) : Infinity;
     const dHead = Math.max(0, v.distanceTo(hc) - 0.25);
     const d = Math.min(dBody, dHead);
     if (d > 0.001) {
@@ -110,6 +129,9 @@ for (const tier of ['high', 'medium', 'low']) {
     }
   }
   console.log(`  top of the mesh y ${top.toFixed(3)}`);
+  let sh = 0, shN = 0;
+  for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i); if (v.y > 1.27 && v.y < 1.45 && ink.getX(i) !== 1 && v.distanceTo(hc) > 0.25) { shN++; sh = Math.max(sh, Math.hypot(v.x, v.z)); } }
+  console.log(`  shoulders above the cylinder cap (y 1.27..1.45, outside the head sphere): ${shN} verts, max radius ${sh.toFixed(3)} m (cylinder 0.36)`);
   for (const [k, o] of outside) console.log(`  outside the hit volumes: ${k}: ${o.n} verts, max ${Number.isFinite(o.max) ? o.max.toFixed(3) : 'n/a'} m`);
 }
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

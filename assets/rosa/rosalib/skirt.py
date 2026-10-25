@@ -55,8 +55,8 @@ def skirt_weights(p):
 
 
 RES = {
-    'high': dict(cols=49, folds=7, ruffle=14, hull_cols=28, blossoms=7),
-    'medium': dict(cols=35, folds=7, ruffle=14, hull_cols=21, blossoms=7),
+    'high': dict(cols=42, folds=7, ruffle=14, hull_cols=21, blossoms=7),
+    'medium': dict(cols=35, folds=7, ruffle=14, hull_cols=16, blossoms=7),
     'low': dict(cols=18, folds=6, ruffle=0, hull_cols=10, blossoms=0),
 }
 

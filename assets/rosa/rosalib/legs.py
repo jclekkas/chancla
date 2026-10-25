@@ -29,6 +29,7 @@ def build(tier):
         rings = [{'y': y, 'r': r, 'rz': r * 0.96, 'x': lx, 'z': 0.004, 'c': 'skirtDeep' if y > 0.37 else 'skin'} for y, r in leg]
         v, f, fc = loft(rings, R['cols'])
         leg = Part('leg', v, f, fc, hull=R['ink'], weights=leg_chain(side))
+        leg.hull_mask = lambda c: c[1] < 0.46  # the thigh never shows outside the skirt
         if R['hull_cols']:
             hv, hf, _ = loft(rings, R['hull_cols'])
             leg.hull_src = (hv, hf)

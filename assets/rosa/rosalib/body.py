@@ -21,47 +21,51 @@ TORSO = [
     (0.79, 0.130, 0.118, 0.004),
     (0.88, 0.140, 0.124, 0.004),
     (0.955, 0.130, 0.114, 0.0),
-    (1.05, 0.160, 0.140, -0.004),
-    (1.15, 0.182, 0.158, -0.010),
-    (1.245, 0.168, 0.132, 0.000),
-    (1.325, 0.118, 0.104, 0.006),
-    (1.395, 0.060, 0.058, 0.010),
-    (1.47, 0.054, 0.054, 0.014),
-    (1.53, 0.048, 0.048, 0.016),
+    (1.05, 0.168, 0.142, -0.004),
+    (1.15, 0.192, 0.162, -0.010),
+    (1.245, 0.184, 0.136, 0.000),
+    (1.325, 0.130, 0.106, 0.006),
+    (1.395, 0.062, 0.060, 0.010),
+    (1.47, 0.056, 0.056, 0.014),
+    (1.53, 0.050, 0.050, 0.016),
 ]
 SHOULDER_NODE = 6
 # The arm, offset outward of the joint line so it hangs clear of the bodice: (x, y, z, r, rz).
+# A soft shoulder into a gathered puff, a plump upper arm, a fuller forearm, a visible wrist.
 ARM = [
-    (0.150, 1.338, 0.006, 0.070, 0.068),
-    (0.214, 1.318, 0.006, 0.084, 0.080),
-    (0.252, 1.225, 0.006, 0.094, 0.090),
-    (0.260, 1.138, 0.004, 0.074, 0.072),
-    (0.260, 1.090, 0.002, 0.054, 0.054),
-    (0.256, 0.980, 0.000, 0.048, 0.048),
-    (0.252, 0.900, -0.004, 0.052, 0.051),
-    (0.240, 0.705, -0.008, 0.035, 0.034),
+    (0.160, 1.340, 0.006, 0.074, 0.070),
+    (0.228, 1.320, 0.006, 0.090, 0.084),
+    (0.266, 1.226, 0.006, 0.100, 0.094),
+    (0.274, 1.138, 0.004, 0.080, 0.076),
+    (0.276, 1.088, 0.002, 0.067, 0.064),
+    (0.272, 0.980, 0.000, 0.057, 0.055),
+    (0.266, 0.890, -0.004, 0.064, 0.060),
+    (0.248, 0.712, -0.008, 0.040, 0.038),
 ]
-# Hands (absolute x for the right side, mirrored for the left): (x, y, z, r, rz).
+# Hands, about 1.3x: (x, y, z, r, rz) for the right side, mirrored for the left. The right fist
+# closes round the weapons' heel (heldChancla: heel end at the fist's centre, 0.058 below the
+# wrist, z -0.022); a two-part thumb wraps across its front. The left hand is a relaxed mitten.
 RHAND = [
-    (0.224, 0.606, -0.020, 0.054, 0.058),
+    (0.224, 0.604, -0.022, 0.068, 0.072),
 ]
-RTHUMB = [(0.190, 0.622, -0.066, 0.018, 0.017)]
+RTHUMB = [(0.180, 0.636, -0.074, 0.025, 0.024), (0.200, 0.604, -0.094, 0.020, 0.020)]
 LHAND = [
-    (0.238, 0.600, -0.010, 0.032, 0.046),
+    (0.252, 0.604, -0.010, 0.042, 0.058),
+    (0.250, 0.548, -0.014, 0.036, 0.052),
 ]
-LTHUMB = [(0.214, 0.616, -0.050, 0.015, 0.014)]
+LTHUMB = [(0.222, 0.634, -0.060, 0.020, 0.019), (0.226, 0.600, -0.076, 0.016, 0.016)]
 
 # Bodice target (y, half-width, front depth, back depth, centre z), waist to chest.
 BODICE = [
     (0.78, 0.128, 0.116, 0.116, 0.004),
     (0.88, 0.138, 0.122, 0.122, 0.004),
     (0.95, 0.126, 0.112, 0.112, 0.002),
-    (1.00, 0.136, 0.124, 0.116, 0.0),
-    (1.06, 0.156, 0.146, 0.122, -0.002),
-    (1.12, 0.172, 0.170, 0.128, -0.004),
-    (1.17, 0.178, 0.176, 0.132, -0.004),
-    (1.22, 0.176, 0.156, 0.136, -0.002),
-    (1.27, 0.168, 0.128, 0.134, 0.002),
+    (1.00, 0.140, 0.126, 0.118, 0.0),
+    (1.06, 0.164, 0.150, 0.124, -0.002),
+    (1.12, 0.180, 0.176, 0.130, -0.004),
+    (1.17, 0.186, 0.182, 0.134, -0.004),
+    (1.22, 0.186, 0.160, 0.138, -0.002),
+    (1.27, 0.178, 0.130, 0.136, 0.002),
 ]
 SASH = (0.918, 0.992)
 NECKLINE = 1.352  # front; the back sits a little higher
@@ -99,6 +103,8 @@ def skeleton(lite=False):
         hand = RHAND if side > 0 else LHAND
         thumb = RTHUMB if side > 0 else LTHUMB
         first = None
+        if lite:
+            hand, thumb = hand[:1], thumb[:1]
         for x, y, z, r, rz in hand:
             i = add((side * x, y, z), (r, rz))
             edges.append((prev, i))
@@ -134,14 +140,17 @@ def _nearest_on_polyline(p, pts):
 def armness(p):
     """0 on the torso and neck, 1 on an arm, blended over the shoulder."""
     x, y = abs(p[0]), p[1]
+    if y < 0.765:
+        # The hands: well clear of the pelvis (which ends inside the skirt above them).
+        return 1.0 if x > 0.11 else 0.0
     if y < 1.08:
-        return 1.0 if x > 0.165 else 0.0
+        return 1.0 if x > 0.170 else 0.0
     if y < 1.20:
-        return 1.0 if x > 0.19 else 0.0
+        return 1.0 if x > 0.198 else 0.0
     # Over the shoulder: a smooth ramp outward from the neck to the shoulder's end.
-    k = sstep(0.12, 0.25, x)
+    k = sstep(0.13, 0.26, x)
     # Below the armpit, the arm is separate from the side of the bodice.
-    if y < 1.27 and x > 0.185:
+    if y < 1.27 and x > 0.195:
         k = max(k, sstep(1.27, 1.21, y))
     return k
 
@@ -203,6 +212,12 @@ def colour(c, p):
     front = max(0.0, -z / max(1e-6, math.hypot(x, z)))
     if y > NECKLINE + 0.03 * (1 - front) - 0.02 * front ** 3:
         return 'skin'
+    # Under the collar the bodice is cream too, so a coarse tier never shows dress through it.
+    from .clothes import COLLAR_C, collar_edge
+    d = np.array([x, y, z]) - COLLAR_C
+    el = math.atan2(d[1], math.hypot(d[0], d[2]))
+    if el > collar_edge(math.atan2(x, -(z - COLLAR_C[2]))) + math.radians(2.5):
+        return 'collar'
     if y < SASH[0] - 0.002:
         return 'skirtDeep'
     if y < SASH[1]:

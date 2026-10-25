@@ -12,7 +12,7 @@ from .mesh import Part, ellipsoid, frame, loft, sstep, trs, apply
 from .rig import J
 
 SEAT_Y = 1.706       # the crown's opening
-TILT = 0.10          # tipped back (the front rises)
+TILT = 0.15          # tipped back (the front rises)
 PIVOT = np.array([0.0, 1.734, 0.0])
 CROWN_R = (0.166, 0.174)  # opening half-width, half-depth
 BRIM_R = 0.405
@@ -38,7 +38,7 @@ def hat_weights(p):
 
 
 RES = {
-    'high': dict(brim=30, crown=22, bands=[0.17, 0.215, 0.26, 0.305, 0.35], flower=5, crown_rows=1, wave=True),
+    'high': dict(brim=28, crown=22, bands=[0.17, 0.215, 0.26, 0.305, 0.35], flower=5, crown_rows=1, wave=True),
     'medium': dict(brim=26, crown=16, bands=[0.17, 0.235, 0.30, 0.35], flower=5, crown_rows=0, wave=True),
     'low': dict(brim=18, crown=12, bands=[0.17, 0.30], flower=4, crown_rows=0, wave=True),
 }
@@ -107,7 +107,7 @@ def build(tier):
     fm = frame(fp, (math.sin(fa), 0.2, -math.cos(fa)))
     for i in range(R['flower']):
         t = 2 * math.pi * i / R['flower']
-        pv, pf, pfc = ellipsoid(0.026, 0.016, 0.009, 7 if tier == 'high' else 5, 4 if tier != 'low' else 3, 'flower')
+        pv, pf, pfc = ellipsoid(0.026, 0.016, 0.009, 6 if tier == 'high' else 5, 4 if tier != 'low' else 3, 'flower')
         pt = Part('petal', pv, pf, pfc, weights=hat_weights).transform(fm @ trs(math.cos(t) * 0.023, math.sin(t) * 0.023, -0.004, 0, 0, t))
         parts.append(pt)
     hv, hf, hfc = ellipsoid(0.012, 0.012, 0.009, 6, 4, 'flowerHeart')

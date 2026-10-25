@@ -36,6 +36,8 @@ VIEWS = [
 
 D = math.radians
 POSES = [
+    ('fist', {'armR': (D(55), 0, D(12)), 'foreR': (D(35), 0, 0)}, 75, 1.1, 0.95),
+    ('fist_front', {'armR': (D(55), 0, D(12)), 'foreR': (D(35), 0, 0)}, 0, 1.1, 0.95),
     ('arms_forward', {'armR': (D(100), 0, 0), 'armL': (D(100), 0, 0)}, 0, 2.6, 1.1),
     ('arms_forward_side', {'armR': (D(100), 0, 0), 'armL': (D(100), 0, 0)}, 90, 2.6, 1.1),
     ('arms_side', {'armR': (0, 0, D(100)), 'armL': (0, 0, -D(100))}, 0, 2.6, 1.1),
@@ -94,6 +96,32 @@ def main(argv):
         em.inputs['Color'].default_value = cols[i] + (1,)
         m.node_tree.links.new(em.outputs[0], m.node_tree.nodes['Material Output'].inputs[0])
         c.data.materials.append(m)
+    # A stand-in chancla as heldChancla places it on wristR: heel end at the fist centre (0.058 below
+    # the wrist), the sole running down 0.38 m, 0.13 wide, footbed facing +z, centred at z -0.022.
+    import bmesh
+    me = bpy.data.meshes.new('sandal')
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    for vv in bm.verts:
+        x, y, z = vv.co
+        # cube in Blender coords; three x = Bx, three y = Bz, three z = -By
+        tx, ty, tz = x * 0.12, -0.058 - (z + 0.5) * 0.38, -0.022 + y * 0.03
+        vv.co = (0.22 + tx, -tz, 0.67 + ty)
+    bm.to_mesh(me)
+    sd = bpy.data.objects.new('sandal', me)
+    bpy.context.scene.collection.objects.link(sd)
+    sm = bpy.data.materials.new('sandalm')
+    sm.use_nodes = True
+    e2 = sm.node_tree.nodes.new('ShaderNodeEmission')
+    e2.inputs['Color'].default_value = (0.07, 0.03, 0.15, 1)
+    sm.node_tree.links.new(e2.outputs[0], sm.node_tree.nodes['Material Output'].inputs[0])
+    me.materials.append(sm)
+    mw = sd.matrix_world.copy()
+    sd.parent = arm
+    sd.parent_type = 'BONE'
+    sd.parent_bone = 'wristR'
+    bpy.context.view_layer.update()
+    sd.matrix_world = mw
     bpy.context.view_layer.update()
     render.setup((420, 520), a.samples)
     shots = []

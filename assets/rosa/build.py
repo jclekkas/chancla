@@ -32,7 +32,10 @@ def build_parts(tier):
     b = body.make_part(**BODY[tier])
     if tier == 'low':
         # Low: the outline on the torso, shoulders and upper arms; none on the forearms and hands.
-        b.hull_mask = lambda c: c[1] > 1.0 or abs(c[0]) < 0.17
+        b.hull_mask = lambda c: (c[1] > 1.0 or abs(c[0]) < 0.17) and not (c[1] > 1.31 and abs(c[0]) < 0.15)
+    else:
+        # Under the collar (which has its own outline) the body's hull never shows.
+        b.hull_mask = lambda c: not (c[1] > 1.31 and abs(c[0]) < 0.15 and c[1] < 1.40)
     parts.append(b)
     SB = Surface(b.v, b.f)
     hp, SH, face_rig = head.build(tier)
@@ -46,8 +49,8 @@ def build_parts(tier):
     parts += sk
     SK = Surface(sk[0].v, sk[0].f)
     parts += legs.build(tier)
-    cr = {'high': (36, 3), 'medium': (27, 2), 'low': (18, 1)}[tier]
-    col = clothes.collar(SB, *cr, scallops=9)
+    cr = {'high': (30, 3), 'medium': (22, 3), 'low': (14, 2)}[tier]
+    col = clothes.collar(SB, *cr, scallops=9, lift0={'high': 0.0065, 'medium': 0.009, 'low': 0.011}[tier])
     lo = clothes.collar(SB, max(18, cr[0] * 2 // 3), 1, scallops=9)
     col.hull_src = (lo.v, lo.f)
     if tier == 'low':
@@ -110,6 +113,7 @@ def main(argv):
             coll.hide_viewport = True
             coll.hide_render = True
     if not a.no_blend:
+        bpy.context.preferences.filepaths.save_version = 0  # no .blend1 backups
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, 'rosa-sol.blend'), compress=True)
 
 

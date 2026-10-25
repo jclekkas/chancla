@@ -38,7 +38,7 @@ def head_point(a, u):
 def hairline_y(a):
     """Front (a = 0) high on the forehead, over the ears, down to the nape."""
     w = abs(math.atan2(math.sin(a), math.cos(a)))
-    pts = [(0.0, 1.690), (0.45, 1.678), (0.95, 1.628), (1.35, 1.598), (1.62, 1.592), (2.0, 1.52), (2.5, 1.468), (math.pi, 1.452)]
+    pts = [(0.0, 1.680), (0.45, 1.669), (0.95, 1.624), (1.35, 1.598), (1.62, 1.592), (2.0, 1.52), (2.5, 1.468), (math.pi, 1.452)]
     for (a0, y0), (a1, y1) in zip(pts, pts[1:]):
         if w <= a1:
             t = (w - a0) / (a1 - a0)
@@ -51,7 +51,7 @@ def thickness(a, y, v):
     w = abs(math.atan2(math.sin(a), math.cos(a)))
     t = 0.013
     # The rolled front, swept back from the forehead.
-    t += 0.016 * gauss(w / 0.75) * gauss((y - 1.70) / 0.035)
+    t += 0.016 * gauss(w / 0.75) * gauss((y - 1.69) / 0.035)
     # Full temples over the ears.
     t += 0.012 * gauss((w - 1.35) / 0.4) * gauss((y - 1.625) / 0.04)
     # Volume low at the back of the head, gathered into the bun.
@@ -166,7 +166,7 @@ def seat_spots(S):
         pos = m[:3, 3].copy()
         if k < 2:
             # The front pair rides up onto the rolled front (clear of the brows, under the brim).
-            pos += np.array([0.0, 0.022, 0.016])
+            pos += np.array([0.0, 0.006, 0.014])
         d = pos - c
         hit, hn = S.toward(c, d)
         if hit is None or np.dot(hit - c, d) <= 0:
@@ -182,7 +182,7 @@ def hair_weights(p):
 
 
 RES = {
-    'high': dict(cols=26, rows=11, bun=(10, 7), hull=(20, 8)),
+    'high': dict(cols=26, rows=11, bun=(10, 7), hull=(16, 7)),
     'medium': dict(cols=22, rows=9, bun=(8, 6), hull=(14, 6)),
     'low': dict(cols=14, rows=6, bun=(7, 5), hull=(10, 4)),
 }

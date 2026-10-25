@@ -44,7 +44,28 @@ export function toonRamp(): THREE.DataTexture {
   return ramp;
 }
 
+/**
+ * The arena world's own bands (ao-field.ts swaps them in on the world's
+ * materials only; characters, the hand and props keep the shared ramp).
+ * A wall turned from the sun keeps less of it, so a face in shade is lit by
+ * the cool sky fill and reads as shade, not as dimmer sunlight.
+ */
+export const WORLD_RAMP: readonly [number, number, number] = [30, 112, 255];
+let wramp: THREE.DataTexture | null = null;
+export function worldRamp(): THREE.DataTexture {
+  if (wramp) return wramp;
+  const [a, b, c] = WORLD_RAMP;
+  wramp = new THREE.DataTexture(new Uint8Array([a, a, a, 255, b, b, b, 255, c, c, c, 255]), 3, 1, THREE.RGBAFormat);
+  wramp.minFilter = wramp.magFilter = THREE.NearestFilter;
+  wramp.generateMipmaps = false;
+  wramp.needsUpdate = true;
+  return wramp;
+}
+
 const cache = new Map<string, THREE.Material>();
+const shared = new WeakSet<THREE.Material>();
+/** A material from the shared toon/flat cache (it may also dress characters or props). */
+export function isSharedMaterial(m: THREE.Material): boolean { return shared.has(m); }
 
 export function toon(color: number, opts: { map?: THREE.Texture | null; emissive?: number; side?: THREE.Side; transparent?: boolean; opacity?: number } = {}): THREE.MeshToonMaterial {
   const key = `t:${color}:${opts.map?.uuid ?? ''}:${opts.emissive ?? 0}:${opts.side ?? 0}:${opts.transparent ? 1 : 0}:${opts.opacity ?? 1}`;
@@ -55,6 +76,7 @@ export function toon(color: number, opts: { map?: THREE.Texture | null; emissive
       side: opts.side ?? THREE.FrontSide, transparent: !!opts.transparent, opacity: opts.opacity ?? 1,
     });
     cache.set(key, m);
+    shared.add(m);
   }
   return m;
 }

@@ -15,12 +15,14 @@ const mix = (a: number, b: number, t: number) => new THREE.Color(a).lerp(new THR
  * ground bounce stays warm terracotta, so faces and undersides in shade keep
  * a warm lift and skin and team colours stay true.
  */
-export function kitLight(base: SceneLight): SceneLight {
+export interface KitLightTune { sky: number; skyMix: number; ground: number; groundMix: number; hemiK: number; sunK: number }
+export const KIT_LIGHT: KitLightTune = { sky: 0x8ea6f0, skyMix: 0.7, ground: 0x9a6450, groundMix: 0.5, hemiK: 1, sunK: 1.34 };
+export function kitLight(base: SceneLight, t: KitLightTune = KIT_LIGHT): SceneLight {
   return {
     // The fill is a little stronger than the theme's: with the arena ramp's deeper
     // shadow band (materials.ts) it carries the shade, so it must keep it readable.
-    hemi: [mix(base.hemi[0], 0x8ea6f0, 0.7), mix(base.hemi[1], 0x9a6450, 0.5), base.hemi[2]],
-    sun: [mix(base.sun[0], 0xffb26e, 0.5), base.sun[1] * 1.34],
+    hemi: [mix(base.hemi[0], t.sky, t.skyMix), mix(base.hemi[1], t.ground, t.groundMix), base.hemi[2] * t.hemiK],
+    sun: [mix(base.sun[0], 0xffb26e, 0.5), base.sun[1] * t.sunK],
     fog: base.fog,
   };
 }

@@ -14,6 +14,7 @@ import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
 import { GROUND_ZONES, patioGround } from './patio-materials';
 import { kitLight, shadowSettings } from './lighting';
+import { AO_TUNE, buildAoField } from './ao-field';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -606,6 +607,13 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   add(doors.build(UNIT, toon(0xffffff, { map: wood })));
   add(slabs.build(UNIT, toon(0xffffff)));
 
+  // The arena maps' baked occlusion and grounding (ao-field.ts); campaign layouts keep their look.
+  if (kit && aoFieldOn()) {
+    const ao = buildAoField(map.boxes, map.bounds, quality, AO_TUNE, sun.position.clone());
+    const n = ao.apply(group);
+    group.userData.aoField = { materials: n, bytes: ao.bytes, bakeMs: ao.bakeMs };
+  }
+
   const water = group.getObjectByName('water') as THREE.Mesh | undefined;
   const statue = group.getObjectByName('statue');
   let lastT = 0;
@@ -631,6 +639,11 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       pinata?.step(dt, t);
     },
   };
+}
+
+/** Review switch: ?ao=0 in the page URL builds the arena without the occlusion field. */
+function aoFieldOn(): boolean {
+  try { return typeof location === 'undefined' || new URLSearchParams(location.search).get('ao') !== '0'; } catch { return true; }
 }
 
 /** The cream path ring and thin violet ring around El Patio's fountain, flush with the ground. */

@@ -108,8 +108,9 @@ real Mac, in Safari or on a real phone.
   At 5 m and beyond the face reads mainly through the glasses and lips, because the skin stays dark
   under this lighting and the palette is unchanged.
 - **The hand has one tier:** the viewmodel doesn't know the quality setting, so phone Low pays its
-  +5k triangles too.
-- **La Pesada's thumb** still reads a little like a pointing finger.
+  +5k triangles too. (Resolved later: see `docs/character-shading/README.md`, Medium and Low hand tiers.)
+- **La Pesada's thumb** still reads a little like a pointing finger. (Resolved later: see
+  `docs/character-shading/README.md`.)
 - **Small omissions:** there is no outline on the flounce ruffles, and Low has no ruffle.
 - **Nameplates:** a lifted tag can sit up to about 40 px above its player's head, with no leader
   line. On older browsers without `:has()`, an empty mode pill may show on touch in practice.

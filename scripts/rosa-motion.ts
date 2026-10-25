@@ -66,6 +66,8 @@ const SCENES: Scene[] = [
   { name: 'idle', dur: 4.0, pre: 0.4, fps: 15, views: ['side'], strip: 8 },
   // Close on her face (1.6 m): idle blinks, a swing's effort, a blow to the head.
   { name: 'face', dur: 3.0, pre: 0.4, fps: 30, views: ['3q'], strip: 12, cam: 1.6 },
+  // Walking out of the sun into a house's cast shadow and back (the lighting transition on her face and arms).
+  { name: 'sunshade', dur: 5.0, pre: 0.4, fps: 30, views: ['3q'], strip: 12, cam: 2.6 },
 ];
 const MEASURED = ['walk1.5', 'walk3', 'walk6', 'crouch', 'strafeR', 'back'];
 
@@ -149,6 +151,14 @@ function install(): void {
     throwhit: (t) => ({ me: still({ msSinceHit: t >= 0.1 ? (t - 0.1) * 1000 : 1e6 }) }),
     elim: (t) => ({ me: still({ alive: !(t >= 0.1 && t < 2.9) }) }),
     idle: () => ({ me: { x: -3, z: Z, yaw: FWD } }),
+    // SS=x0,z0,x1,z1 (default: out of the marigold house's cast shadow, El Patio, into the sun): there, a turn, back.
+    sunshade: (t) => {
+      const [x0, z0, x1, z1] = (w.__ss ?? [2.05, 7.2, 2.05, 2.4]) as number[];
+      const k = (u: number) => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
+      const a = k(t / 2.2) - k((t - 2.8) / 2.2), dir = t < 2.5 ? 1 : -1;
+      const x = x0! + (x1! - x0!) * a, z = z0! + (z1! - z0!) * a;
+      return { me: { x, z, yaw: Math.atan2(-(x1! - x0!) * dir, -(z1! - z0!) * dir), vx: 0, vz: 0 } };
+    },
     face: (t) => ({ me: still({ weapon: 1, msSinceMelee: t >= 0.6 ? (t - 0.6) * 1000 : 1e6, msSinceHit: t >= 2.0 ? (t - 2.0) * 1000 : 1e6 }), ev: [[2.0, 'react', () => subjectAv()?.react(true, -1)]] }),
   };
   const subjectAv = () => e.avatars.get(M.ids[0]);
@@ -174,7 +184,8 @@ function install(): void {
     // of her on her left (standing) or on her right (moving).
     let cx: number, cz: number;
     const cd = (w.__camDist ?? 4) / 4;
-    if (M.view === 'side') { cx = me.x; cz = me.z + 4.0 * cd; }
+    if (M.scene === 'sunshade') { cx = 4.6; cz = 2.2; } // standing still beside her path in the open square, clear of the fountain
+    else if (M.view === 'side') { cx = me.x; cz = me.z + 4.0 * cd; }
     else if (M.scene.startsWith('strafe')) { cx = me.x + 2.5 * cd; cz = me.z + 3.1 * cd; }
     else if (me.vx) { cx = me.x + 2.0 * cd; cz = me.z + 3.3 * cd; } // walks: ahead of her on her right (clear of the planters)
     else { cx = me.x + 2.9 * cd; cz = me.z - 2.75 * cd; }
@@ -215,6 +226,7 @@ async function main(): Promise<void> {
     });
     await sleep(500);
     await p.evaluate((d) => { (window as any).__camDist = d; }, Number(process.env.CAM || 4));
+    if (process.env.SS) await p.evaluate((v) => { (window as any).__ss = v; }, process.env.SS.split(',').map(Number));
     await p.evaluate(install);
     await p.clock.install();
     await p.clock.pauseAt((await p.evaluate(() => Date.now())) + 200);

@@ -4,15 +4,21 @@
 // first-person hand is rebuilt for the tier, and that renderer memory does not
 // grow across repeated round trips (no leaked geometries or textures).
 //
-//   DIST=<build> [PORT=4241] node --import tsx scripts/quality-switch-e2e.ts
+//   DIST=<build> [PORT=4241] [OUT=<dir>] node --import tsx scripts/quality-switch-e2e.ts
+// OUT also saves a labelled frame after each change (q-NN-<tier>.png) and, with
+// ffmpeg, a slideshow of them (quality-change.mp4; stills, not real-time footage).
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { launch } from './browser.mjs';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const DIST = path.resolve(process.env.DIST || path.join(ROOT, 'dist'));
 const PORT = Number(process.env.PORT || 4241);
 const SITE = `http://localhost:${PORT}/`;
+const OUT = process.env.OUT ? path.resolve(process.env.OUT) : null;
+if (OUT) fs.mkdirSync(OUT, { recursive: true });
+let shot = 0;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const results: { name: string; ok: boolean; detail: string }[] = [];
 const check = (name: string, ok: boolean, detail = '') => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); };
@@ -61,7 +67,12 @@ try {
     await p.evaluate((q) => (document.querySelector(`[data-q="${q}"]`) as HTMLElement).click(), q);
     await p.waitForFunction((q) => (window as any).__fps.engine().quality === q, q, { timeout: 20000, polling: 100 });
     await sleep(2500);
-    return state();
+    const st = await state();
+    if (OUT) {
+      await p.evaluate((t) => { let el = document.getElementById('__qlabel'); if (!el) { el = document.createElement('div'); el.id = '__qlabel'; el.style.cssText = 'position:fixed;left:50%;top:40%;transform:translateX(-50%);z-index:99;font:bold 20px sans-serif;color:#fff;background:#000a;padding:4px 10px;border-radius:4px'; document.body.appendChild(el); } el.textContent = t; }, `Quality: ${q}  hand ${st.handTris} tris  (still frame)`);
+      await p.screenshot({ path: path.join(OUT, `q-${String(++shot).padStart(2, '0')}-${q}.png`) });
+    }
+    return st;
   };
 
   const s0 = await state();
@@ -89,6 +100,7 @@ try {
   // The first switch to a tier builds its shared caches once; later visits must not add to them.
   check('geometries stable across round trips (low)', lo[lo.length - 1].geometries <= lo[1].geometries, lo.map((s) => s.geometries).join(','));
   check('textures stable across round trips', hi[hi.length - 1].textures <= hi[0].textures && lo[lo.length - 1].textures <= lo[1].textures, `high ${hi.map((s) => s.textures).join(',')} low ${lo.map((s) => s.textures).join(',')}`);
+  if (OUT) spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '1', '-pattern_type', 'glob', '-i', path.join(OUT, 'q-*.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30', path.join(OUT, 'quality-change.mp4')]);
   check('no page errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 } finally {

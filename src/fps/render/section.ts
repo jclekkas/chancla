@@ -119,8 +119,14 @@ function chunkOf(b: MapBox): string {
 // faces it does shade (the wall under an eave) get only a light gradient.
 /** Every downward-facing face (soffits, undersides): a step darker than shade. */
 const SOFFIT = 0.78;
-/** A facade's top band under its eave: from 1 at EAVE_BAND below the roofline to EAVE_K at it. */
-const EAVE_BAND = 1.3, EAVE_K = 0.84;
+/**
+ * A facade's top band under its eave: from 1 at EAVE_BAND below the
+ * roofline, through EAVE_MID at EAVE_DARK below it (the eave's shadow band,
+ * just under the cornice), to EAVE_K at the roofline (behind the cornice).
+ */
+const EAVE_BAND = 1.25, EAVE_DARK = 0.55, EAVE_MID = 0.76, EAVE_K = 0.7;
+/** How far the eave (board and tiles) overhangs the wall: deeper than the cornice, always above head height. */
+const EAVE_OUT = 0.64;
 /**
  * Weathering by height on plaster that stands on the ground, as control
  * points (height, shade) the wall's vertex colours run through linearly:
@@ -136,6 +142,7 @@ function weatherRows(minY: number, maxY: number, eave: boolean): Array<[number, 
   if (minY <= 0.001) { for (const [y, k] of FOOT) if (y < maxY - 0.3) pts.push([y, k]); } else pts.push([minY, WALL_MID]);
   const yb = maxY - (eave ? EAVE_BAND : BLEACH_BAND);
   if (yb > pts[pts.length - 1]![0] + 0.3) pts.push([yb, WALL_TOP]);
+  if (eave && maxY - EAVE_DARK > pts[pts.length - 1]![0] + 0.2) pts.push([maxY - EAVE_DARK, EAVE_MID]);
   pts.push([maxY, eave ? EAVE_K : WALL_TOP]);
   return pts;
 }
@@ -153,6 +160,10 @@ function weatherAt(y: number, minY: number, maxY: number, eave: boolean): number
 type ShadeFn = (x: number, y: number, z: number, nx: number, ny: number, nz: number) => number;
 /** Faces of a reveal turned toward the opening (normal along +x or -x in the frame). */
 const reveal = (dir: 1 | -1, k: number): ShadeFn => (_x, _y, _z, nx) => (nx * dir > 0.5 ? k : 1);
+/** The head of a reveal: a lintel's underside a step darker than the other soffits. */
+const HEAD: ShadeFn = (_x, _y, _z, _nx, ny) => (ny < -0.5 ? 0.72 : 1);
+/** A sill: the top lit, the front and ends a step darker. */
+const SILL: ShadeFn = (_x, _y, _z, _nx, ny) => (ny > 0.5 ? 1 : 0.84);
 /** A vertical gradient: k0 at y0, k1 at y1 (clamped). */
 const grade = (y0: number, y1: number, k0: number, k1: number): ShadeFn => (_x, y) => k0 + (k1 - k0) * Math.min(1, Math.max(0, (y - y0) / (y1 - y0)));
 /** Sets a geometry's 'shade' attribute (read and dropped by KindBatch.add) from its current positions and normals. */
@@ -398,6 +409,49 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
       batch.add(mat, shadeGeo(boxGeo(minX, y0, minZ, maxX, y1, maxZ, uv, fc), (x, y, z, nx, ny, nz) => (Math.abs(ny) > 0.5 ? 1 : gr(x, y, z, nx, ny, nz))));
     }
   };
+  /**
+   * A few patches of wear low on a wall face (0.95 to about 2 m, where the
+   * windows never are on these faces): mostly bare masonry where the plaster
+   * has spalled off (stone, jagged outline), now and then a paler lime
+   * repair. One per ~6 m of exposed wall, the first near a convex corner.
+   * Flat shapes 12 mm proud, shaded with the wall's weathering. Seeded by
+   * the box, so the arena is the same every time.
+   */
+  const wallPatches = (b: MapBox, side: Side, col: number) => {
+    const f = frameOf(b, side);
+    let seed = Math.abs(Math.round(b.minX * 73 + b.minZ * 151 + b.maxX * 11 + b.maxZ * 29)) + side.charCodeAt(0) * 977;
+    const r = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const stone = new THREE.Color().setHex(col).lerp(new THREE.Color().setHex(0x8c7a68), 0.6).getHex();
+    const lime = new THREE.Color().setHex(col).lerp(new THREE.Color().setHex(0xfff8ea), 0.14).getHex();
+    for (const s of spansOf(b, side, 0.9, 2.2)) {
+      const L = s.a1 - s.a0;
+      if (L < 2) continue;
+      const n = Math.max(1, Math.round(L / 6));
+      for (let i = 0; i < n; i++) {
+        const bare = r() < 0.7, w = 0.6 + r() * 0.7, h = 0.4 + r() * 0.45, y0 = 0.95 + r() * 0.25;
+        let a = s.a0 + (i + 0.2 + r() * 0.6) * (L / n);
+        if (i === 0 && s.e0 === 'c') a = s.a0 + 0.35 + w / 2 + r() * 0.3;
+        else if (i === n - 1 && s.e1 === 'c' && r() < 0.5) a = s.a1 - 0.35 - w / 2 - r() * 0.3;
+        a = Math.min(s.a1 - w / 2 - 0.05, Math.max(s.a0 + w / 2 + 0.05, a));
+        // A jagged outline (bare masonry) or a softer, squarer one (a repair).
+        const shape = new THREE.Shape(), k = 11;
+        for (let j = 0; j < k; j++) {
+          const t = (j / k) * Math.PI * 2, jit = bare ? 0.72 + r() * 0.38 : 0.92 + r() * 0.1;
+          const cx = Math.cos(t), cy = Math.sin(t), sq = bare ? 1 : 1.35; // repairs bulge toward a rectangle
+          const px = a + (w / 2) * jit * Math.sign(cx) * Math.pow(Math.abs(cx), 1 / sq), py = y0 + h / 2 + (h / 2) * jit * Math.sign(cy) * Math.pow(Math.abs(cy), 1 / sq);
+          if (j === 0) shape.moveTo(px, py); else shape.lineTo(px, py);
+        }
+        const g = new THREE.ShapeGeometry(shape);
+        g.translate(0, 0, 0.012);
+        shadeGeo(g, (_x, y) => weatherAt(y, 0, b.maxY, true) * (bare ? 0.92 : 1));
+        g.applyMatrix4(f.m);
+        const p = g.getAttribute('position') as THREE.BufferAttribute, nr = g.getAttribute('normal') as THREE.BufferAttribute, uv = g.getAttribute('uv') as THREE.BufferAttribute;
+        const sc = bare ? 1 : 2; // stone at the cantera's scale, a repair at the plaster's
+        for (let j = 0; j < p.count; j++) uv.setXY(j, (Math.abs(nr.getX(j)) > 0.5 ? p.getZ(j) : p.getX(j)) / sc, p.getY(j) / sc);
+        batch.add(bare ? { k: 'cantera', c: stone } : wallMat(lime), g);
+      }
+    }
+  };
   /** The wall a window is being placed on (its colour and height band), for the stain under its sill. */
   let wallOf: { col: number; minY: number; maxY: number; eave: boolean } | null = null;
   /**
@@ -428,13 +482,13 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     const gp = gl.getAttribute('position') as THREE.BufferAttribute, guv = gl.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < gp.count; i++) guv.setXY(i, (gp.getX(i) - (a - hw)) / (2 * hw), (gp.getY(i) - bot) / (top - bot));
     batch.add(M.glass, shadeGeo(gl, grade(bot, top, 1, 0.9)).applyMatrix4(f.m));
-    fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.17, 1, 0, reveal(1, 0.8));  // jambs: a 0.16 m reveal, the inner faces in shade
-    fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.17, 1, 0, reveal(-1, 0.8));
-    fbox(f, M.trim, a - hw - 0.14, top, 0, a + hw + 0.14, top + 0.16, 0.2);         // lintel
+    fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.17, 1, 0, reveal(1, 0.64));  // jambs: a 0.16 m reveal, the inner faces in shade
+    fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.17, 1, 0, reveal(-1, 0.64));
+    fbox(f, M.trim, a - hw - 0.14, top, 0, a + hw + 0.14, top + 0.16, 0.2, 1, 0, HEAD);  // lintel, its underside (the head of the reveal) dark
     fbox(f, M.trimSmall, a - hw - 0.2, top + 0.16, 0, a + hw + 0.2, top + 0.22, 0.26); // its cap
     const small = hero || !lite; // Low drops the keystones and corbels off the hero blocks
     if (small) fbox(f, M.trimSmall, a - 0.08, top - 0.04, 0, a + 0.08, top + 0.2, 0.23, 1, hero ? 0 : 4); // keystone (its top is inside the cap)
-    fbox(f, M.cantera, a - hw - 0.16, bot - 0.08, 0, a + hw + 0.16, bot, 0.25);     // sill
+    fbox(f, M.cantera, a - hw - 0.16, bot - 0.08, 0, a + hw + 0.16, bot, 0.25, 0.8, 0, SILL); // sill: a lit top, its front and ends a step darker
     if (small) for (const s of [-1, 1]) fbox(f, M.trimSmall, a + s * (hw - 0.02) - 0.05, bot - 0.22, 0, a + s * (hw - 0.02) + 0.05, bot - 0.08, 0.17, 1, hero ? 0 : 4); // corbels, under the sill
     // Louvered shutters folded back against the wall.
     for (const s of [-1, 1]) fbox(f, shutterMat(shutter), a + s * (hw + 0.12) - (s > 0 ? 0 : 0.42), bot + 0.02, 0.02, a + s * (hw + 0.12) + (s > 0 ? 0.42 : 0), top - 0.02, 0.06, 0.6);
@@ -469,9 +523,9 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   function doorUnit(f: Frame, a: number): void {
     const hw = 0.62, top = 2.4;
     // Casing and a molded head; the leaves sit 0.14 m back from the casing face.
-    fbox(f, M.trim, a - hw - 0.14, 0, 0, a - hw, top, 0.18, 1, 0, reveal(1, 0.78));
-    fbox(f, M.trim, a + hw, 0, 0, a + hw + 0.14, top, 0.18, 1, 0, reveal(-1, 0.78));
-    fbox(f, M.trim, a - hw - 0.18, top, 0, a + hw + 0.18, top + 0.2, 0.22);
+    fbox(f, M.trim, a - hw - 0.14, 0, 0, a - hw, top, 0.18, 1, 0, reveal(1, 0.62));
+    fbox(f, M.trim, a + hw, 0, 0, a + hw + 0.14, top, 0.18, 1, 0, reveal(-1, 0.62));
+    fbox(f, M.trim, a - hw - 0.18, top, 0, a + hw + 0.18, top + 0.2, 0.22, 1, 0, HEAD);
     fbox(f, M.trimSmall, a - hw - 0.26, top + 0.2, 0, a + hw + 0.26, top + 0.27, 0.3);
     // Two closed wooden leaves with raised panels, a center stile and brass handles.
     // In the doorway's shade: darker toward the head, and the raised panels' edges a step darker (the joints).
@@ -500,21 +554,22 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
 
   /** Hero blocks: cornice in three steps and a barrel-tile eave (milestone 2). */
   function roofUnit(f: Frame, h: number): void {
-    fbox(f, M.trim, -0.04, h - 0.42, 0, f.len + 0.04, h - 0.3, 0.08, 1, 0, () => 0.86);
-    fbox(f, M.trim, -0.08, h - 0.3, 0, f.len + 0.08, h - 0.18, 0.17, 1, 0, () => 0.9);
-    fbox(f, M.trim, -0.12, h - 0.18, 0, f.len + 0.12, h - 0.02, 0.27, 1, 0, () => 0.95);
-    fbox(f, M.eave, -0.12, h - 0.02, -0.4, f.len + 0.12, h + 0.04, 0.4);           // eave board under the tiles
-    const n = Math.round((f.len + 0.2) / 0.24);
+    fbox(f, M.trim, -0.02, h - 0.52, 0, f.len + 0.02, h - 0.42, 0.04, 1, 0, () => 0.8);
+    fbox(f, M.trim, -0.04, h - 0.42, 0, f.len + 0.04, h - 0.3, 0.1, 1, 0, () => 0.84);
+    fbox(f, M.trim, -0.08, h - 0.3, 0, f.len + 0.08, h - 0.18, 0.2, 1, 0, () => 0.9);
+    fbox(f, M.trim, -0.12, h - 0.18, 0, f.len + 0.12, h - 0.02, 0.32, 1, 0, () => 0.95);
+    eaveBoard(f, null, h);
+    const n = Math.round((f.len + 0.2) / 0.24), tl = EAVE_OUT + 0.44;
     for (let i = 0; i < n; i++) {
       const a = -0.1 + (i + 0.5) * ((f.len + 0.2) / n);
       const mat = [M.tileA, M.tileB, M.tileA, M.tileC][i % 4]!;
       // Each barrel tile runs from the roof out over the edge, slightly tilted down.
-      fmesh(f, mat, TILE, a, h + 0.11, 0.0, 0.22, 0.84, 0.16, Math.PI / 2 - 0.12, 0, 0);
+      fmesh(f, mat, TILE, a, h + 0.1, EAVE_OUT + 0.02 - tl / 2, 0.22, tl, 0.16, Math.PI / 2 - 0.12, 0, 0);
     }
     // Rain spouts (canales) near both ends: a classic detail and a landmark at the roofline.
     for (const a of [0.5, f.len - 0.5]) {
-      fbox(f, M.spout, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, 0.62);
-      fbox(f, M.eave, a - 0.05, h - 0.28, 0.08, a + 0.05, h - 0.24, 0.62);
+      fbox(f, M.spout, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, EAVE_OUT + 0.24);
+      fbox(f, M.eave, a - 0.05, h - 0.28, 0.08, a + 0.05, h - 0.24, EAVE_OUT + 0.24);
     }
   }
 
@@ -524,17 +579,29 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
    * pieces meet the next face cleanly at corners.
    */
   function eaveRun(f: Frame, s: Span, h: number, spouts: boolean): void {
-    // The cornice's steps sit under the eave: the deeper the step, the more shade.
-    sbox(f, s, M.trim, h - 0.42, 0, h - 0.3, 0.08, 1, 0, () => 0.86);
-    sbox(f, s, M.trim, h - 0.3, 0, h - 0.18, 0.17, 1, 0, () => 0.9);
-    sbox(f, s, M.trim, h - 0.18, 0, h - 0.02, 0.27, 1, 0, () => 0.95);
-    sbox(f, s, M.eave, h - 0.02, -0.4, h + 0.04, 0.4);
-    const [t0, t1] = run(s, -0.42, 0.42);
-    if (t1 - t0 > 0.2) fgeo(f, M.tileA, tileStrip(t0, t1, lite ? 0.32 : 0.24, quality === 'high' ? 3 : 2, h + 0.13, h + 0.04, -0.42, 0.42, 0.08, TILE_COLORS));
+    // A bed moulding, then the cornice's steps under the eave: the deeper the step, the more shade.
+    sbox(f, s, M.trim, h - 0.52, 0, h - 0.42, 0.04, 1, 0, () => 0.8);
+    sbox(f, s, M.trim, h - 0.42, 0, h - 0.3, 0.1, 1, 0, () => 0.84);
+    sbox(f, s, M.trim, h - 0.3, 0, h - 0.18, 0.2, 1, 0, () => 0.9);
+    sbox(f, s, M.trim, h - 0.18, 0, h - 0.02, 0.32, 1, 0, () => 0.95);
+    eaveBoard(f, s, h);
+    const [t0, t1] = run(s, -0.42, EAVE_OUT + 0.02);
+    if (t1 - t0 > 0.2) fgeo(f, M.tileA, tileStrip(t0, t1, lite ? 0.32 : 0.24, quality === 'high' ? 3 : 2, h + 0.13, h + 0.03, -0.42, EAVE_OUT + 0.02, 0.08, TILE_COLORS));
     if (spouts && s.a1 - s.a0 > 3) for (const a of [s.a0 + 0.6, s.a1 - 0.6]) {
-      fbox(f, M.spout, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, 0.62);
-      fbox(f, M.eave, a - 0.05, h - 0.28, 0.08, a + 0.05, h - 0.24, 0.62);
+      fbox(f, M.spout, a - 0.07, h - 0.36, 0, a + 0.07, h - 0.24, EAVE_OUT + 0.24);
+      fbox(f, M.eave, a - 0.05, h - 0.28, 0.08, a + 0.05, h - 0.24, EAVE_OUT + 0.24);
     }
+  }
+  /**
+   * The eave board under the tiles, out to EAVE_OUT, its underside (the
+   * soffit) dark, with a fascia along its front edge: the profile that reads
+   * against the sky.
+   */
+  function eaveBoard(f: Frame, s: Span | null, h: number): void {
+    const soffit: ShadeFn = (_x, _y, _z, _nx, ny) => (ny < -0.5 ? 0.7 : 1);
+    const put = (mat: Mat, y0: number, n0: number, y1: number, n1: number, sh: ShadeFn) => (s ? sbox(f, s, mat, y0, n0, y1, n1, 1, 0, sh) : fbox(f, mat, -0.12, y0, n0, f.len + 0.12, y1, n1, 1, 0, sh));
+    put(M.eave, h - 0.02, -0.4, h + 0.04, EAVE_OUT, soffit);
+    put(M.eave, h - 0.11, EAVE_OUT - 0.05, h - 0.02, EAVE_OUT, (x, y, z, nx, ny, nz) => soffit(x, y, z, nx, ny, nz) * 0.88);
   }
 
   /** Painted base band with a molded cap on one exposed run, stopping at door casings (`gaps`, along the frame). */
@@ -705,6 +772,18 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
           windowUnit(f, a, up, shutter, false, false);
         }
       }
+    }
+    // The house's other convex corners (an alley entrance, a flank on the plaza) get a flat
+    // pilaster strip in the trim colour: the wall's thickness reads at the arris. Base-band depth.
+    for (const side of SIDES) {
+      if (side === fs) continue;
+      const f = frameOf(b, side);
+      for (const s of spansOf(b, side, 0.88, h - 0.52)) {
+        if (s.a1 - s.a0 < 1.2) continue;
+        if (s.e0 === 'c') fbox(f, M.trim, s.a0, 0.88, 0, s.a0 + 0.3, h - 0.52, 0.03, 2, 0, (_x, y) => weatherAt(y, 0, h, true));
+        if (s.e1 === 'c') fbox(f, M.trim, s.a1 - 0.3, 0.88, 0, s.a1 + 0.03, h - 0.52, 0.03, 2, 0, (_x, y) => weatherAt(y, 0, h, true));
+      }
+      wallPatches(b, side, col);
     }
     for (const s of spansOf(b, fs, 0, h - 0.42)) {
       // Pilasters at the facade's own corners.

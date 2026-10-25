@@ -456,13 +456,23 @@ export function patchShader<T extends THREE.Material>(m: T, key: string, fn: (sh
 function plasterMacro<T extends THREE.Material>(m: T, mean: number): T {
   return patchShader(m, `plaster-macro-${mean.toFixed(4)}`, (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+float gMacro = 1.0;
 #ifdef USE_MAP
   {
     vec2 mu = mat2(0.80, -0.60, 0.60, 0.80) * vMapUv * 0.23 + vec2(0.37, 0.11);
-    float mm = texture2D(map, mu).g / ${mean.toFixed(4)};
-    diffuseColor.rgb *= clamp(1.0 + (mm - 1.0) * 3.2, 0.82, 1.1);
+    gMacro = texture2D(map, mu).g / ${mean.toFixed(4)};
+    diffuseColor.rgb *= clamp(1.0 + (gMacro - 1.0) * 3.2, 0.82, 1.1);
   }
-#endif`);
+#endif`).replace('#include <opaque_fragment>', `{
+  // In the toon ramp's shadow band the same albedo variation is only a few
+  // levels of a dark colour and vanishes: there, the broad patches get more
+  // contrast, centred on 1 so the shade as a whole is no lighter.
+  float gAlb = max(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-3);
+  float gLit = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)) / gAlb;
+  float gShade = 1.0 - smoothstep(0.35, 1.3, gLit);
+  outgoingLight *= mix(1.0, clamp(1.0 + (gMacro - 1.0) * 3.0, 0.8, 1.16), gShade);
+}
+#include <opaque_fragment>`);
   });
 }
 

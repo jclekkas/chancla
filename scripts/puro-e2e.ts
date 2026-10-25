@@ -1,4 +1,5 @@
 // ¡Puro Chanclazo! in the real page (Chromium with SwiftShader; the phone is
+// ROSA=candidate turns on the candidate Rosa model for team Sol (preview builds).
 // emulated, not a real device). Practice (offline build): the selector, the
 // HUD, the primary button and V swinging (never a throw, never twice), weapon
 // switching, pause, the replay's attribution, and switching back to Classic.
@@ -45,7 +46,7 @@ async function page(browser: Browser, o: Opts = {}): Promise<{ ctx: BrowserConte
   await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(site) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p = await ctx.newPage();
   const settings = { practiceAllies: 0, practiceEnemies: 1, practiceDifficulty: 'easy', quality: 'low', qualityMode: 'low', music: 0, lang: o.lang ?? 'en', name: 'Rosa', ...o.settings };
-  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
+  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify({ ...settings, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) })})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
   await p.goto(site);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
@@ -285,7 +286,7 @@ async function clip(browser: Browser): Promise<void> {
   await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(`http://localhost:${PORT_OFF}/`) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p = await ctx.newPage();
   const settings = { practiceAllies: 0, practiceEnemies: 1, practiceDifficulty: 'easy', quality: 'medium', qualityMode: 'medium', music: 0, lang: 'en', name: 'Rosa', practiceMap: 'patio', practiceRules: 'melee' };
-  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
+  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify({ ...settings, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) })})); } catch {}` });
   await p.goto(`http://localhost:${PORT_OFF}/`);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
   await p.evaluate(() => (document.getElementById('btn-practice') as HTMLElement).click());

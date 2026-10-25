@@ -1,4 +1,5 @@
 // Matched HUD stills for the motion, minimap and cafecito milestone: the real
+// ROSA=candidate turns on the candidate Rosa model for team Sol (preview builds).
 // game page (offline practice), staged identically on any build that has
 // window.__fps, so before and after compare shot for shot. The page runs on a
 // fake clock (the in-page host rebased onto it, as in scripts/killcam-e2e.ts),
@@ -45,7 +46,7 @@ async function shoot(browser: Browser, name: string, sc: Scene, phone: boolean):
   const p: Page = await ctx.newPage();
   const q = phone ? 'low' : 'high';
   const settings = { practiceMap: sc.map, practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: q, qualityMode: q, music: 0, lang: sc.lang ?? 'en', name: 'Rosa', killcam: true };
-  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
+  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify({ ...settings, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) })})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
   await p.goto(SITE);
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });

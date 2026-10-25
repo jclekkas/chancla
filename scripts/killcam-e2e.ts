@@ -1,4 +1,5 @@
 // Browser checks for the elimination replay, in offline practice (the real
+// ROSA=candidate turns on the candidate Rosa model for team Sol (preview builds).
 // page, the in-page host and the real sim). A bot is placed and told to
 // swing or throw (the same inputs a bot sends); you are eliminated for real,
 // and the page's own replay plays. Each check reads the engine's replay
@@ -43,7 +44,7 @@ async function open(browser: Browser, o: OpenOpts = {}): Promise<{ ctx: BrowserC
   await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p = await ctx.newPage();
   const settings = { practiceMap: 'patio', practiceAllies: 0, practiceEnemies: 1, practiceDifficulty: 'easy', quality: o.quality ?? 'medium', qualityMode: o.quality ?? 'medium', music: 0, killcam: o.killcam ?? true, lang: o.lang ?? 'en' };
-  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
+  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify({ ...settings, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) })})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
   p.on('console', (m) => { if (/not eliminated/.test(m.text())) console.log(m.text()); });
   await p.goto(SITE);

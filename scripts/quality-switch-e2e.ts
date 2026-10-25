@@ -1,4 +1,5 @@
 // Mid-match quality change: switches the graphics quality several times during
+// ROSA=candidate turns on the candidate Rosa model for team Sol (preview builds).
 // an offline practice match, through the real settings buttons, and checks that
 // the match carries on (same phase, health, score, weapon in hand), that the
 // first-person hand is rebuilt for the tier, and that renderer memory does not
@@ -31,7 +32,7 @@ try {
   await ctx.route('**/*', (r) => { const u = r.request().url(); return u.startsWith(SITE) || u.startsWith('data:') || u.startsWith('blob:') ? r.continue() : r.abort(); });
   const p = await ctx.newPage();
   const settings = { practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: 'high', qualityMode: 'high', music: 0, lang: 'en', name: 'Rosa' };
-  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
+  await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify({ ...settings, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) })})); } catch {}` });
   const errors: string[] = [];
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(SITE);
@@ -61,6 +62,7 @@ try {
       quality: e.quality, handTris: Math.round(tris), handMeshes: meshes, vmQuality: e.vm.quality ?? null,
       geometries: e.renderer.info.memory.geometries, textures: e.renderer.info.memory.textures, programs: e.renderer.info.programs?.length ?? 0,
       tick: room.sim.tick ?? null,
+      rosa: e.rosaCandidateState?.() ?? null, solCandidate: [...e.avatars.values()].filter((a: any) => a.isCandidate).length,
     };
   });
   const setQ = async (q: string) => {
@@ -85,6 +87,7 @@ try {
     console.log(q, JSON.stringify(s));
     check(`${q}: match continues`, s.phase === 'playing' && s.alive, `phase=${s.phase} alive=${s.alive}`);
     check(`${q}: health, kills and deaths unchanged`, s.hp === s0.hp && s.kills === s0.kills && s.deaths === s0.deaths, `hp=${s.hp} k=${s.kills} d=${s.deaths}`);
+    if (process.env.ROSA === 'candidate') check(`${q}: candidate Sol rebuilt for the tier`, !!s.rosa?.ready && s.solCandidate > 0, JSON.stringify({ rosa: s.rosa, sol: s.solCandidate }));
     check(`${q}: La Pesada still in hand`, s.weapon === 1 && s.shown === 1, `sim=${s.weapon} shown=${s.shown}`);
   }
   // A swing right after a change still lands in the sim (the attack path is untouched).

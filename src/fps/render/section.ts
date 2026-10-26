@@ -24,7 +24,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { EL_PATIO, type MapBox } from '../../../shared/map';
 import type { Quality } from '../settings';
 import { COLORS, boxGeo } from './materials';
-import { TINTED, kitMaterials, type Kind, type Mat } from './patio-materials';
+import { ATLAS, TINTED, atlasUV, kitMaterials, type AtlasRegion, type Kind, type Mat } from './patio-materials';
 import { archPanel, archRing, exposedSpans, faceCovered, faceOf, leafTuft, tileStrip, toAlong, SIDES, type Side } from './patio-shapes';
 
 /** The hero blocks: the café and its point-mirrored Panadería keep their milestone 2 dressing. */
@@ -433,6 +433,8 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
         if (i === 0 && s.e0 === 'c') a = s.a0 + 0.35 + w / 2 + r() * 0.3;
         else if (i === n - 1 && s.e1 === 'c' && r() < 0.5) a = s.a1 - 0.35 - w / 2 - r() * 0.3;
         a = Math.min(s.a1 - w / 2 - 0.05, Math.max(s.a0 + w / 2 + 0.05, a));
+        // Where a lane-wall piece already sits (a painted advert, a meter), the patch is left out.
+        if (taken(b, side).some(([p, q, u, v]) => a - w / 2 < q + 0.1 && a + w / 2 > p - 0.1 && y0 < v && y0 + h > u)) continue;
         // A jagged outline (bare masonry) or a softer, squarer one (a repair).
         const shape = new THREE.Shape(), k = 11;
         for (let j = 0; j < k; j++) {
@@ -480,7 +482,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     // Glass, flush with the wall, its texture fitted to the opening (frame, panes, the reveal's shadow).
     const gl = boxGeo(a - hw, bot, 0, a + hw, top, 0.012, 1, 63 & ~32);
     const gp = gl.getAttribute('position') as THREE.BufferAttribute, guv = gl.getAttribute('uv') as THREE.BufferAttribute;
-    for (let i = 0; i < gp.count; i++) guv.setXY(i, (gp.getX(i) - (a - hw)) / (2 * hw), (gp.getY(i) - bot) / (top - bot));
+    for (let i = 0; i < gp.count; i++) guv.setXY(i, ...atlasUV(ATLAS.glass, (gp.getX(i) - (a - hw)) / (2 * hw), (gp.getY(i) - bot) / (top - bot)));
     batch.add(M.glass, shadeGeo(gl, grade(bot, top, 1, 0.9)).applyMatrix4(f.m));
     fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.17, 1, 0, reveal(1, 0.64));  // jambs: a 0.16 m reveal, the inner faces in shade
     fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.17, 1, 0, reveal(-1, 0.64));
@@ -770,15 +772,13 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
           const a = s.a0 + sp * (k + 0.5);
           if (!bannerClear(b, side, a)) continue;
           windowUnit(f, a, up, shutter, false, false);
+          occupy(b, side, a - 0.75, a + 0.75, up - 0.95, up + 0.85);
         }
       }
     }
     // (Flat trim-colour strips on the other convex corners were tried and removed: in shade
     // they read as pale boards stuck on the arris, as quoins did.)
-    for (const side of SIDES) {
-      if (side === fs) continue;
-      wallPatches(b, side, col);
-    }
+    // (The wear patches on the other faces go on after the lane-wall pieces: see the assembly.)
     for (const s of spansOf(b, fs, 0, h - 0.42)) {
       // Pilasters at the facade's own corners.
       if (s.a0 < 0.01) pilaster(ff, 0, h);
@@ -1093,6 +1093,235 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     batch.add(M.binLid, boxGeo(b.minX, h - 0.1, b.minZ, b.maxX, h, b.maxZ, 1, 63 & ~8));
   }
 
+  // ------------------------------------------------------------ lane walls
+  // Large plain faces that look onto ground a player can stand on (the backs
+  // and flanks of houses, garden and boundary walls, the arcade's back) get
+  // what a lived-in street puts on them: a downpipe from the eaves, a cable
+  // run dropping to a meter box, a shuttered blind window up high, a painted
+  // shop sign, a wall advert or mural, pasted posters, and on a long run a
+  // pilaster with its own downpipe dividing it. Two to four per face, placed
+  // by a seed taken from the face's position, clear of the windows and wear
+  // patches already there and of the team banners. Visual only, like the
+  // rest of the kit: painted pieces lie flush (12 to 16 mm), pipes, conduit
+  // and the meter box stand off at most 8 cm, and anything deeper (a
+  // rainwater head, a blind window's sill) is above 2.6 m. Nothing is shaped
+  // like a door, a ladder or a ledge. The painted pieces use the kit atlas
+  // on the glass material, the rest the detail, plaster, cantera and louver
+  // kinds: no new draw call. Low keeps every piece's silhouette and drops the
+  // small parts (clips, clamps, the meter's window, the posters).
+
+  /** Rectangles (frame a0, a1, y0, y1) taken on a face: windows, wear patches, placed pieces. */
+  const occ = new Map<string, Array<[number, number, number, number]>>();
+  function taken(b: MapBox, side: Side): Array<[number, number, number, number]> {
+    const k = `${b.minX},${b.minY},${b.minZ},${b.maxX},${b.maxY},${b.maxZ}:${side}`;
+    let l = occ.get(k);
+    if (!l) { l = []; occ.set(k, l); }
+    return l;
+  }
+  function occupy(b: MapBox, side: Side, a0: number, a1: number, y0: number, y1: number): void { taken(b, side).push([a0, a1, y0, y1]); }
+
+  /** The arena's extent (the boundary walls), and whether a point at chest height is open ground inside it. */
+  const env = boxes.reduce((e, o) => ({ minX: Math.min(e.minX, o.minX), maxX: Math.max(e.maxX, o.maxX), minZ: Math.min(e.minZ, o.minZ), maxZ: Math.max(e.maxZ, o.maxZ) }),
+    { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  // Steps, the terrace, crates and planters are lane too (stood on or beside); houses and walls are not.
+  const openAt = (x: number, z: number) => x > env.minX && x < env.maxX && z > env.minZ && z < env.maxZ &&
+    !boxes.some((o) => o.minY < 1.4 && o.maxY > 2.4 && o.mat !== 'stone' && x > o.minX && x < o.maxX && z > o.minZ && z < o.maxZ);
+  /** True when most of a run looks onto open ground (sampled 0.9 m out). */
+  const facesLane = (f: Frame, s: Span): boolean => {
+    let n = 0;
+    const p = new THREE.Vector3();
+    for (let i = 0; i < 5; i++) {
+      p.set(s.a0 + (s.a1 - s.a0) * (i + 0.5) / 5, 1, 0.9).applyMatrix4(f.m);
+      if (openAt(p.x, p.z)) n++;
+    }
+    return n >= 3;
+  };
+  /** True when a team banner hangs on this face near a0..a1. */
+  const bannerNear = (b: MapBox, side: Side, a0: number, a1: number): boolean => {
+    const fc = faceOf(b, side);
+    for (const bn of banners) {
+      const [n, w] = fc.axis === 'x' ? [bn.x, bn.z] : [bn.z, bn.x];
+      if (Math.abs(n - fc.plane) > 0.3 || w < fc.lo - 1 || w > fc.hi + 1) continue;
+      const a = toAlong(b, side, w);
+      if (a > a0 - 0.9 && a < a1 + 0.9) return true;
+    }
+    return false;
+  };
+
+  /** Pipes and boxes: the faces along the wall a step darker than the front, so they read round and proud. */
+  const SIDE_DARK: ShadeFn = (_x, _y, _z, nx) => (Math.abs(nx) > 0.5 ? 0.8 : 1);
+  /** Paint and paper on the plaster take the wall's own weathering (and a touch of dust). */
+  interface WallShade { minY: number; maxY: number; eave: boolean }
+
+  /** A downpipe from a rainwater head under the cornice (when there is one) to a shoe at the foot. */
+  function downpipe(f: Frame, a: number, yTop: number, col: number, head: boolean): void {
+    const m: Mat = { k: 'detail', c: col }, r = 0.034;
+    fbox(f, m, a - r, 0.16, 0.012, a + r, yTop, 0.076, 1, 0, SIDE_DARK);
+    fbox(f, m, a - r - 0.012, 0, 0.012, a + r + 0.012, 0.16, 0.08, 1, 0, SIDE_DARK); // the shoe
+    if (head && yTop >= 2.6) fbox(f, m, a - 0.1, yTop, 0, a + 0.1, yTop + 0.2, 0.18, 1, 0, SIDE_DARK);
+    if (!lite) {
+      const clip: Mat = { k: 'detail', c: new THREE.Color().setHex(col).multiplyScalar(0.7).getHex() };
+      for (let y = 1.15; y < yTop - 0.4; y += 1.4) fbox(f, clip, a - r - 0.012, y, 0, a + r + 0.012, y + 0.045, 0.08, 1, 0, SIDE_DARK);
+    }
+  }
+
+  /** A meter box at chest height, its conduit up to a run along the wall under the eave (to a2), and a cable down into the ground. */
+  function meterRun(f: Frame, a: number, yRun: number, a2: number): void {
+    const box: Mat = { k: 'detail', c: 0xa3a19a }, pipe: Mat = { k: 'detail', c: 0x77726a };
+    fbox(f, box, a - 0.17, 1.42, 0, a + 0.17, 1.9, 0.075, 1, 0, SIDE_DARK);
+    fbox(f, pipe, a - 0.02, 0, 0.012, a + 0.02, 1.42, 0.052, 1, 0, SIDE_DARK);
+    fbox(f, pipe, a - 0.02, 1.9, 0.012, a + 0.02, yRun - 0.02, 0.052, 1, 0, SIDE_DARK);
+    const [p, q] = a2 > a ? [a - 0.02, a2] : [a2, a + 0.02];
+    fbox(f, pipe, p, yRun - 0.02, 0.012, q, yRun + 0.02, 0.052, 1, 0, (_x, _y, _z, _nx, ny) => (ny < -0.5 ? 0.7 : 1));
+    fbox(f, box, a - 0.07, yRun - 0.07, 0, a + 0.07, yRun + 0.07, 0.07, 1, 0, SIDE_DARK); // junction box at the bend
+    if (lite) return;
+    fbox(f, { k: 'detail', c: 0x2c2a30 }, a - 0.08, 1.68, 0.075, a + 0.08, 1.78, 0.079); // the reading window
+    const clamp: Mat = { k: 'detail', c: 0x5e5a54 };
+    for (let t = 0.9; t < Math.abs(q - p) - 0.3; t += 0.9) {
+      const x = a2 > a ? a + t : a - t;
+      fbox(f, clamp, x - 0.02, yRun - 0.035, 0, x + 0.02, yRun + 0.035, 0.06);
+    }
+  }
+
+  /** A blind window up high: the surround of the house's windows round two closed louvered shutters. */
+  function blindWindow(f: Frame, a: number, wy: number, shutter: number): void {
+    const hw = 0.45, top = wy + 0.6, bot = wy - 0.6;
+    fbox(f, M.trim, a - hw - 0.1, bot, 0, a - hw, top, 0.12, 1, 0, reveal(1, 0.64));
+    fbox(f, M.trim, a + hw, bot, 0, a + hw + 0.1, top, 0.12, 1, 0, reveal(-1, 0.64));
+    fbox(f, M.trim, a - hw - 0.14, top, 0, a + hw + 0.14, top + 0.16, 0.16, 1, 0, HEAD);
+    fbox(f, M.cantera, a - hw - 0.16, bot - 0.08, 0, a + hw + 0.16, bot, 0.2, 0.8, 0, SILL);
+    // The leaves closed in the reveal, a step into its shade toward the head.
+    for (const [p, q] of [[a - hw, a], [a, a + hw]] as const) fbox(f, shutterMat(shutter), p, bot, 0.02, q, top, 0.05, 0.6, 0, grade(bot, top, 0.95, 0.82));
+    if (!lite) fbox(f, M.iron, a - 0.015, wy - 0.05, 0.05, a + 0.015, wy + 0.05, 0.065); // the latch
+  }
+
+  /** A painted piece (a region of the kit atlas) flat on the wall, `out` proud of it, turned `rz` in its plane. */
+  function painted(f: Frame, r: AtlasRegion, a: number, yc: number, w: number, h: number, out: number, ws: WallShade, rz = 0): void {
+    const g = new THREE.PlaneGeometry(w, h);
+    const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, ...atlasUV(r, uv.getX(i), uv.getY(i)));
+    if (rz) g.rotateZ(rz);
+    g.translate(a, yc, out);
+    shadeGeo(g, (_x, y) => weatherAt(y, ws.minY, ws.maxY, ws.eave) * 0.94);
+    batch.add(M.glass, g.applyMatrix4(f.m));
+  }
+
+  /** A pilaster dividing a long run: the house's pilaster, standing on the base band where there is one. */
+  function pilasterBreak(f: Frame, a: number, topY: number, band: boolean): void {
+    fbox(f, M.trim, a - 0.17, band ? 0.88 : 0, 0, a + 0.17, topY, 0.05);
+    if (band) fbox(f, M.trim, a - 0.19, 0.8, 0, a + 0.19, 0.88, 0.08);
+  }
+
+  type LaneKind = 'hero' | 'house' | 'wall' | 'terrace';
+  /** Downpipe paints: zinc grey, oxide red, bottle green, dark grey. */
+  const PIPE_COLS = [0x8b8d88, 0x9c4a32, 0x3f5e4c, 0x6a6560];
+  /** Places the lane-wall pieces on every plain face of a box that looks onto the lanes. */
+  function laneWalls(b: MapBox, kind: LaneKind, col: number): void {
+    const H = b.maxY;
+    if (b.minY > 0.01 || H < 2.4) return;
+    const eave = kind === 'hero' || kind === 'house';
+    const topY = eave ? H - 0.55 : kind === 'terrace' ? H - 0.24 : H - (H >= 4 ? 0.36 : 0.1);
+    const ws: WallShade = { minY: 0, maxY: kind === 'wall' ? H - 0.07 : H, eave };
+    const up = Math.min(4.6, H - 1.34);
+    for (const side of SIDES) {
+      // Facades are dressed already (windows, doors, signs, the terrace's arcade); a plain wall's facade only when it carries no sign.
+      if (side === b.facade && (kind !== 'wall' || b.sign)) continue;
+      const f = frameOf(b, side), tk = taken(b, side);
+      // Whatever stands against the face (steps, a landing, a crate) keeps the pieces off it.
+      const fc = faceOf(b, side);
+      for (const o of boxes) {
+        if (o === b || o.minY > topY) continue;
+        const [oMin, oMax] = fc.axis === 'z' ? [o.minZ, o.maxZ] : [o.minX, o.maxX];
+        if (!(fc.out > 0 ? oMin <= fc.plane + 0.05 && oMax >= fc.plane + 0.05 : oMax >= fc.plane - 0.05 && oMin <= fc.plane - 0.05)) continue;
+        const [lo, hi] = fc.axis === 'z' ? [o.minX, o.maxX] : [o.minZ, o.maxZ];
+        if (Math.min(hi, fc.hi) <= Math.max(lo, fc.lo)) continue;
+        const p = toAlong(b, side, Math.max(lo, fc.lo)), q = toAlong(b, side, Math.min(hi, fc.hi));
+        tk.push([Math.min(p, q), Math.max(p, q), o.minY, o.maxY + 0.15]);
+      }
+      for (const s of spansOf(b, side, 0.9, Math.min(topY, 3.2))) {
+        const L = s.a1 - s.a0;
+        if (L < 2.2 || L * Math.min(topY, 4) < 6.5 || !facesLane(f, s)) continue;
+        let seed = Math.abs(Math.round(b.minX * 131 + b.minZ * 197 + b.maxX * 17 + b.maxZ * 41 + s.a0 * 59)) + side.charCodeAt(0) * 733;
+        const r = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+        const m0 = s.e0 === 'i' ? 0.3 : 0.15, m1 = s.e1 === 'i' ? 0.3 : 0.15;
+        const free = (a0: number, a1: number, y0: number, y1: number) => a0 >= s.a0 + m0 && a1 <= s.a1 - m1 &&
+          !tk.some(([p, q, u, v]) => a0 < q + 0.12 && a1 > p - 0.12 && y0 < v + 0.08 && y1 > u - 0.08) && !bannerNear(b, side, a0, a1);
+        const take = (a0: number, a1: number, y0: number, y1: number) => tk.push([a0, a1, y0, y1]);
+        const order = [0.5, 0.3, 0.7, 0.2, 0.8, 0.4, 0.6, 0.12, 0.88].map((t) => [t, r()] as const).sort((p, q) => p[1] - q[1]).map(([t]) => t);
+        const spot = (w: number, y0: number, y1: number): number | null => {
+          for (const t of order) { const a = s.a0 + L * t; if (free(a - w / 2, a + w / 2, y0, y1)) return a; }
+          return null;
+        };
+        const target = Math.min(4, Math.max(2, Math.round(L / 3)));
+        let placed = 0;
+        const pipeCol = PIPE_COLS[Math.floor(r() * PIPE_COLS.length)]!, pipes = eave || H >= 4;
+        const pipeTop = eave ? H - 0.75 : topY - 0.05;
+        // A downpipe near one end of the run (the corner end when one is seen), from the eave to the ground.
+        if (pipes) {
+          const atEnd = s.e1 === 'c' && (s.e0 !== 'c' || r() < 0.5);
+          const a = atEnd ? s.a1 - m1 - 0.16 : s.a0 + m0 + 0.16;
+          if (free(a - 0.1, a + 0.1, 0, pipeTop)) { downpipe(f, a, pipeTop, pipeCol, eave); take(a - 0.12, a + 0.12, 0, H); placed++; }
+        }
+        // A long run is divided by a pilaster (with a second downpipe beside it under an eave).
+        if (L >= 9) {
+          const a = s.a0 + L * (0.42 + r() * 0.16), pa = a + 0.42;
+          if (free(a - 0.2, (pipes ? pa : a) + 0.12, 0, topY)) {
+            pilasterBreak(f, a, topY, kind !== 'wall' || b.minY === 0);
+            if (pipes) downpipe(f, pa, pipeTop, pipeCol, eave);
+            take(a - 0.2, (pipes ? pa : a) + 0.12, 0, H); placed++;
+          }
+        }
+        // Then the rest, in an order seeded by the face.
+        const kinds = ['sign', 'ad', 'meter', 'blind', 'posters'].map((k) => [k, r()] as const).sort((p, q) => p[1] - q[1]).map(([k]) => k);
+        for (const k of kinds) {
+          if (placed >= target) break;
+          if (k === 'blind') {
+            if (!eave || up - 0.68 < 2.6) continue;
+            const a = spot(1.3, up - 0.75, up + 0.85);
+            if (a === null) continue;
+            blindWindow(f, a, up, shutterOf(col)); take(a - 0.65, a + 0.65, up - 0.75, up + 0.85); placed++;
+          } else if (k === 'sign') {
+            // High under the eave, or (under an upper window) just above head height.
+            const w = Math.min(2.2, L - 0.9), hh = w / 4;
+            let yTop = 0, a: number | null = null;
+            for (const yt of [Math.min(topY - 0.25, 3.4), 2.68]) {
+              if (w < 1.3 || yt - hh < 1.7 || yt > topY - 0.2) continue;
+              a = spot(w, yt - hh, yt);
+              if (a !== null) { yTop = yt; break; }
+            }
+            if (a === null) continue;
+            painted(f, ATLAS.signs[Math.floor(r() * ATLAS.signs.length)]!, a, yTop - hh / 2, w, hh, 0.012, ws); take(a - w / 2, a + w / 2, yTop - hh, yTop); placed++;
+          } else if (k === 'ad') {
+            const wide = L >= 3.4, reg = wide ? ATLAS.ads[2]! : ATLAS.ads[Math.floor(r() * 2)]!;
+            const w = wide ? 1.9 : 1.3, hh = w * reg[3] / reg[2], y0 = 1.05;
+            if (y0 + hh > topY - 0.15) continue;
+            const a = spot(w, y0, y0 + hh);
+            if (a === null) continue;
+            painted(f, reg, a, y0 + hh / 2, w, hh, 0.012, ws); take(a - w / 2, a + w / 2, y0, y0 + hh); placed++;
+          } else if (k === 'meter') {
+            if (topY < 2.5) continue;
+            const yRun = Math.min(topY - 0.12, 3.6), a = spot(0.4, 0, yRun + 0.1);
+            if (a === null) continue;
+            // The run heads for the nearer end, as far as it is clear.
+            const dir = a - s.a0 < s.a1 - a ? -1 : 1;
+            let a2 = a;
+            while (Math.abs(a2 - a) < 3.5 && free(Math.min(a, a2 + dir * 0.3) - 0.01, Math.max(a, a2 + dir * 0.3) + 0.01, yRun - 0.05, yRun + 0.05)) a2 += dir * 0.3;
+            meterRun(f, a, yRun, a2);
+            take(a - 0.2, a + 0.2, 0, yRun + 0.08); take(Math.min(a, a2), Math.max(a, a2), yRun - 0.05, yRun + 0.08); placed++;
+          } else if (k === 'posters') {
+            if (lite) continue;
+            const n = L >= 4 ? 3 : 2, w = n * 0.5, a = spot(w, 1.2, 1.9);
+            if (a === null) continue;
+            for (let i = 0; i < n; i++) {
+              painted(f, ATLAS.posters[Math.floor(r() * ATLAS.posters.length)]!, a - w / 2 + 0.25 + i * 0.5, 1.53 + (r() - 0.5) * 0.08, 0.4, 0.58, 0.016, ws, (r() - 0.5) * 0.08);
+            }
+            take(a - w / 2, a + w / 2, 1.2, 1.9); placed++;
+          }
+        }
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- assembly
   // Facades first, so their paving strips win at inside corners.
   const order = [...boxes].sort((p, q) => Number(!!q.facade) - Number(!!p.facade));
@@ -1102,14 +1331,14 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
     if (b.mat in STUCCO) {
       const col = STUCCO[b.mat]!;
       const fl = b.facade ? frameOf(b, b.facade).len : 0;
-      if (b.facade && heroZone && inZone(b)) { heroBuilding(b); hero = false; }
-      else if (b.facade && fl >= 2 && h >= 4) building(b, col);
-      else wall(b, col);
+      if (b.facade && heroZone && inZone(b)) { heroBuilding(b); hero = false; laneWalls(b, 'hero', col); }
+      else if (b.facade && fl >= 2 && h >= 4) { building(b, col); laneWalls(b, 'house', col); for (const side of SIDES) if (side !== b.facade) wallPatches(b, side, col); }
+      else { wall(b, col); laneWalls(b, 'wall', col); }
       continue;
     }
     switch (b.mat) {
       case 'step': step(b); break;
-      case 'stone': if (h > 1.5) terrace(b); else bench(b); break;
+      case 'stone': if (h > 1.5) { terrace(b); laneWalls(b, 'terrace', STONE); } else bench(b); break;
       case 'parapet': parapet(b); break;
       case 'lintel': lintel(b); break;
       case 'planter': planter(b); break;

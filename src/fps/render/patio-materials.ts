@@ -195,41 +195,165 @@ function louverTexture(quality: Quality): THREE.CanvasTexture | null {
 }
 
 /**
- * A window, fitted to the opening (UVs 0..1 across each window): a painted
- * wooden casement frame with a centre stile and a transom, the panes a deep
- * interior with a soft sky reflection, and the reveal's shadow on it: darker
- * under the lintel and along one jamb, so the glass reads set back in a
- * thick wall rather than painted on it.
+ * The kit's one atlas (512 px on High and Medium, 256 on Low), drawn on the
+ * glass material so it costs no draw call: the window glass and the painted
+ * pieces on the lane walls (shop signs, wall adverts, a mural, posters).
+ * Regions are in a 512 grid, each kept 4 px from the next and its edges
+ * bled outward, so mip levels do not mix neighbours. Text is big and bold:
+ * nothing finer than ~4 px, by the texture rules above.
  */
-function glassTexture(quality: Quality): THREE.CanvasTexture | null {
-  const k = SCALE[quality], W = 128 * k, H = 160 * k;
-  return q(tex(`glass2-${W}-${quality}`, W, H, (c) => {
-    // Canvas y runs down; the window's top (v = 1) is the canvas's top row.
-    const g = c.createLinearGradient(0, 0, W * 0.4, H);
-    g.addColorStop(0, '#2a2038'); g.addColorStop(0.5, '#3a2d4e'); g.addColorStop(1, '#4a3c5c');
-    c.fillStyle = g; c.fillRect(0, 0, W, H);
-    // Sky reflection: one soft diagonal sheen.
-    const sh = c.createLinearGradient(0, H * 0.2, W, H * 0.6);
-    sh.addColorStop(0.15, 'rgba(255,226,196,0)'); sh.addColorStop(0.35, 'rgba(255,226,196,0.14)'); sh.addColorStop(0.55, 'rgba(255,226,196,0)');
-    c.fillStyle = sh; c.fillRect(0, 0, W, H);
-    // Frame: outer border, centre stile, transom (painted wood, a warm cream).
-    const fw = 9 * k, st = 7 * k, ty = H * 0.3;
-    c.fillStyle = '#e8d6b4';
-    c.fillRect(0, 0, W, fw); c.fillRect(0, H - fw, W, fw); c.fillRect(0, 0, fw, H); c.fillRect(W - fw, 0, fw, H);
-    c.fillRect(W / 2 - st / 2, ty, st, H - ty); c.fillRect(0, ty - st / 2, W, st);
-    // Thin glazing bars in the lower lights.
-    c.fillRect(W * 0.25 - 2 * k, ty, 4 * k, H - ty); c.fillRect(W * 0.75 - 2 * k, ty, 4 * k, H - ty);
-    c.fillRect(0, ty + (H - ty) / 2 - 2 * k, W, 4 * k);
-    // The frame's inner edge a step darker (a rebate), the panes' edges darker still.
-    c.strokeStyle = 'rgba(40,28,36,0.35)'; c.lineWidth = 2 * k; c.strokeRect(fw, fw, W - 2 * fw, H - 2 * fw);
-    // The reveal's shadow: down from the lintel, and in from one jamb.
-    const top = c.createLinearGradient(0, 0, 0, H * 0.36);
-    top.addColorStop(0, 'rgba(20,12,24,0.55)'); top.addColorStop(1, 'rgba(20,12,24,0)');
-    c.fillStyle = top; c.fillRect(0, 0, W, H * 0.36);
-    const side = c.createLinearGradient(0, 0, W * 0.2, 0);
-    side.addColorStop(0, 'rgba(20,12,24,0.4)'); side.addColorStop(1, 'rgba(20,12,24,0)');
-    c.fillStyle = side; c.fillRect(0, 0, W * 0.2, H);
+export type AtlasRegion = readonly [x: number, y: number, w: number, h: number];
+export const ATLAS = {
+  glass: [4, 4, 128, 160] as AtlasRegion,
+  /** Painted wall adverts and a mural (wider than tall). */
+  ads: [[140, 4, 180, 160], [328, 4, 180, 160], [260, 372, 248, 136]] as AtlasRegion[],
+  /** Painted shop signs, 4:1. */
+  signs: [0, 1, 2].flatMap((r) => [[4, 172 + r * 66, 248, 62], [260, 172 + r * 66, 248, 62]]) as AtlasRegion[],
+  /** Paper posters and flyers, about 2:3. */
+  posters: [0, 1, 2, 3].map((i) => [4 + i * 62, 380, 58, 84]) as AtlasRegion[],
+};
+/** Texture coordinates (u, v) in the atlas for a point (s across, t up, both 0..1) of a region. */
+export function atlasUV(r: AtlasRegion, s: number, t: number): [number, number] {
+  return [(r[0] + s * r[2]) / 512, 1 - (r[1] + (1 - t) * r[3]) / 512];
+}
+function kitAtlas(quality: Quality): THREE.CanvasTexture | null {
+  const k = SCALE[quality], S = 512 * k;
+  const t = q(tex(`atlas-${S}-${quality}`, S, S, (c) => {
+    c.fillStyle = '#8a7a68'; c.fillRect(0, 0, S, S);
+    const at = (r: AtlasRegion, draw: (W: number, H: number) => void) => {
+      const [x, y, w, h] = r.map((v) => v * k) as [number, number, number, number];
+      c.save(); c.translate(x, y); c.beginPath(); c.rect(0, 0, w, h); c.clip();
+      draw(w, h);
+      c.restore();
+      // Bleed the edges 4 px outward (the gutter), so a lower mip level never mixes in a neighbour.
+      const g = 4 * k, el = c.canvas;
+      c.drawImage(el, x, y, w, 1, x, y - g, w, g); c.drawImage(el, x, y + h - 1, w, 1, x, y + h, w, g);
+      c.drawImage(el, x, y - g, 1, h + 2 * g, x - g, y - g, g, h + 2 * g); c.drawImage(el, x + w - 1, y - g, 1, h + 2 * g, x + w, y - g, g, h + 2 * g);
+    };
+    at(ATLAS.glass, (W, H) => glassArt(c, W, H, k));
+    const font = (px: number) => `${Math.round(px)}px "Lilita One", "Arial Black", sans-serif`;
+    /** Text fitted to a width, centred at (x, y). */
+    const text = (s: string, x: number, y: number, px: number, maxW: number, fill: string, stroke?: string) => {
+      c.font = font(px);
+      const w = c.measureText(s).width, sc = Math.min(1, maxW / Math.max(1, w));
+      c.save(); c.translate(x, y); c.scale(sc, 1);
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      if (stroke) { c.lineWidth = px * 0.16; c.strokeStyle = stroke; c.lineJoin = 'round'; c.strokeText(s, 0, 0); }
+      c.fillStyle = fill; c.fillText(s, 0, 0);
+      c.restore();
+    };
+    /** Sun-faded paint: soft paler and darker blotches over the region. */
+    const fade = (W: number, H: number, seed: number, n: number) => {
+      const r = rng(seed);
+      for (let i = 0; i < n; i++) {
+        const x = r() * W, y = r() * H, rad = (0.2 + r() * 0.35) * Math.max(W, H);
+        const g = c.createRadialGradient(x, y, 0, x, y, rad), pale = r() < 0.6;
+        g.addColorStop(0, pale ? `rgba(255,246,228,${0.1 + r() * 0.12})` : `rgba(70,50,40,${0.06 + r() * 0.08})`); g.addColorStop(1, 'rgba(255,246,228,0)');
+        c.fillStyle = g; c.fillRect(0, 0, W, H);
+      }
+    };
+    // Shop signs painted on the plaster: a ground, a keyline border, the name.
+    const SIGNS: Array<[string, string, string, string]> = [
+      ['ABARROTES LUPITA', '#f3e3c0', '#b8352a', '#2f6b4a'], ['TORTILLERÍA', '#f0b45a', '#5a2d1c', '#5a2d1c'],
+      ['CERRAJERÍA', '#2f8f86', '#fbf1dc', '#fbf1dc'], ['REFRESCOS FRÍOS', '#c53a2c', '#fbf1dc', '#f0b45a'],
+      ['NIEVES Y PALETAS', '#eb9aac', '#4a2a5c', '#4a2a5c'], ['TALLER DON CHUY', '#2f5f45', '#f4d27a', '#f4d27a'],
+    ];
+    ATLAS.signs.forEach((r, i) => at(r, (W, H) => {
+      const [name, bg, fg, line] = SIGNS[i]!;
+      c.fillStyle = bg; c.fillRect(0, 0, W, H);
+      c.strokeStyle = line; c.lineWidth = 3 * k; c.strokeRect(6 * k, 6 * k, W - 12 * k, H - 12 * k);
+      text(name, W / 2, H / 2 + 2 * k, H * 0.56, W - 30 * k, fg);
+      fade(W, H, 300 + i, 5);
+    }));
+    // Wall adverts and a mural.
+    at(ATLAS.ads[0]!, (W, H) => {
+      // A paletas (ice lolly) advert on a sky-blue ground.
+      c.fillStyle = '#5fb3c9'; c.fillRect(0, 0, W, H);
+      c.strokeStyle = '#fbf1dc'; c.lineWidth = 5 * k; c.strokeRect(7 * k, 7 * k, W - 14 * k, H - 14 * k);
+      text('PALETAS', W / 2, H * 0.17, H * 0.17, W * 0.8, '#fbf1dc', '#2a4a6a');
+      c.fillStyle = '#c8a070'; c.fillRect(W * 0.47, H * 0.62, W * 0.06, H * 0.2); // the stick
+      c.fillStyle = '#eb6a8a'; c.beginPath(); c.roundRect(W * 0.36, H * 0.3, W * 0.28, H * 0.36, 18 * k); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(W * 0.41, H * 0.36, W * 0.04, H * 0.22);
+      text('LA ABUELITA', W / 2, H * 0.88, H * 0.11, W * 0.8, '#2a4a6a');
+      fade(W, H, 401, 6);
+    });
+    at(ATLAS.ads[1]!, (W, H) => {
+      // A mural: marigolds and leaves on turquoise, a painted sun.
+      c.fillStyle = '#3f9e94'; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#f0b45a'; c.beginPath(); c.arc(W * 0.74, H * 0.26, H * 0.14, 0, Math.PI * 2); c.fill();
+      const r = rng(77);
+      for (let i = 0; i < 9; i++) {
+        const x = W * (0.1 + r() * 0.8), y = H * (0.45 + r() * 0.45), rad = H * (0.06 + r() * 0.05);
+        c.fillStyle = '#2f5a2c'; c.beginPath(); c.ellipse(x - rad, y + rad * 0.8, rad * 1.1, rad * 0.4, -0.5, 0, Math.PI * 2); c.fill();
+        c.fillStyle = r() < 0.6 ? '#f08a2a' : '#eb6a8a';
+        for (let p = 0; p < 8; p++) { const a = (p / 8) * Math.PI * 2; c.beginPath(); c.arc(x + Math.cos(a) * rad * 0.7, y + Math.sin(a) * rad * 0.7, rad * 0.45, 0, Math.PI * 2); c.fill(); }
+        c.fillStyle = '#7a3a2a'; c.beginPath(); c.arc(x, y, rad * 0.35, 0, Math.PI * 2); c.fill();
+      }
+      c.strokeStyle = '#f3e3c0'; c.lineWidth = 4 * k; c.strokeRect(5 * k, 5 * k, W - 10 * k, H - 10 * k);
+      fade(W, H, 402, 6);
+    });
+    at(ATLAS.ads[2]!, (W, H) => {
+      // A painted advert for a tortillería: maize yellow, a band of red, a stack of tortillas.
+      c.fillStyle = '#f4d27a'; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#b8352a'; c.fillRect(0, H * 0.62, W, H * 0.38);
+      text('TORTILLAS', W * 0.5, H * 0.3, H * 0.3, W * 0.86, '#b8352a');
+      text('DE MAÍZ · A MANO', W * 0.5, H * 0.81, H * 0.16, W * 0.8, '#fbf1dc');
+      c.strokeStyle = '#5a2d1c'; c.lineWidth = 4 * k; c.strokeRect(6 * k, 6 * k, W - 12 * k, H - 12 * k);
+      fade(W, H, 403, 7);
+    });
+    // Posters and flyers pasted on the wall: paper, with a margin.
+    const POSTERS: Array<[string, string, string, string]> = [
+      ['#f4d27a', '#b8352a', 'LUCHA', 'DOMINGO'], ['#fbf1dc', '#4a2a5c', 'BAILE', 'SÁBADO'],
+      ['#eb9aac', '#2a2238', 'GRAN', 'KERMÉS'], ['#fbf6ea', '#2a2238', 'SE RENTA', 'CUARTO'],
+    ];
+    ATLAS.posters.forEach((r, i) => at(r, (W, H) => {
+      const [bg, fg, a, b] = POSTERS[i]!;
+      c.fillStyle = bg; c.fillRect(0, 0, W, H);
+      text(a, W / 2, H * 0.2, H * 0.17, W * 0.84, fg);
+      if (i === 0) { c.fillStyle = fg; c.beginPath(); c.arc(W / 2, H * 0.5, W * 0.22, 0, Math.PI * 2); c.fill(); c.fillStyle = bg; c.fillRect(W * 0.38, H * 0.47, W * 0.24, H * 0.04); }
+      else if (i === 3) { c.fillStyle = 'rgba(42,34,56,0.5)'; for (let j = 0; j < 4; j++) c.fillRect(W * 0.15, H * (0.4 + j * 0.07), W * 0.7, 2.5 * k); }
+      else { c.fillStyle = fg; for (let j = 0; j < 3; j++) c.fillRect(W * (0.2 + j * 0.22), H * 0.42, W * 0.14, H * 0.18); }
+      text(b, W / 2, H * 0.8, H * 0.14, W * 0.84, fg);
+      fade(W, H, 500 + i, 4);
+    }));
   }), quality);
+  if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+  return t;
+}
+
+/**
+ * A window, fitted to its atlas region (UVs across each window cover the
+ * region): a painted wooden casement frame with a centre stile and a
+ * transom, the panes a deep interior with a soft sky reflection, and the
+ * reveal's shadow on it: darker under the lintel and along one jamb, so the
+ * glass reads set back in a thick wall rather than painted on it.
+ */
+function glassArt(c: CanvasRenderingContext2D, W: number, H: number, k: number): void {
+  // Canvas y runs down; the window's top (v = 1) is the canvas's top row.
+  const g = c.createLinearGradient(0, 0, W * 0.4, H);
+  g.addColorStop(0, '#2a2038'); g.addColorStop(0.5, '#3a2d4e'); g.addColorStop(1, '#4a3c5c');
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  // Sky reflection: one soft diagonal sheen.
+  const sh = c.createLinearGradient(0, H * 0.2, W, H * 0.6);
+  sh.addColorStop(0.15, 'rgba(255,226,196,0)'); sh.addColorStop(0.35, 'rgba(255,226,196,0.14)'); sh.addColorStop(0.55, 'rgba(255,226,196,0)');
+  c.fillStyle = sh; c.fillRect(0, 0, W, H);
+  // Frame: outer border, centre stile, transom (painted wood, a warm cream).
+  const fw = 9 * k, st = 7 * k, ty = H * 0.3;
+  c.fillStyle = '#e8d6b4';
+  c.fillRect(0, 0, W, fw); c.fillRect(0, H - fw, W, fw); c.fillRect(0, 0, fw, H); c.fillRect(W - fw, 0, fw, H);
+  c.fillRect(W / 2 - st / 2, ty, st, H - ty); c.fillRect(0, ty - st / 2, W, st);
+  // Thin glazing bars in the lower lights.
+  c.fillRect(W * 0.25 - 2 * k, ty, 4 * k, H - ty); c.fillRect(W * 0.75 - 2 * k, ty, 4 * k, H - ty);
+  c.fillRect(0, ty + (H - ty) / 2 - 2 * k, W, 4 * k);
+  // The frame's inner edge a step darker (a rebate), the panes' edges darker still.
+  c.strokeStyle = 'rgba(40,28,36,0.35)'; c.lineWidth = 2 * k; c.strokeRect(fw, fw, W - 2 * fw, H - 2 * fw);
+  // The reveal's shadow: down from the lintel, and in from one jamb.
+  const top = c.createLinearGradient(0, 0, 0, H * 0.36);
+  top.addColorStop(0, 'rgba(20,12,24,0.55)'); top.addColorStop(1, 'rgba(20,12,24,0)');
+  c.fillStyle = top; c.fillRect(0, 0, W, H * 0.36);
+  const side = c.createLinearGradient(0, 0, W * 0.2, 0);
+  side.addColorStop(0, 'rgba(20,12,24,0.4)'); side.addColorStop(1, 'rgba(20,12,24,0)');
+  c.fillStyle = side; c.fillRect(0, 0, W * 0.2, H);
 }
 
 /**
@@ -509,7 +633,8 @@ export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
     detail: toonOf({ vertexColors: true }),
     louver: toonOf({ vertexColors: true, map: louverTexture(quality) }),
     talavera: toonOf({ map: talaveraTexture(quality) }),
-    glass: toonOf({ vertexColors: true, map: glassTexture(quality) }),
+    // The glass material carries the kit's atlas: window glass and the lane walls' painted pieces.
+    glass: toonOf({ vertexColors: true, map: kitAtlas(quality) }),
     // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
     // Vertex colours are white wherever nothing bakes shading into them (every dressing's wood).
     wood: toonOf({ color: 0xb8875a, vertexColors: true, map: woodTexture(quality) }),

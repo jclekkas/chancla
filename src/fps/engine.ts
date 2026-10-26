@@ -138,7 +138,11 @@ export class Engine {
     this.rosaCandidate = s.rosaCandidate;
     // The arena hand is built at the quality tier (fewer rings on Medium and Low, same grip and motion).
     this.vm = new ViewModel({ arena: true, quality: s.quality });
-    this.renderer = new THREE.WebGLRenderer({ antialias: s.quality !== 'low', powerPreference: 'high-performance', alpha: false, stencil: false });
+    // Anti-aliased on every tier: Low draws at pixel ratio 1, and on a 2x or 3x phone its unsmoothed
+    // edges were upscaled into stair-steps over the whole screen (Visual Director, milestone VD).
+    // MSAA on the default framebuffer is resolved on-tile by phone GPUs. It is also chosen once, at
+    // creation, so a session that started on Low kept no anti-aliasing after switching to High.
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', alpha: false, stencil: false });
     this.renderer.autoClear = false;
     this.renderer.shadowMap.enabled = s.quality !== 'low';
     this.renderer.shadowMap.type = THREE.PCFShadowMap;

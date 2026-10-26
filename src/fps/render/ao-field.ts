@@ -302,6 +302,7 @@ ${lite ? `
     const tm = mm as THREE.MeshToonMaterial;
     if (tune.ramp && tm.gradientMap === toonRamp()) tm.gradientMap = worldRamp();
     mm.userData.aoField = true;
+    mm.userData.aoUniforms = uniforms; // the engine uploads these textures with the world (warm-up)
     mm.needsUpdate = true;
     patched.set(m, mm);
     if (mm !== m) patched.set(mm, mm);

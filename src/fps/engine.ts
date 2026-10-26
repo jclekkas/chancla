@@ -154,6 +154,7 @@ export class Engine {
     this.fx.setQuality(s.quality);
     this.fx.setReducedMotion(s.reducedMotion);
     this.buildPickups();
+    this.warmWorld();
     this.buildMenuAvatars();
     if (this.rosaCandidate) void this.refreshAvatars('rosa');
     input.onSkip = () => this.skipReplay();
@@ -274,6 +275,7 @@ export class Engine {
       this.scene.add(this.world.group);
       this.lightHand();
       this.renderer.shadowMap.needsUpdate = true;
+      this.warmWorld();
       // Characters are built per quality: rebuild them (with the candidate on, once its tier has loaded).
       void this.refreshAvatars('quality');
       this.resize();
@@ -373,6 +375,31 @@ export class Engine {
     this.lightHand();
     (this.scene.fog as THREE.Fog).color.setHex(this.world.fog);
     this.renderer.shadowMap.needsUpdate = true;
+    this.warmWorld();
+  }
+
+  /**
+   * Compiles the world's shaders now, while the map loads, instead of the
+   * first time each patched material comes into view mid-play (a visible
+   * hitch: the occlusion field and kit patches give the world several
+   * program variants).
+   */
+  private warmWorld(): void {
+    if (this.contextLost) return;
+    try {
+      this.renderer.compile(this.scene, this.camera);
+      // And upload the world's textures (maps and the occlusion field's uniforms), which compiling does not.
+      const seen = new Set<THREE.Texture>();
+      const add = (v: unknown) => { if (v && (v as THREE.Texture).isTexture && !seen.has(v as THREE.Texture)) seen.add(v as THREE.Texture); };
+      this.world.group.traverse((o) => {
+        const ms = (o as THREE.Mesh).material;
+        for (const m of Array.isArray(ms) ? ms : ms ? [ms] : []) {
+          for (const v of Object.values(m)) add(v);
+          for (const u of Object.values((m.userData.aoUniforms ?? {}) as Record<string, { value: unknown }>)) add(u.value);
+        }
+      });
+      for (const t of seen) this.renderer.initTexture(t);
+    } catch (err) { diagLog('gfx', `shader warm-up failed: ${String(err)}`); }
   }
 
   enterController(c: Controller): void {

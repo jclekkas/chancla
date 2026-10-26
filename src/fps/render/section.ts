@@ -1271,8 +1271,29 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
             take(a - 0.2, (pipes ? pa : a) + 0.12, 0, H); placed++;
           }
         }
-        // Then the rest, in an order seeded by the face.
-        const kinds = ['sign', 'ad', 'meter', 'blind', 'posters'].map((k) => [k, r()] as const).sort((p, q) => p[1] - q[1]).map(([k]) => k);
+        // Then a painted advert or mural at eye height every ~4.5 m, spread along the run, so
+        // no stretch of the face a player walks past is left bare (the nearest included).
+        const eyes = Math.max(1, Math.round(L / 4.5));
+        let painting = false;
+        for (let i = 0; i < eyes; i++) {
+          const t0 = (i + 0.5) / eyes;
+          const regs = [ATLAS.ads[2]!, ATLAS.ads[Math.floor(r() * 2)]!];
+          if (r() < 0.5) regs.reverse();
+          for (const reg of regs) {
+            const w = reg === ATLAS.ads[2] ? 1.9 : 1.3, hh = w * reg[3] / reg[2], y0 = 1.05;
+            if (y0 + hh > topY - 0.15) continue;
+            let a: number | null = null;
+            for (const dt of [0, 0.08, -0.08, 0.16, -0.16]) {
+              const c = s.a0 + L * (t0 + dt);
+              if (free(c - w / 2, c + w / 2, y0, y0 + hh)) { a = c; break; }
+            }
+            if (a === null) continue;
+            painted(f, reg, a, y0 + hh / 2, w, hh, 0.012, ws); take(a - w / 2, a + w / 2, y0, y0 + hh); placed++; painting = true;
+            break;
+          }
+        }
+        // Then the rest, in an order seeded by the face (one more advert only where none fitted).
+        const kinds = ['sign', ...(painting ? [] : ['ad']), 'meter', 'blind', 'posters'].map((k) => [k, r()] as const).sort((p, q) => p[1] - q[1]).map(([k]) => k);
         for (const k of kinds) {
           if (placed >= target) break;
           if (k === 'blind') {

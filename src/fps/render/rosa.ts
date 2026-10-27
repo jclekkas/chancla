@@ -92,6 +92,15 @@ export class Avatar {
   /** A confirmed miss: a short off-balance follow-through. */
   whiff(weapon: WeaponId): void { this.anim.whiff(weapon); }
 
+  /**
+   * How far she stands in the world's shade, 0 (sun) to 1 (fully shaded):
+   * the arena look lifts her clothing's received shadow by this much of
+   * ARENA_SKIN.bodyLift (rosa-materials.ts). Other looks ignore it.
+   */
+  setShade(k: number): void {
+    for (const m of this.model.flashMats) { const u = m.userData.rosaShade as { value: number } | undefined; if (u) u.value = k; }
+  }
+
   /** Shows the first `n` recovered ruleros on her head (campaign). */
   setRuleros(n: number): void {
     this.model.curlers.forEach((m, i) => (m.visible = i < n));

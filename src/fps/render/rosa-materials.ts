@@ -85,16 +85,26 @@ function inkShader(sh: THREE.WebGLProgramParametersWithUniforms, fr: FaceRig): v
  * received shadow lifted a quarter of the way toward lit (shadowLift), so a
  * hat brim darkens the face without erasing it. The lift also covers the
  * face's other pieces (hair, brows, eyes, glasses, lips: colours used only on
- * the head, matched exactly), so the head stays one piece in a shadow, while
- * the clothing keeps the full shadow. No new texture, light or pass.
+ * the head, matched exactly), so the head stays one piece in a shadow. The
+ * rest of her (clothing) takes its own share of the same lift (bodyLift),
+ * scaled by how far she stands in the world's shade (`rosaShade`, per
+ * avatar: Avatar.setShade, from a ray toward the sun), so her own self-shadow
+ * in sun is untouched. In a building's shade or at dusk the only other light
+ * is the cool sky fill, which turns Sol's marigold brown and Luna's
+ * turquoise navy at combat range; a little of the warm sun keeps the team
+ * colour readable while she still sits clearly darker than in sun. By the
+ * same factor her whole sky fill (skin too) is pulled toward its own grey,
+ * a touch warm (fillNeutral), and raised a little (fillGain), so the lilac
+ * no longer shifts her colours' hue. In sun (rosaShade 0) she is exactly as
+ * before. No new texture, light or pass.
  */
-export const ARENA_SKIN = { soft: 0.09, wrap: 0.1, shadowLift: 0.25 } as const;
+export const ARENA_SKIN = { soft: 0.09, wrap: 0.1, shadowLift: 0.25, bodyLift: 0.3, fillNeutral: 0.85, fillGain: 0.35 } as const;
 /** Colours that only the head uses (none closer than 0.02 in linear RGB to any other in the palette). */
 const HEAD_ONLY = [ROSA_SHARED.hair, ROSA_SHARED.hairHi, ROSA_SHARED.eyeWhite, ROSA_SHARED.iris, ROSA_SHARED.frames, ROSA_SHARED.lips].map((h) => new THREE.Color(h));
 const skinLin = new THREE.Color(ROSA_SHARED.skin), blushLin = new THREE.Color(ROSA_SHARED.blush);
 const v3 = (c: THREE.Color) => `vec3(${f4(c.r)}, ${f4(c.g)}, ${f4(c.b)})`;
 function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
-  const { soft, wrap, shadowLift } = ARENA_SKIN;
+  const { soft, wrap, shadowLift, bodyLift, fillNeutral, fillGain } = ARENA_SKIN;
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nvarying float vRosaSkin;\nvarying float vRosaHead;')
     .replace('#include <color_vertex>', `#include <color_vertex>
@@ -105,7 +115,7 @@ function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
   const pars = THREE.ShaderChunk.lights_toon_pars_fragment.replace('getGradientIrradiance(', 'rosaGradient(');
   const begin = THREE.ShaderChunk.lights_fragment_begin.split('receiveShadow ) ? get').join(`receiveShadow ) ? rosaLift + ( 1.0 - rosaLift ) * get`);
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vRosaSkin;\nvarying float vRosaHead;')
+    .replace('#include <common>', '#include <common>\nvarying float vRosaSkin;\nvarying float vRosaHead;\nuniform float rosaShade;')
     .replace('#include <lights_toon_pars_fragment>', `vec3 rosaGradient( vec3 normal, vec3 lightDirection ) {
 \tvec3 hard = getGradientIrradiance( normal, lightDirection );
 \tfloat u = ( dot( normal, lightDirection ) + ${f4(wrap)} ) / ${f4(1 + wrap)} * 0.5 + 0.5;
@@ -114,7 +124,12 @@ function skinShader(sh: THREE.WebGLProgramParametersWithUniforms): void {
 \treturn mix( hard, vec3( soft ), vRosaSkin );
 }
 ${pars}`)
-    .replace('#include <lights_fragment_begin>', `float rosaLift = ${f4(shadowLift)} * vRosaHead;\n${begin}`);
+    .replace('#include <lights_fragment_end>', `{
+		vec3 grey = vec3( dot( irradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * vec3( 1.0, 0.96, 0.9 );
+		irradiance = mix( irradiance, grey, ${f4(fillNeutral)} * rosaShade ) * ( 1.0 + ${f4(fillGain)} * rosaShade );
+	}
+#include <lights_fragment_end>`)
+    .replace('#include <lights_fragment_begin>', `float rosaLift = mix( ${f4(bodyLift)} * rosaShade, ${f4(shadowLift)}, vRosaHead );\n${begin}`);
 }
 
 /**
@@ -130,8 +145,10 @@ export function rosaMaterial(fr: FaceRig, face = new THREE.Vector4(), opts: { ar
   // The face rig is baked into the shader: one program per rig (the match and campaign looks differ).
   const key = `rosa-ink:${f4(fr.lidY)}:${f4(fr.browIn)}:${f4(fr.browOut)}`;
   if (opts.arena) {
-    m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; inkShader(sh, fr); skinShader(sh); };
-    const akey = `${key}:skin:${ARENA_SKIN.soft}:${ARENA_SKIN.wrap}:${ARENA_SKIN.shadowLift}`;
+    const shade = { value: 0 };
+    m.userData.rosaShade = shade;
+    m.onBeforeCompile = (sh) => { sh.uniforms.rosaFace = u; sh.uniforms.rosaShade = shade; inkShader(sh, fr); skinShader(sh); };
+    const akey = `${key}:skin:${ARENA_SKIN.soft}:${ARENA_SKIN.wrap}:${ARENA_SKIN.shadowLift}:${ARENA_SKIN.bodyLift}:${ARENA_SKIN.fillNeutral}:${ARENA_SKIN.fillGain}`;
     m.customProgramCacheKey = () => akey;
     return m;
   }

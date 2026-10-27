@@ -5,9 +5,9 @@
 // session and shows what the server confirms.
 import * as THREE from 'three';
 import { MATCH, MOVE, NET, WEAPONS, type WeaponId } from '../../shared/config';
-import { EL_PATIO, regionAt, type MapData, type Team } from '../../shared/map';
+import { EL_PATIO, regionAt, type MapBox, type MapData, type Team } from '../../shared/map';
 import { mapEntry } from '../../shared/maps';
-import { lineOfSight } from '../../shared/collision';
+import { lineOfSight, type AABB } from '../../shared/collision';
 import { buildCafecito, type CafecitoModel } from './render/cafecito-model';
 import { CafecitoLabel, pickCafecitoGuide } from './cafecito';
 import { teammateMarkers, type MiniMarkers } from './minimap';
@@ -1008,6 +1008,29 @@ export class Engine {
     this.placeCafeHint(s, cam, w, h, !!replay, dt);
   }
 
+  /**
+   * How far a character stands in the world's shade (0 sun, 1 shade): three
+   * points up her body (shin, waist, shoulder) tested toward the sun against
+   * the map's boxes, eased so walking into a shadow fades in. Only where the
+   * sun's shadow map shades her (not Low) and on the arena maps' light.
+   */
+  private shadeAvatar(av: Avatar, r: RemotePlayer, s: GameSession, dt: number): void {
+    if (this.quality === 'low' || !this.world.light) return;
+    const sun = this.world.sun, d = SHADE_DIR.copy(sun.position).sub(sun.target.position).normalize().multiplyScalar(60);
+    let shaded = 0;
+    for (const h of SHADE_H) {
+      const a = { x: r.x, y: r.y + h, z: r.z };
+      if (!lineOfSight(a, { x: a.x + d.x, y: a.y + d.y, z: a.z + d.z }, s.world.boxes, SHADE_CASTS)) shaded++;
+    }
+    const k = (this.shadeK.get(av) ?? shaded / SHADE_H.length);
+    const next = k + (shaded / SHADE_H.length - k) * Math.min(1, dt * 8);
+    this.shadeK.set(av, next);
+    av.setShade(next);
+  }
+
+  /** Each character's eased shade (shadeAvatar). */
+  private shadeK = new WeakMap<Avatar, number>();
+
   private syncAvatars(s: GameSession, dt: number, reduced: boolean): void {
     const seen = new Set<number>();
     // Rollers come from the newest snapshot (it arrives with the event that
@@ -1021,6 +1044,7 @@ export class Engine {
       if (!av) { av = new Avatar(team, this.avatarOpts()); this.avatars.set(r.id, av); this.scene.add(av.root); }
       seen.add(r.id);
       driveAvatar(av, r, (masks.get(r.id) ?? r.ruleros) | (this.heldRuleros.get(r.id) ?? 0), dt, reduced);
+      this.shadeAvatar(av, r, s, dt);
       // During a replay the live characters keep animating, out of sight.
       av.root.visible = !this.replay;
       if (!this.replay) this.contact.add(av, r.x, r.y, r.z, r.onGround);
@@ -1428,6 +1452,12 @@ function driveAvatar(av: Avatar, r: RemotePlayer, ruleros: number, dt: number, r
     msSinceMelee: r.msSinceMelee, ruleros,
   }, dt, reduced);
 }
+
+/** shadeAvatar's probe heights (m above her feet) and scratch vector. */
+const SHADE_H = [0.4, 0.95, 1.45];
+const SHADE_DIR = new THREE.Vector3();
+/** Boxes whose drawn shape fills them (the statue's box is only its collision proxy; the chancla on it casts far less shade). */
+const SHADE_CASTS = (b: AABB) => (b as MapBox).mat !== 'statue';
 
 /** How dark the characters' contact discs are: lighter where the sun's shadow map also grounds them. */
 function contactStrength(q: Quality): number { return q === 'high' ? 0.32 : q === 'medium' ? 0.36 : 0.46; }

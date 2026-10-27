@@ -2,6 +2,8 @@
 // at production time. No network, no runtime generation, no paid service.
 //
 //   node --import tsx scripts/make-voices.ts
+//   ONLY=rulero1 node --import tsx scripts/make-voices.ts   (just these lines,
+//   merged into the existing manifest; the other files are left as they are)
 //
 // Engines (installed from Ubuntu packages):
 //   SVOX Pico 1.0, es-ES voice  (Apache-2.0; language data redistributable)
@@ -54,15 +56,18 @@ function render(id: string, who: Speaker, text: string): { file: string; ms: num
   return { file, ms: Math.round(dur * 1000) };
 }
 
+const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
+const previous = ONLY ? JSON.parse(fs.readFileSync(path.join(OUT, 'manifest.json'), 'utf8')) as { lines: Record<string, { file: string; ms: number; who: Speaker }>; generated: string } : null;
 const manifest = {
   version: 1,
   quality: 'placeholder-tts',
   note: 'Synthetic placeholder voices (SVOX Pico es-ES, eSpeak NG es-419). Replace with recorded performances; see docs/VOICE_SCRIPT.md.',
-  generated: new Date().toISOString().slice(0, 10),
-  lines: {} as Record<string, { file: string; ms: number; who: Speaker }>,
+  generated: previous?.generated ?? new Date().toISOString().slice(0, 10),
+  lines: { ...(previous?.lines ?? {}) } as Record<string, { file: string; ms: number; who: Speaker }>,
 };
 let total = 0;
 for (const l of LINES) {
+  if (ONLY && !ONLY.has(l.id)) continue;
   const r = render(l.id, l.who, l.es);
   manifest.lines[l.id] = { ...r, who: l.who };
   total += fs.statSync(path.join(OUT, r.file)).size;

@@ -1,0 +1,41 @@
+{
+  "_comment": "Mirrors ROSA_COLORS[0] (team Sol) and ROSA_SHARED in src/fps/render/rosa-materials.ts. Vertex colours use only these values (sRGB hex).",
+  "sol": {
+    "dress": "#f2a033",
+    "dressDeep": "#d9822a",
+    "trim": "#c24f2e",
+    "sash": "#c24f2e",
+    "collar": "#f8eedb",
+    "straw": "#e9c87c",
+    "strawDeep": "#d4ad62",
+    "band": "#c24f2e",
+    "flower": "#e86a8d",
+    "flowerHeart": "#f5c542",
+    "patch": "#c24f2e",
+    "emblem": "#f9d34e",
+    "shoe": "#4a2a3c",
+    "button": "#f8eedb"
+  },
+  "shared": {
+    "skin": "#c68a5e",
+    "blush": "#d47b66",
+    "lips": "#c4283c",
+    "hair": "#3d3940",
+    "hairHi": "#5a5560",
+    "eyeWhite": "#faf4ea",
+    "iris": "#3a2216",
+    "frames": "#b8233f",
+    "gold": "#f2c14a",
+    "sole": "#2a1a22",
+    "sock": "#f6efe2",
+    "skirt": "#2c2a52",
+    "skirtDeep": "#1f1d3d",
+    "blossom": "#f6ecd6",
+    "blossom2": "#f09ab0",
+    "bangle": "#f2c14a",
+    "flipSole": "#4b2a6b",
+    "flipBed": "#4fb3a9",
+    "flipStrap": "#c8553d",
+    "ink": "#241626"
+  }
+}

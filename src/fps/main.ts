@@ -10,7 +10,7 @@ import { installDiag, diagProvide, diagLog, diagError, diagCopy, diagText, diagB
 import './fps.css';
 import { SafeStorage } from '../persistence/storage';
 import { audio } from '../audio/audio';
-import { MATCH, WEAPONS, type BotDifficulty } from '../../shared/config';
+import { MATCH, WEAPONS, isRulesetId, rulesetOf, type BotDifficulty, type RulesetId } from '../../shared/config';
 import { isValidCode, normalizeCode, sanitizeName, type ErrorCode, type RoomView } from '../../shared/protocol';
 import type { Team } from '../../shared/map';
 import { GameSession, wsTransport, type ConnState, type TransportFactory } from '../net/session';
@@ -28,7 +28,8 @@ import { SoundtrackPanel } from '../ui/soundtrackPanel';
 import { SoundGate } from '../ui/soundGate';
 import { renderMapCards, type MapChoice } from '../ui/mapSelect';
 import { copyLink, inputProfile, watchInputProfile, type InputProfile } from '../ui/device';
-import { isMapId, mapEntry, randomMapId, type MapId } from '../../shared/maps';
+import { isMapId, mapData, mapEntry, randomMapId, type MapId } from '../../shared/maps';
+import { Minimap, type MiniLegend } from './minimap';
 import { Dialogue } from '../audio/dialogue';
 import { LINES } from '../audio/lines';
 import { CampaignUi } from '../campaign/ui';
@@ -37,9 +38,9 @@ import type { SimEvent } from '../../shared/sim';
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 let soundtrack: SoundtrackPanel | null = null;
 
-type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
-const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
-const OVERLAYS = new Set<ScreenId>(['settings', 'controls', 'confirm']);
+type ScreenId = 'title' | 'online' | 'practice' | 'lobby' | 'results' | 'pause' | 'map' | 'settings' | 'controls' | 'confirm' | 'lost' | 'campaign' | 'mintro' | 'mresults' | 'none';
+const SCREENS: ScreenId[] = ['title', 'online', 'practice', 'lobby', 'results', 'pause', 'map', 'settings', 'controls', 'confirm', 'lost', 'campaign', 'mintro', 'mresults'];
+const OVERLAYS = new Set<ScreenId>(['settings', 'controls', 'confirm', 'map']);
 
 // ---------------------------------------------------------------------
 // Environment
@@ -111,6 +112,61 @@ let pauseOpenedAt = -1e9;
 // The map the current (or last) practice match was started on: Restart keeps it,
 // even when the choice was "Random".
 let practiceMapId: MapId = 'patio';
+/**
+ * The suggested arena for ¡Puro Chanclazo!: La Fiesta, where bot-only melee
+ * matches meet most often (about 15.6 eliminations a minute, against 13-14 on
+ * the others; see docs/puro-chanclazo).
+ */
+const MELEE_MAP: MapId = 'fiesta';
+/**
+ * The combat rules in effect: the room's (the host decides; a joined room never
+ * uses this player's saved choice), Classic outside a room and in the campaign.
+ */
+let activeRules: RulesetId = 'classic';
+let appliedRulesKey = '';
+/** The compact map (arena matches in Practice and Online), and the expanded one in the menu. */
+let minimap: Minimap | null = null;
+let minimapKey = '';
+let mapDrawnAt = 0;
+const miniLegend = (): MiniLegend => ({ you: t('minimap.you'), mate: t('minimap.mate'), cafe: t('minimap.cafe'), cafeOff: t('minimap.cafeOff'), wall: t('minimap.wall'), low: t('minimap.low'), raised: t('minimap.raised'), over: t('minimap.over') });
+function arenaMatch(): boolean { return inMatch && !!session && !campaign?.active; }
+function syncMinimap(now: number): void {
+  if (!minimap) return;
+  const room = lastRoom;
+  if (!arenaMatch() || !room) { minimap.setVisible(false); minimapKey = ''; return; }
+  const key = `${room.map}:${getLang()}`;
+  if (key !== minimapKey) { minimap.setMap(mapData(room.map), t(mapEntry(room.map).nameKey as Key)); minimapKey = key; }
+  // Live positions only while you are alive and not watching a replay (it restores on respawn).
+  const marks = engine?.miniMarkers() ?? null;
+  const show = store.value.minimap && !!marks && !!session?.alive && !engine?.replaying && !$('hud').hidden;
+  minimap.setVisible(show);
+  if (show && marks) minimap.update(marks);
+  // The expanded map follows an online match while it is open.
+  if (top() === 'map' && marks && now - mapDrawnAt > 200) { mapDrawnAt = now; minimap.drawExpanded($('map-canvas') as HTMLCanvasElement, marks, miniLegend()); }
+}
+/** The expanded map, over the menu: practice pauses, online keeps going (the menu's own rules). */
+function openMap(): void {
+  if (!arenaMatch()) return;
+  if (base !== 'pause') openPause();
+  pushOverlay('map');
+  mapDrawnAt = 0;
+  requestAnimationFrame(() => { const m = engine?.miniMarkers(); if (m && minimap) minimap.drawExpanded($('map-canvas') as HTMLCanvasElement, m, miniLegend()); });
+}
+
+function applyRules(): void {
+  const rules: RulesetId = session && !campaign?.active ? session.rules : 'classic';
+  const touchOn = !!input?.touchMode;
+  const key = `${rules}:${getLang()}:${touchOn}`;
+  touch?.setMeleeOnly(rules === 'melee', t('touch.slap'), t('touch.throw'));
+  if (key === appliedRulesKey) return;
+  const changed = rules !== activeRules;
+  appliedRulesKey = key;
+  activeRules = rules;
+  // A button held across a change of rules must not act under the new ones.
+  if (changed) { input?.release('combat mode changed'); diagLog('match', `combat mode ${rules}`); }
+  document.body.classList.toggle('melee-only', rules === 'melee');
+  hud.setRules(rules, touchOn);
+}
 
 // Dialogue (campaign and multiplayer quips) with subtitles.
 const SPEAKERS: Record<string, string> = { rosa: 'Rosa', influ: 'Influencer', bocinas: 'El Bocinas', soplador: 'El Soplador', cart: 'Express 3000', rollcart: 'Carrito', pinata: 'Party System', vecina: 'Vecina' };
@@ -268,12 +324,32 @@ function setTouchMode(on: boolean): void {
 
 /** The graphics benchmark's controlled scene holds a practice match still (offline previews only). */
 let benchHold = false;
+/** The last practice pause: when, inputs discarded, and whether momentum (a jump, a knockback) was kept (diagnostics). */
+let lastPause: { at: number; discarded: number; keptVelocity: boolean | null } | null = null;
 
 function updatePracticePause(): void {
   if (campaign?.active) campaign.setPaused(base === 'pause' || overlayStack.length > 0 || waitingForAim());
   if (!host || !engine) return;
   const shouldPause = practice && inMatch && (base === 'pause' || overlayStack.length > 0 || waitingForAim() || benchHold);
-  if (shouldPause && !host.paused) { host.pause(); engine.paused = true; input?.release(); }
+  if (shouldPause && !host.paused) {
+    // Pausing mid-stride used to leave inputs queued on the host and her
+    // walking momentum in place, so she walked on after Resume with no key
+    // held. Now held keys are dropped, everything already sent is flushed,
+    // and the host discards what it had not simulated and re-syncs the
+    // client (Room.pauseSync) without simulating anything: the clock, bots,
+    // attacks and cooldowns freeze where they are. The benchmark's hold
+    // keeps its scripted scene.
+    input?.release();
+    let sync: ReturnType<LocalHost['pauseSync']>[number] | undefined;
+    if (!benchHold && session) {
+      session.flush();
+      sync = host.pauseSync().find((r) => r.id === session!.id);
+      if (sync) session.pauseSync(sync.ackBefore);
+    }
+    host.pause(); engine.paused = true;
+    lastPause = { at: Math.round(performance.now()), discarded: sync?.discarded ?? 0, keptVelocity: sync?.keptVelocity ?? null };
+    diagLog('input', `practice paused (discarded ${sync?.discarded ?? 0} queued inputs${sync?.keptVelocity ? ', momentum kept' : ''})`);
+  }
   if (!shouldPause && host.paused) { host.resume(); engine.paused = false; }
 }
 
@@ -328,7 +404,22 @@ async function boot(): Promise<void> {
     held: input?.heldCount ?? null,
     lang: getLang(),
   }));
-  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden }));
+  diagProvide('input', () => ({ ...(input?.diag() ?? { mode: 'none' }), menu: top(), clickToAim: !$('click-to-play').hidden, engineInput: !!engine?.inputActive }));
+  // Movement, to tell a stuck key from knockback, a correction or a stale command.
+  diagProvide('movement', () => {
+    const s = session;
+    if (!s) return { session: 'none' };
+    const room = host ? [...host.hub.rooms.values()][0] : null;
+    const sp = room?.sim?.players.get(s.id);
+    const now = Math.round(performance.now());
+    return {
+      speed: +Math.hypot(s.body.vx, s.body.vz).toFixed(2), onGround: s.body.onGround, alive: s.alive, phase: s.phase,
+      pendingInputs: s.pendingInputs, hostQueue: sp ? sp.queue.length : null, hostSpeed: sp ? +Math.hypot(sp.body.vx, sp.body.vz).toFixed(2) : null,
+      corrections: s.corrections, maxCorrection: +s.maxCorrection.toFixed(3), lastCorrection: +s.lastCorrection.toFixed(3),
+      lastHitOnMe: s.lastHitOnMe ? { ...s.lastHitOnMe, msAgo: now - s.lastHitOnMe.at } : null,
+      lastPracticePause: lastPause ? { ...lastPause, msAgo: now - lastPause.at } : null,
+    };
+  });
   diagProvide('render', () => engine?.diag() ?? { webgl: 'not started' });
   diagProvide('audio', () => ({ context: audio.state, music: music.status() }));
   campaign = new CampaignUi({
@@ -355,10 +446,18 @@ async function boot(): Promise<void> {
     campaign.tick();
     if (!campaign.active) dialogue.update();
     const s = session;
+    applyRules();
+    syncMinimap(performance.now());
     if (touch?.visible && s) {
       const def = WEAPONS[s.weapon];
-      touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+      const swingReady = s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0;
+      if (activeRules === 'melee') touch.setReady(swingReady ? 1 : 0);
+      else touch.setReady(s.switchMs > 0 ? 0 : def ? Math.max(0, Math.min(1, 1 - s.cooldownMs / def.cooldownMs)) : 1);
+      // The melee button names the attack the chancla in hand makes.
+      touch.setMelee(t(s.weapon === 1 ? 'melee.reves' : 'melee.chanclazo'), s.weapon === 1, s.meleeMs <= 0 && s.cooldownMs <= 0 && s.switchMs <= 0);
     }
+    // Melee is a multiplayer and practice move: the campaign keeps its own rules.
+    touch?.setMeleeAvailable(!campaign.active);
   };
   requestAnimationFrame(uiTick);
   music.setPrefs(loadMusicPrefs());
@@ -405,15 +504,21 @@ async function boot(): Promise<void> {
     try {
       bootProgress(35, 'loading.engine');
       const mod = await import('./engine');
+      // ?mat=toon|std: El Patio's sourced textures, loaded before the engine builds its first world
+      // (at most 4 s; classic otherwise). Without the parameter this returns at once.
+      await mod.preloadSourced(store.value.quality);
       bootProgress(65, 'loading.world');
       await new Promise((r) => setTimeout(r, 0));
       input = new FpsInput($('stage'));
       input.touchMode = touchMode;
       touch = new FpsTouch(input);
+      // A tap on the compact map (touch only) opens the expanded one; the map consumes the tap.
+      minimap = new Minimap($('minimap'), { onTap: () => { if (touchMode) openMap(); } });
       bindInput(input);
       applyInputSettings();
       engine = new mod.Engine($('stage'), () => store.value, hud, input);
       engine.onContextLost = (lost) => graphicsLost(lost);
+      engine.onOwnMiss = () => touch?.meleeMiss();
       engine.onFatal = () => showCrash();
       engine.start();
     } catch (err) {
@@ -589,8 +694,11 @@ function handlers() {
     state: (s: ConnState, detail?: string) => onState(s, detail),
     room: (room: RoomView) => onRoom(room),
     error: (code: ErrorCode) => onError(code),
-    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); mpDialogue(e); },
+    // Live voice lines wait out a replay (it plays none of its own).
+    event: (e: Parameters<Engine['onEvent']>[0]) => { engine?.onEvent(e); if (!engine?.replaying) mpDialogue(e); },
+    snapshot: (r: Parameters<Engine['onSnapshot']>[0]) => engine?.onSnapshot(r),
     localThrow: (w: 0 | 1) => engine?.onLocalThrow(w),
+    localMelee: (w: 0 | 1) => engine?.onLocalMelee(w),
     impact: (...a: Parameters<Engine['onImpact']>) => engine?.onImpact(...a),
     left: () => endSession('title'),
   };
@@ -622,6 +730,8 @@ function mpDialogue(e: SimEvent): void {
       if (e.id === me && s.phase === 'playing') dialogue.react('respawn');
       break;
     case 'hit':
+      // Now and then, when El Revés knocks a roller off your own head.
+      if (e.v === me && e.ru?.length && Math.random() < 0.6) dialogue.react('rulero');
       if (e.v === me && e.hp > 0 && e.hp <= 30 && !mpLowHp) { mpLowHp = true; dialogue.react('low'); }
       if (e.v === me && e.hp > 30) mpLowHp = false;
       break;
@@ -657,7 +767,9 @@ function startOnline(join: string | null): void {
   practice = false;
   const s = newSession(wsTransport(url));
   s.connect(playerName());
-  s.send(join ? { t: 'join', code: join } : { t: 'create' });
+  // Creating: this player's chosen rules (and, for ¡Puro Chanclazo!, the arena that suits it). Joining: the host's, whatever is saved here.
+  const rules = store.value.roomRules;
+  s.send(join ? { t: 'join', code: join } : rules === 'melee' ? { t: 'create', rules, map: MELEE_MAP } : { t: 'create' });
   retry = () => startOnline(join ?? lastCode);
 }
 
@@ -671,7 +783,7 @@ function startPractice(keepMap = false): void {
   host = h;
   const s = newSession(h.transport(), () => h.now());
   s.connect(sanitizeName(store.value.name, t('online.namePh')));
-  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId });
+  s.send({ t: 'create', practice: { difficulty: v.practiceDifficulty, allies: v.practiceAllies, enemies: v.practiceEnemies }, map: practiceMapId, rules: v.practiceRules });
   retry = () => startPractice(true);
 }
 
@@ -835,6 +947,15 @@ function renderLobby(room: RoomView): void {
     b.classList.toggle('on', on);
     b.disabled = !isOwner && !on;
   });
+  // So are the combat rules: everyone sees them, and they hold for the whole match (rematches too).
+  const rules = rulesetOf(room.rules);
+  document.querySelectorAll<HTMLButtonElement>('[data-lrules]').forEach((b) => {
+    const on = b.dataset.lrules === rules;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+    b.disabled = !isOwner && !on;
+  });
+  $('lobby-rules').textContent = t(rules === 'melee' ? 'lobby.rulesMelee' : 'lobby.rules');
   ($('chk-bots') as HTMLInputElement).checked = room.bots.enabled;
   document.querySelectorAll<HTMLButtonElement>('[data-bdiff]').forEach((b) => {
     const on = b.dataset.bdiff === room.bots.difficulty;
@@ -876,7 +997,7 @@ function renderResults(room: RoomView): void {
   $('res-title').textContent = r.winner === -1 ? t('results.tie') : r.winner === 0 ? t('results.sol') : t('results.luna');
   const flavor = r.winner === -1 ? t('results.youTie') : r.winner === myTeam ? t('results.youWin') : t('results.youLose');
   const reason = r.reason === 'score' ? t('results.byScore', { n: MATCH.scoreToWin }) : t('results.byTime');
-  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}`;
+  $('res-sub').textContent = `${reason} · ${flavor} · ${t(mapEntry(room.map).nameKey as Key)}${rulesetOf(room.rules) === 'melee' ? ` · ${t('mode.melee')}` : ''}`;
   ($('btn-res-maps') as HTMLButtonElement).hidden = !room.practice;
   $('res-sol').textContent = String(r.scores[0]);
   $('res-luna').textContent = String(r.scores[1]);
@@ -941,11 +1062,14 @@ function renderSettings(): void {
   ($('set-fov') as HTMLInputElement).value = String(v.fov);
   $('out-fov').textContent = `${v.fov}°`;
   ($('set-motion') as HTMLInputElement).checked = v.reducedMotion;
+  ($('set-rosa-cand') as HTMLInputElement).checked = v.rosaCandidate;
   ($('set-music') as HTMLInputElement).value = String(Math.round(v.music * 100));
   $('out-music').textContent = `${Math.round(v.music * 100)}%`;
   ($('set-sfx') as HTMLInputElement).value = String(Math.round(v.sfx * 100));
   $('out-sfx').textContent = `${Math.round(v.sfx * 100)}%`;
   ($('set-stats') as HTMLInputElement).checked = v.showStats;
+  ($('set-killcam') as HTMLInputElement).checked = v.killcam;
+  ($('set-minimap') as HTMLInputElement).checked = v.minimap;
 }
 
 function renderPracticeSetup(): void {
@@ -955,6 +1079,8 @@ function renderPracticeSetup(): void {
     b.setAttribute('aria-checked', String(on));
     b.classList.toggle('on', on);
   });
+  seg('prules', v.practiceRules);
+  seg('rrules', v.roomRules);
   seg('diff', v.practiceDifficulty);
   seg('allies', String(v.practiceAllies));
   seg('enemies', String(v.practiceEnemies));
@@ -988,6 +1114,7 @@ function changeLang(lang: 'en' | 'es'): void {
 function openOnline(): void {
   ($('in-name') as HTMLInputElement).value = store.value.name;
   ($('in-code') as HTMLInputElement).value = pendingInviteCode;
+  renderPracticeSetup(); // also marks the Create Room combat mode
   $('online-err').textContent = serverUrl() ? '' : t(OFFLINE_ONLY ? 'status.offlinePreview' : 'status.serverMissing');
   show('online');
   // From an invite: the code is filled in; ask for a name first if there isn't one.
@@ -1013,6 +1140,11 @@ function openPause(): void {
   rb.dataset.t = m ? 'pause.restart' : 'pause.restartMatch';
   rb.textContent = t(rb.dataset.t as Key);
   ($('btn-pause-maps') as HTMLButtonElement).hidden = !practice;
+  ($('btn-pause-map') as HTMLButtonElement).hidden = m;
+  // Match information: the combat rules of this match (not shown for missions).
+  $('pause-mode').hidden = m;
+  $('pause-mode-text').textContent = t('mode.pause', { mode: t(activeRules === 'melee' ? 'mode.melee' : 'mode.classic') });
+  ($('pause-mode').querySelector('.mode-ico') as HTMLElement).hidden = activeRules !== 'melee';
   ($('btn-pause-select') as HTMLButtonElement).hidden = !m;
   const lb = $('btn-pause-leave');
   lb.dataset.t = online ? 'pause.leaveMatch' : 'pause.home';
@@ -1194,6 +1326,20 @@ function bindUi(): void {
     $('lobby-err').textContent = '';
     session?.send({ t: 'team', team: (team === 0 ? 1 : 0) as Team });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-lrules]').forEach((b) => b.addEventListener('click', () => {
+    if (lastRoom?.owner === session?.id && isRulesetId(b.dataset.lrules)) session?.send({ t: 'rules', rules: b.dataset.lrules });
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-prules]').forEach((b) => b.addEventListener('click', () => {
+    const rules = rulesetOf(b.dataset.prules);
+    // Switching to ¡Puro Chanclazo! suggests the arena where fights happen most (any map can still be picked).
+    if (rules === 'melee' && store.value.practiceRules !== 'melee') store.update({ practiceMap: MELEE_MAP });
+    store.update({ practiceRules: rules });
+    renderPracticeSetup();
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-rrules]').forEach((b) => b.addEventListener('click', () => {
+    store.update({ roomRules: rulesetOf(b.dataset.rrules) });
+    renderPracticeSetup();
+  }));
   document.querySelectorAll<HTMLButtonElement>('[data-lmap]').forEach((b) => b.addEventListener('click', () => {
     if (lastRoom?.owner === session?.id && isMapId(b.dataset.lmap)) session?.send({ t: 'map', map: b.dataset.lmap });
   }));
@@ -1219,6 +1365,8 @@ function bindUi(): void {
   on('btn-mi-reload', () => location.reload());
   on('btn-pause-settings', () => { renderSettings(); pushOverlay('settings'); });
   on('btn-pause-controls', () => pushOverlay('controls'));
+  on('btn-pause-map', () => openMap());
+  on('btn-map-back', () => popOverlay());
   on('btn-fullscreen', toggleFullscreen);
   on('btn-pause-leave', askHome);
   on('btn-pause-select', () => campaign.leave());
@@ -1255,6 +1403,12 @@ function bindUi(): void {
   check('set-invert', (v) => store.update({ invertY: v }));
   check('set-motion', (v) => store.update({ reducedMotion: v }));
   check('set-stats', (v) => store.update({ showStats: v }));
+  check('set-killcam', (v) => store.update({ killcam: v }));
+  check('set-minimap', (v) => store.update({ minimap: v }));
+  // Preview builds only: Sol drawn with the candidate Blender model (review; the current model stays the default).
+  if (OFFLINE_ONLY) { $('field-rosa-cand').hidden = false; check('set-rosa-cand', (v) => store.update({ rosaCandidate: v })); }
+  // The replay's Skip button (mouse, when the pointer is free) and the touch "Tap to skip" layer.
+  for (const id of ['kc-skip', 'kc-tap']) $(id).addEventListener('click', (e) => { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); engine?.skipReplay(); });
   range('set-voice', (v) => store.update({ voice: v / 100 }));
   check('set-banter', (v) => store.update({ banter: v }));
   check('set-hints', (v) => store.update({ campaignHints: v }));
@@ -1336,7 +1490,7 @@ function bindInput(inp: FpsInput): void {
     if (cooldown) { if (inMatch && base === 'none') { render(); toast(t('hud.clickAgain'), 2200); } return; }
     lockFailures++;
     if (lockFailures >= 3 || typeof $('stage').requestPointerLock !== 'function') {
-      if (!inp.fallback) toast(t('hud.dragLook'), 4000);
+      if (!inp.fallback) toast(t(activeRules === 'melee' ? 'mode.dragLook' : 'hud.dragLook'), 4000);
       inp.fallback = true;
     }
     if (inMatch && base === 'none') render();
@@ -1373,6 +1527,7 @@ function debugApi() {
     get touchMode() { return touchMode; },
     engine: () => engine,
     input: () => input,
+    minimap: () => ({ created: !!minimap, key: minimapKey, setting: store.value.minimap, arena: arenaMatch(), hidden: $('minimap').hidden }),
     campaign: () => campaign,
     dialogue: () => dialogue,
     music: () => music,

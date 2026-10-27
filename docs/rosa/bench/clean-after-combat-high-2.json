@@ -1,0 +1,165 @@
+{
+ "kind": "chancla-section-benchmark",
+ "version": 3,
+ "mode": "controlled",
+ "label": "Controlled comparison: scripted scene, identical in both variants",
+ "build": "aff7293 (local)",
+ "variant": "experiment",
+ "comparison": "environment-only",
+ "quality": "high",
+ "valid": true,
+ "invalidReason": null,
+ "testRun": true,
+ "workload": {
+  "id": "combat-scripted-v3",
+  "hash": "f9519e54",
+  "warmupS": 6,
+  "measuredSPerView": 10,
+  "views": [
+   "duel, 2 m",
+   "duel, 5 m",
+   "skirmish, 9 m",
+   "from the café door, 3 m"
+  ]
+ },
+ "measuredS": 40.06,
+ "frames": 132,
+ "avgFps": 3.3,
+ "medianFrameMs": 298.6,
+ "p95FrameMs": 535.2,
+ "p99FrameMs": 610.3,
+ "maxFrameMs": 731.1,
+ "framesOver50ms": 126,
+ "render": {
+  "cssSize": [
+   960,
+   540
+  ],
+  "bufferSize": [
+   960,
+   540
+  ],
+  "pixelRatio": 1,
+  "devicePixelRatio": 1
+ },
+ "drawCalls": {
+  "avg": 182,
+  "min": 155,
+  "max": 196
+ },
+ "triangles": {
+  "avg": 148061,
+  "min": 136244,
+  "max": 152628
+ },
+ "firstPerson": {
+  "drawCalls": 8,
+  "triangles": 5596
+ },
+ "perView": [
+  {
+   "name": "duel, 2 m",
+   "frames": 33,
+   "sampledS": 9.826,
+   "windowS": 10,
+   "avgFps": 3.36,
+   "medianFrameMs": 288.2,
+   "p95FrameMs": 542.3,
+   "p99FrameMs": 610.3,
+   "maxFrameMs": 610.3,
+   "framesOver50ms": 32,
+   "drawCalls": {
+    "avg": 157,
+    "min": 155,
+    "max": 165
+   },
+   "triangles": {
+    "avg": 138510,
+    "min": 136244,
+    "max": 145710
+   }
+  },
+  {
+   "name": "duel, 5 m",
+   "frames": 33,
+   "sampledS": 10.085,
+   "windowS": 10,
+   "avgFps": 3.27,
+   "medianFrameMs": 303.1,
+   "p95FrameMs": 342.4,
+   "p99FrameMs": 608.8,
+   "maxFrameMs": 608.8,
+   "framesOver50ms": 32,
+   "drawCalls": {
+    "avg": 190,
+    "min": 188,
+    "max": 193
+   },
+   "triangles": {
+    "avg": 150874,
+    "min": 149828,
+    "max": 152178
+   }
+  },
+  {
+   "name": "skirmish, 9 m",
+   "frames": 32,
+   "sampledS": 10.17,
+   "windowS": 10,
+   "avgFps": 3.15,
+   "medianFrameMs": 316.7,
+   "p95FrameMs": 601.1,
+   "p99FrameMs": 731.1,
+   "maxFrameMs": 731.1,
+   "framesOver50ms": 31,
+   "drawCalls": {
+    "avg": 191,
+    "min": 189,
+    "max": 196
+   },
+   "triangles": {
+    "avg": 151308,
+    "min": 150758,
+    "max": 152628
+   }
+  },
+  {
+   "name": "from the café door, 3 m",
+   "frames": 34,
+   "sampledS": 9.983,
+   "windowS": 10,
+   "avgFps": 3.41,
+   "medianFrameMs": 292.1,
+   "p95FrameMs": 535.2,
+   "p99FrameMs": 566.2,
+   "maxFrameMs": 566.2,
+   "framesOver50ms": 31,
+   "drawCalls": {
+    "avg": 188,
+    "min": 188,
+    "max": 191
+   },
+   "triangles": {
+    "avg": 151313,
+    "min": 150934,
+    "max": 152514
+   }
+  }
+ ],
+ "sampling": "Complete frame intervals only; a frame counts if it starts inside the measurement window and belongs, whole, to the view its start falls in; the final unfinished interval and frames starting in the warm-up are excluded; FPS = frames / sum of their durations; count averages are weighted by duration.",
+ "scene": {
+  "characters": 3,
+  "projectiles": "two thrown per 2.4 s cycle",
+  "checkpoints": 46,
+  "maxCameraError": 0,
+  "maxCharacterError": 0,
+  "maxProjectileError": 0,
+  "minCharactersDrawn": 3,
+  "minProjectilesDrawn": 0
+ },
+ "throttleMs": 0,
+ "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+ "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+ "startedAt": "2026-10-24T01:54:50.424Z",
+ "note": "Scripted scene through the normal game renderer; one variant loaded. Draw calls and triangles are per engine frame including the shadow pass and the first-person view (its share is in firstPerson). Environment-only comparison: the first-person view is this build's in both variants. Shorter than 60 s: indicative only."
+}

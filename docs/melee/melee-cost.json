@@ -1,0 +1,39 @@
+{
+ "note": "Exact renderer counts per frame (world + first person), SwiftShader. Counts, not timings.",
+ "high": {
+  "attached": {
+   "calls": 368,
+   "tris": 130670
+  },
+  "removed": {
+   "calls": 362,
+   "tris": 129710
+  },
+  "flying": {
+   "calls": 392,
+   "tris": 131630
+  },
+  "flyingActive": {
+   "calls": 12,
+   "tris": 0
+  }
+ },
+ "low": {
+  "attached": {
+   "calls": 219,
+   "tris": 79704
+  },
+  "removed": {
+   "calls": 213,
+   "tris": 78744
+  },
+  "flying": {
+   "calls": 243,
+   "tris": 80664
+  },
+  "flyingActive": {
+   "calls": 12,
+   "tris": 0
+  }
+ }
+}

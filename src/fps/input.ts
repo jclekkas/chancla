@@ -19,6 +19,10 @@
 // button, so a name field or a Settings slider keeps it). Keys aimed at such
 // a stale target are game keys: the focus is dropped and the key counts.
 //
+// Melee (V, or the touch button) is a press, not a hold: one press makes one
+// swing, a held key never repeats it, and key repeat is ignored. The press is
+// kept until the next game tick reads it, and dropped by release().
+//
 // Touch (phones, tablets) is a second source, fed by the on-screen controls
 // (touch.ts) and merged in sample(): no pointer lock, no keyboard needed.
 // release() drops both sources, so a menu, a lost focus or a hidden page
@@ -33,6 +37,10 @@ export interface Controls {
   jump: boolean;
   crouch: boolean;
   fire: boolean;
+  /** Melee was pressed since the last sample. */
+  melee: boolean;
+  /** The primary button went down since the last sample (however briefly: melee-only rules swing on it). */
+  firePress: boolean;
   weapon: WeaponId;
 }
 
@@ -63,6 +71,10 @@ export class FpsInput {
   onLockError: (() => void) | null = null;
   onScoreboard: ((open: boolean) => void) | null = null;
   onSwitch: (() => void) | null = null;
+  /** Space while a replay shows: skip it (true: the key is used up, it never becomes a held jump). */
+  onSkip: (() => boolean) | null = null;
+  /** The Space press that skipped a replay is still down (its repeats are ignored). */
+  private skipSpace = false;
   lookEvents = 0;
   /** performance.now() when the menu was last requested from the keyboard or a lost lock. */
   lastMenuAt = -1e9;
@@ -74,6 +86,14 @@ export class FpsInput {
   /** Touch look speed, separate from the mouse's. */
   touchSensitivity = 1;
   private pendingTouchJump = false;
+  private pendingMelee = false;
+  private pendingFirePress = false;
+  /** Melee presses seen (tests and diagnostics). */
+  meleePresses = 0;
+  /** The last time held input was dropped, and why (diagnostics). */
+  private lastRelease: { reason: string; at: number } | null = null;
+  /** Key presses ignored because Ctrl, Cmd or Option was held (diagnostics). */
+  private modifierIgnored = 0;
   private touch = { mx: 0, mz: 0, fire: false, jump: false, crouch: false };
   /** Called by release(): the touch overlay forgets the fingers it was tracking. */
   onTouchRelease: (() => void) | null = null;
@@ -97,7 +117,7 @@ export class FpsInput {
       if (!this.locked || !this.enabled) return;
       // The click that re-captured the mouse must never also throw.
       if (performance.now() - this.lockedAt < 200) return;
-      if (e.button === 0) this.mouseFire = true;
+      if (e.button === 0) { this.mouseFire = true; this.pendingFirePress = true; }
       else if (e.button === 2) this.toggleWeapon();
     });
     this.bag.on<MouseEvent>(doc, 'mouseup', (e) => { if (e.button === 0) this.mouseFire = false; });
@@ -128,7 +148,7 @@ export class FpsInput {
       if (down && this.heldCount) this.release('Cmd/Ctrl pressed');
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) { if (!down) this.keys.delete(e.code); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) { if (!down) this.keys.delete(e.code); else this.modifierIgnored++; return; }
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName;
     const field = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || !!target?.isContentEditable;
@@ -156,13 +176,22 @@ export class FpsInput {
       if (this.scoreboard !== down) { this.scoreboard = down; this.onScoreboard?.(down); }
       return;
     }
+    // A Space press that skipped a replay is used up whole: its auto-repeat
+    // never becomes a held jump (Space held through respawn does not jump);
+    // the next real press, after a keyup (or one lost to a focus change), jumps.
+    if (e.code === 'Space') {
+      if (this.skipSpace && (!down || e.repeat)) { e.preventDefault(); if (!down) this.skipSpace = false; return; }
+      this.skipSpace = false;
+      if (down && !e.repeat && this.onSkip?.()) { e.preventDefault(); this.skipSpace = true; return; }
+    }
     if (MOVE[e.code] || e.code === 'Space' || e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
       e.preventDefault();
       if (down) this.keys.add(e.code); else this.keys.delete(e.code);
       return;
     }
-    if (e.code === 'KeyF' || e.code === 'KeyE') { this.keyFire = down; return; }
+    if (e.code === 'KeyF' || e.code === 'KeyE') { if (down && !e.repeat) this.pendingFirePress = true; this.keyFire = down; return; }
     if (!down || e.repeat) return;
+    if (e.code === 'KeyV') { this.pressMelee(); return; }
     if (e.code === 'Digit1') this.setWeapon(0);
     else if (e.code === 'Digit2') this.setWeapon(1);
     else if (e.code === 'KeyQ') this.toggleWeapon();
@@ -187,6 +216,7 @@ export class FpsInput {
 
   setTouchButton(b: 'fire' | 'jump' | 'crouch', down: boolean): void {
     this.touch[b] = down && this.enabled;
+    if (b === 'fire' && down && this.enabled) this.pendingFirePress = true;
     if (b === 'jump' && down && this.enabled) this.pendingTouchJump = true;
   }
 
@@ -206,6 +236,13 @@ export class FpsInput {
     if (this.enabled) this.toggleWeapon();
   }
 
+  /** One melee swing (V or the touch button). Ignored while input is off (menus, typing). */
+  pressMelee(): void {
+    if (!this.enabled) return;
+    this.pendingMelee = true;
+    this.meleePresses++;
+  }
+
   toggleScoreboard(): void {
     this.scoreboard = !this.scoreboard;
     this.onScoreboard?.(this.scoreboard);
@@ -219,24 +256,40 @@ export class FpsInput {
     const t = this.touch;
     const jump = t.jump || this.pendingTouchJump;
     this.pendingTouchJump = false;
+    const melee = this.enabled && this.pendingMelee;
+    this.pendingMelee = false;
+    const firePress = this.enabled && this.pendingFirePress;
+    this.pendingFirePress = false;
     mx += t.mx; mz += t.mz;
     return {
       mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1),
       jump: this.enabled && (this.keys.has('Space') || jump),
       crouch: this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || t.crouch,
       fire: this.enabled && (this.mouseFire || this.keyFire || t.fire),
+      melee,
+      firePress,
       weapon: this.weapon,
     };
+  }
+
+  /** The movement the held keys resolve to, without consuming presses (diagnostics). */
+  private peek(): { mx: number; mz: number } {
+    let mx = this.touch.mx, mz = this.touch.mz;
+    for (const k of this.keys) { const v = MOVE[k]; if (v) { mx += v[0]; mz += v[1]; } }
+    return { mx: clamp(mx, -1, 1), mz: clamp(mz, -1, 1) };
   }
 
   // Drops everything held (focus loss, menus, death).
   release(reason?: string): void {
     if (reason && this.heldCount) diagLog('input', `released held input (${reason})`);
+    this.lastRelease = { reason: reason ?? 'unspecified', at: performance.now() };
     this.keys.clear();
     this.mouseFire = false;
     this.keyFire = false;
     this.touch.mx = 0; this.touch.mz = 0;
     this.pendingTouchJump = false;
+    this.pendingMelee = false;
+    this.pendingFirePress = false;
     this.touch.fire = false; this.touch.jump = false; this.touch.crouch = false;
     this.onTouchRelease?.();
     if (this.scoreboard) { this.scoreboard = false; this.onScoreboard?.(false); }
@@ -253,6 +306,10 @@ export class FpsInput {
       mode: this.touchMode ? 'touch' : this.locked ? 'mouse (captured)' : this.fallback ? 'mouse (drag to look)' : 'mouse (not captured)',
       enabled: this.enabled, locked: this.locked, pointerLockElement: !!document.pointerLockElement, fallback: this.fallback,
       held: this.heldCount, focus: describeEl(document.activeElement),
+      // Key codes only (never what was typed): which bindings the game believes are down.
+      heldKeys: [...this.keys], resolved: (() => { const c = this.peek(); return { mx: c.mx, mz: c.mz }; })(),
+      lastRelease: this.lastRelease ? { reason: this.lastRelease.reason, msAgo: Math.round(performance.now() - this.lastRelease.at) } : null,
+      modifierIgnored: this.modifierIgnored, windowFocused: document.hasFocus(), hidden: document.hidden,
     };
   }
 

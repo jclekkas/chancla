@@ -6,7 +6,7 @@ The current files in `public/voice/` are **temporary synthetic placeholders** (S
 
 Direction: Rosa is warm, quick and theatrical. She is never shrill and never a caricature. Her timing is dry; she has seen it all. The opponents are broad and comic. The party system is a cheerful, malfunctioning robot announcer. Do not imitate any real performer.
 
-## Doña Rosa (66)
+## Doña Rosa (67)
 
 | File | Spanish (record this) | English subtitle | Plays |
 | --- | --- | --- | --- |
@@ -23,7 +23,8 @@ Direction: Rosa is warm, quick and theatrical. She is never shrill and never a c
 | `elim4.mp3` | Eso te pasa por contestar. | That's what you get for talking back. | reaction: elim |
 | `hurt1.mp3` | ¡Ay! ¿Quién fue? | Ow! Who did that? | reaction: hurt |
 | `hurt2.mp3` | Eso me lo vas a pagar. | You're going to pay for that. | reaction: hurt |
-| `hurt3.mp3` | Mi peinado no. | Not the hair. | reaction: hurt |
+| `hurt3.mp3` | Mi peinado no. | Not the hair. | reaction: hurt, rulero |
+| `rulero1.mp3` | ¡Con los ruleros no! | Not the rollers! | reaction: rulero |
 | `low1.mp3` | Necesito un cafecito. Urgente. | I need a cafecito. Urgently. | reaction: low |
 | `respawn1.mp3` | Ya volví. Y traje la otra. | I'm back. And I brought the other one. | reaction: respawn |
 | `respawn2.mp3` | ¿Me extrañaron? | Did you miss me? | reaction: respawn |

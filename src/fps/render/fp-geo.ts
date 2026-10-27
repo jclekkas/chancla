@@ -129,3 +129,109 @@ INK.onBeforeCompile = (sh) => {
 export function vertexToon(opts: { emissive?: number; color?: number } = {}): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({ color: opts.color ?? 0xffffff, vertexColors: true, gradientMap: toonRamp(), emissive: opts.emissive ?? 0 });
 }
+
+export interface TubeOpts {
+  /** Vertices round each ring. */
+  radial?: number;
+  /** Rings along the body (caps excluded). */
+  steps?: number;
+  /** Direction the section's width (first radius) lies along; projected off the tangent at each ring. */
+  side: THREE.Vector3;
+  /** Rounded cap rings at the start and end (0: open). */
+  capStart?: number;
+  capEnd?: number;
+  /** Cap length as a fraction of the smaller end radius (1: a hemisphere). */
+  capLen?: number;
+}
+
+/**
+ * A smooth lofted tube through `pts` (centripetal Catmull-Rom): `prof(t)`
+ * gives the section at arc fraction t as [half-width, half-thickness,
+ * superellipse exponent (2: an ellipse, higher: squarer)], optional rounded
+ * caps. Indexed while the normals are computed, so the surface shades
+ * smoothly and the toon bands follow its contours.
+ */
+export function tube(pts: THREE.Vector3[], prof: (t: number) => [number, number, number?], o: TubeOpts): THREE.BufferGeometry {
+  const R = o.radial ?? 8, steps = o.steps ?? 12;
+  const curve: THREE.Curve<THREE.Vector3> = pts.length > 2 ? new THREE.CatmullRomCurve3(pts, false, 'centripetal') : new THREE.LineCurve3(pts[0]!, pts[1]!);
+  const pos: number[] = [];
+  const idx: number[] = [];
+  let lastSide = o.side.clone().normalize();
+  const ring = (p: THREE.Vector3, tan: THREE.Vector3, rx: number, ry: number, n: number) => {
+    const side = o.side.clone().addScaledVector(tan, -o.side.dot(tan));
+    if (side.lengthSq() < 1e-8) side.copy(lastSide); else side.normalize();
+    lastSide = side;
+    const up = new THREE.Vector3().crossVectors(tan, side);
+    const e = 2 / n;
+    for (let j = 0; j < R; j++) {
+      const a = (j / R) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      const x = rx * Math.sign(c) * Math.abs(c) ** e, y = ry * Math.sign(s) * Math.abs(s) ** e;
+      pos.push(p.x + side.x * x + up.x * y, p.y + side.y * x + up.y * y, p.z + side.z * x + up.z * y);
+    }
+  };
+  const t0 = curve.getTangentAt(0).normalize(), t1 = curve.getTangentAt(1).normalize();
+  const p0 = curve.getPointAt(0), p1 = curve.getPointAt(1);
+  const s0 = prof(0), s1 = prof(1);
+  const capL = o.capLen ?? 1;
+  let rings = 0;
+  const cs = o.capStart ?? 0, ce = o.capEnd ?? 0;
+  // Start cap rings (from near the apex out to the body).
+  for (let i = 1; i < cs; i++) {
+    const a = (i / cs) * (Math.PI / 2), k = Math.sin(a);
+    ring(p0.clone().addScaledVector(t0, -Math.min(s0[0], s0[1]) * capL * Math.cos(a)), t0, s0[0] * k, s0[1] * k, s0[2] ?? 2); rings++;
+  }
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const s = prof(t);
+    ring(curve.getPointAt(t), curve.getTangentAt(t).normalize(), s[0], s[1], s[2] ?? 2); rings++;
+  }
+  for (let i = ce - 1; i >= 1; i--) {
+    const a = (i / ce) * (Math.PI / 2), k = Math.sin(a);
+    ring(p1.clone().addScaledVector(t1, Math.min(s1[0], s1[1]) * capL * Math.cos(a)), t1, s1[0] * k, s1[1] * k, s1[2] ?? 2); rings++;
+  }
+  for (let r = 0; r < rings - 1; r++) {
+    for (let j = 0; j < R; j++) {
+      const a = r * R + j, b = r * R + ((j + 1) % R), c = (r + 1) * R + ((j + 1) % R), d = (r + 1) * R + j;
+      idx.push(a, b, c, a, c, d);
+    }
+  }
+  if (cs > 0) {
+    const apex = pos.length / 3;
+    const q = p0.clone().addScaledVector(t0, -Math.min(s0[0], s0[1]) * capL);
+    pos.push(q.x, q.y, q.z);
+    for (let j = 0; j < R; j++) idx.push(apex, (j + 1) % R, j);
+  }
+  if (ce > 0) {
+    const apex = pos.length / 3, base = (rings - 1) * R;
+    const q = p1.clone().addScaledVector(t1, Math.min(s1[0], s1[1]) * capL);
+    pos.push(q.x, q.y, q.z);
+    for (let j = 0; j < R; j++) idx.push(apex, base + j, base + ((j + 1) % R));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  // Outward normals: flip the winding if the side x up frame was left-handed.
+  const mid = curve.getPointAt(0.5), pa = g.attributes.position!, na = g.attributes.normal!;
+  const r0 = Math.floor(rings / 2) * R;
+  let dot = 0;
+  for (let j = 0; j < R; j++) dot += (pa.getX(r0 + j) - mid.x) * na.getX(r0 + j) + (pa.getY(r0 + j) - mid.y) * na.getY(r0 + j) + (pa.getZ(r0 + j) - mid.z) * na.getZ(r0 + j);
+  if (dot < 0) {
+    const ix = g.index!.array as Uint16Array | Uint32Array;
+    for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]!; ix[i + 1] = ix[i + 2]!; ix[i + 2] = t; }
+    g.computeVertexNormals();
+  }
+  return g;
+}
+
+/** Piecewise linear lookup of a section profile: keys [t, half-width, half-thickness, exponent?], eased between keys. */
+export function profile(keys: Array<[number, number, number, number?]>): (t: number) => [number, number, number] {
+  return (t: number) => {
+    let i = 0;
+    while (i < keys.length - 2 && t > keys[i + 1]![0]) i++;
+    const a = keys[i]!, b = keys[i + 1]!;
+    const k0 = THREE.MathUtils.clamp((t - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1);
+    const k = k0 * k0 * (3 - 2 * k0);
+    return [a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, (a[3] ?? 2) + ((b[3] ?? 2) - (a[3] ?? 2)) * k];
+  };
+}

@@ -29,6 +29,7 @@ export const LINES: Line[] = [
   L('hurt1', 'rosa', '¡Ay! ¿Quién fue?', 'Ow! Who did that?'),
   L('hurt2', 'rosa', 'Eso me lo vas a pagar.', "You're going to pay for that."),
   L('hurt3', 'rosa', 'Mi peinado no.', 'Not the hair.'),
+  L('rulero1', 'rosa', '¡Con los ruleros no!', 'Not the rollers!'),
   L('low1', 'rosa', 'Necesito un cafecito. Urgente.', 'I need a cafecito. Urgently.'),
   L('respawn1', 'rosa', 'Ya volví. Y traje la otra.', "I'm back. And I brought the other one."),
   L('respawn2', 'rosa', '¿Me extrañaron?', 'Did you miss me?'),
@@ -114,6 +115,8 @@ export const POOLS: Record<string, string[]> = {
   ricochet: ['ricochet1', 'ricochet2', 'ricochet3'],
   elim: ['elim1', 'elim2', 'elim3', 'elim4'],
   hurt: ['hurt1', 'hurt2', 'hurt3'],
+  // A roller knocked off your head by El Revés (occasional, rate-limited).
+  rulero: ['rulero1', 'hurt3'],
   low: ['low1'],
   respawn: ['respawn1', 'respawn2', 'respawn3'],
   start: ['start1', 'start2'],
@@ -124,5 +127,5 @@ export const POOLS: Record<string, string[]> = {
 
 // Minimum time between two lines from the same pool, ms.
 export const POOL_COOLDOWN: Record<string, number> = {
-  miss: 14000, ricochet: 8000, elim: 6000, hurt: 9000, low: 20000, respawn: 4000, influ_hit: 5000,
+  miss: 14000, ricochet: 8000, elim: 6000, hurt: 9000, rulero: 15000, low: 20000, respawn: 4000, influ_hit: 5000,
 };

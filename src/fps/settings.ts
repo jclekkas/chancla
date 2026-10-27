@@ -1,6 +1,7 @@
 import { SafeStorage } from '../persistence/storage';
 import type { Lang } from './strings';
 import { isMapId, type MapId } from '../../shared/maps';
+import { rulesetOf, type RulesetId } from '../../shared/config';
 
 export type Quality = 'low' | 'medium' | 'high';
 /** What the player chose: Auto picks Low on phones, tablets and low-core devices, Medium elsewhere. */
@@ -20,6 +21,10 @@ export interface FpsSettings {
   music: number;
   sfx: number;
   showStats: boolean;
+  /** After you are eliminated, a short replay of the blow (from the attacker's view when possible). */
+  killcam: boolean;
+  /** The compact map in Practice and Online matches (the expanded map stays in the menu). */
+  minimap: boolean;
   voice: number; // dialogue volume
   banter: boolean; // automatic reaction lines
   subtitles: 'auto' | 'es' | 'en' | 'off';
@@ -28,6 +33,11 @@ export interface FpsSettings {
   practiceAllies: number;
   practiceEnemies: number;
   practiceMap: MapId | 'random'; // the last map chosen for practice
+  /** Combat mode for practice and for rooms you create (a joined room always uses its host's). */
+  practiceRules: RulesetId;
+  roomRules: RulesetId;
+  /** Preview: Sol in matches is the Blender-built candidate model (rosa-candidate.ts), loaded on demand. */
+  rosaCandidate: boolean;
 }
 
 const KEY = 'chancla.mp.settings.v1';
@@ -35,7 +45,8 @@ const KEY = 'chancla.mp.settings.v1';
 export function defaults(lang: Lang, reducedMotion: boolean, lowEnd: boolean): FpsSettings {
   return {
     lang, name: '', sensitivity: 1, touchSensitivity: 1, invertY: false, fov: 85, reducedMotion, quality: lowEnd ? 'low' : 'medium', qualityMode: 'auto',
-    music: 0.45, sfx: 0.85, showStats: false, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
+    music: 0.45, sfx: 0.85, showStats: false, killcam: true, minimap: true, voice: 0.9, banter: true, subtitles: 'auto', campaignHints: true, practiceDifficulty: 'normal', practiceAllies: 1, practiceEnemies: 2, practiceMap: 'patio',
+    practiceRules: 'classic', roomRules: 'classic', rosaCandidate: false,
   };
 }
 
@@ -60,6 +71,8 @@ export class FpsSettingsStore {
       music: num(r.music, d.music, 0, 1),
       sfx: num(r.sfx, d.sfx, 0, 1),
       showStats: bool(r.showStats, d.showStats),
+      killcam: bool(r.killcam, d.killcam),
+      minimap: bool(r.minimap, d.minimap),
       voice: num(r.voice, d.voice, 0, 1),
       banter: bool(r.banter, d.banter),
       subtitles: r.subtitles === 'es' || r.subtitles === 'en' || r.subtitles === 'off' || r.subtitles === 'auto' ? r.subtitles : d.subtitles,
@@ -68,6 +81,10 @@ export class FpsSettingsStore {
       practiceMap: r.practiceMap === 'random' || isMapId(r.practiceMap) ? r.practiceMap : d.practiceMap,
       practiceAllies: num(r.practiceAllies, d.practiceAllies, 0, 1),
       practiceEnemies: num(r.practiceEnemies, d.practiceEnemies, 1, 2),
+      // Saves from before combat modes existed (or anything unknown) are Classic.
+      practiceRules: rulesetOf(r.practiceRules),
+      roomRules: rulesetOf(r.roomRules),
+      rosaCandidate: bool(r.rosaCandidate, d.rosaCandidate),
     };
   }
   update(p: Partial<FpsSettings>): FpsSettings {

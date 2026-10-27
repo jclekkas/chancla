@@ -1,8 +1,9 @@
 // In-match HUD. DOM is only touched when values change.
 import * as THREE from 'three';
-import { MATCH, WEAPONS, type WeaponId } from '../../shared/config';
+import { MATCH, MELEE, WEAPONS, type RulesetId, type WeaponId } from '../../shared/config';
 import type { RoomView } from '../../shared/protocol';
-import { t, type Key } from './strings';
+import { getLang, t, type Key } from './strings';
+import { attackKey } from './killcam';
 import { chanclaSVG, rosaSVG, svgUrl } from '../ui/art';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -13,6 +14,8 @@ export interface HudFrame {
   weapon: WeaponId;
   cooldownMs: number;
   switchMs: number;
+  /** Melee recovery left (ms), if a swing is under way. */
+  meleeMs?: number;
   respawnInMs: number;
   protectedMs: number;
   scores: [number, number];
@@ -33,12 +36,86 @@ const teamIcon = (team: number) => (team === 0 ? '☀' : '☾');
 
 const pesadaIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"><g transform="rotate(-18 60 40)"><path d="M16 46 C16 30 34 22 60 24 C92 26 106 34 106 46 L106 54 C106 60 92 64 60 64 C30 64 16 60 16 54 Z" fill="#9a6a3e"/><path d="M16 54 C16 60 30 64 60 64 C92 64 106 60 106 54 L106 58 C106 66 90 70 60 70 C30 70 16 66 16 58 Z" fill="#5e3b25"/><path d="M58 26 C80 24 92 34 92 44 C80 46 68 46 56 44 C54 36 54 30 58 26 Z" fill="#6a3a8c"/><g fill="#f5c542"><circle cx="62" cy="30" r="3"/><circle cx="72" cy="28" r="3"/><circle cx="82" cy="31" r="3"/><circle cx="88" cy="38" r="3"/></g></g></svg>`;
 
+interface Rect { left: number; top: number; right: number; bottom: number }
+
+/** One name tag's DOM and what was last written to it (so unchanged values are never rewritten). */
+interface Plate {
+  el: HTMLDivElement; role: HTMLElement; n: HTMLElement; bot: HTMLElement; hp: HTMLElement;
+  on: boolean; tier: number; key: string; hpW: string; tx: string;
+  w: number; h: number; rect: Rect | null;
+}
+
+/** HUD pieces name tags never sit under. */
+const PLATE_CHROME = '.hud-top, .hud-ident, #minimap, .hud-tr, #ft-score, .hud-bl';
+
+/** Name tag tiers by distance (m): nearer than NEAR shows the role word, farther than FAR is compact. */
+export const PLATE_NEAR = 10;
+export const PLATE_FAR = 24;
+/** Hysteresis (m) so a player walking along a boundary does not flicker between tiers. */
+const PLATE_HYST = 1.5;
+
+/** 0 near, 1 mid, 2 far; `prev` (or -1) keeps the current tier until the distance is clearly past a boundary. */
+export function plateTier(d: number, prev = -1): number {
+  const raw = d < PLATE_NEAR ? 0 : d < PLATE_FAR ? 1 : 2;
+  if (prev < 0 || raw === prev) return raw;
+  if (prev === 0 && d < PLATE_NEAR + PLATE_HYST) return 0;
+  if (prev === 1 && d > PLATE_NEAR - PLATE_HYST && d < PLATE_FAR + PLATE_HYST) return 1;
+  if (prev === 2 && d > PLATE_FAR - PLATE_HYST) return 2;
+  return raw;
+}
+
+/**
+ * Screen-space declutter for name tags. Each tag is w x h px, its bottom
+ * centre anchored at (x, y) above a player's head. Fixed HUD pieces
+ * (`obstacles`: minimap, chips, buttons) come first: a tag under one slides
+ * sideways just clear of it, staying on screen (`vw`). Then tags are placed in
+ * priority order (nearest first; opponents count as a little nearer, since
+ * they matter more in a fight); a tag that would overlap one already placed
+ * is lifted by whole tag heights (at most `maxLift` times), and if it still
+ * overlaps it stays put but is marked dim. Returns positions in input order.
+ */
+export function declutterPlates(
+  items: ReadonlyArray<{ id: number; x: number; y: number; w: number; h: number; d: number; enemy: boolean }>,
+  opts: { gap?: number; maxLift?: number; obstacles?: readonly Rect[]; vw?: number } = {},
+): Array<{ id: number; left: number; top: number; dim: boolean }> {
+  const gap = opts.gap ?? 2, maxLift = opts.maxLift ?? 2, obstacles = opts.obstacles ?? [], vw = opts.vw ?? Infinity;
+  const order = items.map((_, i) => i).sort((a, b) => {
+    const A = items[a]!, B = items[b]!;
+    return A.d * (A.enemy ? 0.8 : 1) - B.d * (B.enemy ? 0.8 : 1) || A.id - B.id;
+  });
+  const placed: Rect[] = [];
+  const out: Array<{ id: number; left: number; top: number; dim: boolean }> = new Array(items.length);
+  const over = (rs: readonly Rect[], l: number, t: number, w: number, h: number) =>
+    rs.some((r) => l < r.right + gap && l + w > r.left - gap && t < r.bottom + gap && t + h > r.top - gap);
+  for (const i of order) {
+    const it = items[i]!;
+    let left = it.x - it.w / 2;
+    // Out from under fixed HUD pieces: to whichever side is nearer and on screen.
+    for (let pass = 0; pass < 2; pass++) {
+      const o = obstacles.find((r) => left < r.right + gap && left + it.w > r.left - gap && it.y - it.h < r.bottom + gap && it.y > r.top - gap);
+      if (!o) break;
+      const toR = o.right + gap + 2, toL = o.left - gap - 2 - it.w;
+      const rOk = toR + it.w <= vw - 4, lOk = toL >= 4;
+      if (rOk && (!lOk || toR - left <= left - toL)) left = toR; else if (lOk) left = toL; else break;
+    }
+    let top = it.y - it.h;
+    let ok = false;
+    for (let k = 0; k <= maxLift; k++) {
+      const t = it.y - it.h - k * (it.h + gap);
+      if (!over(placed, left, t, it.w, it.h) && !over(obstacles, left, t, it.w, it.h)) { top = t; ok = true; break; }
+    }
+    if (ok) placed.push({ left, top, right: left + it.w, bottom: top + it.h });
+    out[i] = { id: it.id, left, top, dim: !ok };
+  }
+  return out;
+}
+
 export class Hud {
   private cache = new Map<string, string>();
   private el = {
     root: $('hud'), solScore: $('sc-sol'), lunaScore: $('sc-luna'), timer: $('timer'), practice: $('hud-practice'),
     killfeed: $('killfeed'), net: $('net'), netPing: $('net-ping'), fps: $('fps'),
-    cd: $('cd-ring'), hitmarker: $('hitmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
+    cd: $('cd-ring'), hitmarker: $('hitmarker'), missmarker: document.getElementById('missmarker'), dmg: $('dmg-ind'), center: $('center-msg'), sub: $('sub-msg'),
     region: $('region'), hp: $('hp'), hpFill: $('hp-fill'), hpNum: $('hp-num'), protect: $('protect'),
     slots: Array.from(document.querySelectorAll<HTMLElement>('.wslot')), conn: $('banner-conn'),
     vigHurt: $('vig-hurt'), vigLow: $('vig-low'), names: $('names'), sb: $('scoreboard'), sbBody: $('sb-body'),
@@ -47,11 +124,15 @@ export class Hud {
     scoreSol: document.querySelector<HTMLElement>('.teamscore.sol'), scoreLuna: document.querySelector<HTMLElement>('.teamscore.luna'),
   };
   private bannerT = 0;
+  /** The match's combat rules: melee-only shows its chip, its key hint and a line on the first banner. */
+  private rules: RulesetId = 'classic';
+  private touchHints = false;
   private hitT = 0;
+  private missT = 0;
   private hurtT = 0;
   private centerT = 0;
   private subT = 0;
-  private nameEls = new Map<number, HTMLDivElement>();
+  private nameEls = new Map<number, Plate>();
   private floats: Array<{ el: HTMLDivElement; pos: THREE.Vector3; t: number }> = [];
   private dmgArcs: Array<{ el: HTMLElement; angle: number; t: number }> = [];
 
@@ -74,12 +155,13 @@ export class Hud {
     this.el.killfeed.innerHTML = '';
     this.el.center.hidden = true;
     this.el.sub.hidden = true;
-    this.hitT = this.hurtT = this.centerT = this.subT = 0;
+    this.hitT = this.missT = this.hurtT = this.centerT = this.subT = 0;
+    this.el.missmarker?.classList.remove('on');
     for (const f of this.floats) f.el.remove();
     this.floats = [];
     for (const a of this.dmgArcs) a.el.remove();
     this.dmgArcs = [];
-    for (const e of this.nameEls.values()) e.remove();
+    for (const p of this.nameEls.values()) p.el.remove();
     this.nameEls.clear();
   }
 
@@ -103,6 +185,16 @@ export class Hud {
     this.hitT = kind === 'kill' ? 0.32 : 0.18;
   }
 
+  /** Your own confirmed miss: pale air arcs on the side the swing finished (+1 right, -1 left). Never a hit marker. */
+  missMarker(side: 1 | -1): void {
+    const m = this.el.missmarker;
+    if (!m) return;
+    this.el.hitmarker.classList.remove('on');
+    m.classList.remove('r', 'l');
+    m.classList.add('on', side > 0 ? 'r' : 'l');
+    this.missT = 0.2;
+  }
+
   hurt(fromAngle: number | null): void {
     this.el.vigHurt.classList.add('on');
     this.hurtT = 0.2;
@@ -122,16 +214,37 @@ export class Hud {
     if (this.floats.length > 12) this.floats.shift()!.el.remove();
   }
 
-  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean): void {
+  /** `melee`: the elimination was a Chanclazo or a Revés (named next to the chancla). */
+  killfeed(attacker: string, aTeam: number, victim: string, vTeam: number, weapon: WeaponId, mine: boolean, melee = false): void {
     const row = document.createElement('div');
     row.className = `kf${mine ? ' me' : ''}`;
     const a = document.createElement('span'); a.className = aTeam === 0 ? 's' : 'l'; a.textContent = attacker;
     const w = document.createElement('span'); w.className = 'w'; w.style.backgroundImage = svgUrl(weapon === 0 ? chanclaSVG(-15) : pesadaIcon);
     const v = document.createElement('span'); v.className = vTeam === 0 ? 's' : 'l'; v.textContent = victim;
-    row.append(a, w, v);
+    row.append(a, w);
+    if (melee) { const m = document.createElement('span'); m.className = 'kf-melee'; m.textContent = t(weapon === 1 ? 'melee.reves' : 'melee.chanclazo'); row.append(m); }
+    row.append(v);
     this.el.killfeed.prepend(row);
     while (this.el.killfeed.children.length > 5) this.el.killfeed.lastElementChild!.remove();
     setTimeout(() => row.remove(), 6000);
+  }
+
+  /**
+   * The elimination replay's overlay: "REPLAY", who eliminated you (with
+   * her team's icon, colour and name) and with what. null hides it.
+   */
+  killcam(info: { name: string; team: number | null; w: 0 | 1; melee: boolean } | null): void {
+    const root = document.getElementById('killcam');
+    this.el.root.classList.toggle('killcam-on', !!info);
+    document.body.classList.toggle('killcam-on', !!info); // the subtitles live outside the HUD
+    if (!root) return;
+    root.hidden = !info;
+    if (!info) return;
+    const name = document.getElementById('kc-name')!;
+    const team = info.team === 0 || info.team === 1 ? info.team : null;
+    name.className = `kc-name${team === null ? '' : team === 0 ? ' sol' : ' luna'}`;
+    name.textContent = team === null ? info.name : `${teamIcon(team)} ${info.name} (${teamName(team)})`;
+    document.getElementById('kc-attack')!.textContent = t(attackKey(info.w, info.melee));
   }
 
   connection(text: string | null): void {
@@ -140,6 +253,7 @@ export class Hud {
 
   update(f: HudFrame, dt: number, myYaw: number): void {
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) this.el.hitmarker.classList.remove('on');
+    if (this.missT > 0 && (this.missT -= dt) <= 0) this.el.missmarker?.classList.remove('on');
     if (this.hurtT > 0 && (this.hurtT -= dt) <= 0) this.el.vigHurt.classList.remove('on');
     if (this.centerT > 0 && (this.centerT -= dt) <= 0) this.el.center.hidden = true;
     if (this.subT > 0 && (this.subT -= dt) <= 0) this.el.sub.hidden = true;
@@ -156,7 +270,7 @@ export class Hud {
       this.el.timer.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
       this.el.timer.classList.toggle('low', secs <= 30);
     });
-    this.set('practice', String(f.practice), () => (this.el.practice.hidden = !f.practice));
+    this.set('practice', String(f.practice), () => { this.el.practice.hidden = !f.practice; this.syncModes(); });
     // Which team you are on, always visible, matching the score blocks and the scoreboard.
     this.set('team', String(f.team), () => {
       const tm = f.team;
@@ -181,7 +295,9 @@ export class Hud {
     this.set('prot', String(f.protectedMs > 0 && f.alive), () => (this.el.protect.hidden = !(f.protectedMs > 0 && f.alive)));
     this.set('weapon', `${f.weapon}`, () => this.el.slots.forEach((s, i) => s.classList.toggle('on', i === f.weapon)));
     const def = WEAPONS[f.weapon]!;
-    const readyK = f.switchMs > 0 ? 0 : 1 - f.cooldownMs / def.cooldownMs;
+    // Ready when neither a throw nor a swing is recovering.
+    const meleeK = f.meleeMs && f.meleeMs > 0 ? 1 - f.meleeMs / (MELEE[f.weapon]!.cycleMs + MELEE[f.weapon]!.whiffMs) : 1;
+    const readyK = f.switchMs > 0 ? 0 : Math.min(1 - f.cooldownMs / def.cooldownMs, meleeK);
     const ring = 138.2 * (readyK >= 1 ? 1 : readyK);
     this.set('cd', ring.toFixed(0), () => (this.el.cd.style.strokeDashoffset = (readyK >= 1 ? 138.2 : 138.2 - ring).toFixed(1)));
     this.el.slots.forEach((s, i) => {
@@ -207,18 +323,69 @@ export class Hud {
     this.set('fps', `${f.showStats}:${Math.round(f.fps)}`, () => { this.el.fps.hidden = !f.showStats; this.el.fps.textContent = t('fps', { fps: Math.round(f.fps) }); });
   }
 
-  /** At spawn and respawn: a short reminder of the player's team. */
+  /** Classic shows the HUD as it always was; melee-only adds its chip and turns the swing hint into the primary button. */
+  setRules(rules: RulesetId, touch: boolean): void {
+    this.rules = rules;
+    this.touchHints = touch;
+    const melee = rules === 'melee';
+    $('hud-rules').hidden = !melee;
+    this.syncModes();
+    this.el.root.classList.toggle('melee-only', melee);
+    for (const k of this.el.root.querySelectorAll<HTMLElement>('.wmelee kbd')) k.textContent = melee ? t('mode.keys') : 'V';
+  }
+
+  private chromeRects: Rect[] | null = null;
+  private chromeT = 0;
+  /** Fixed HUD pieces name tags keep out from under, relative to the label layer. Measured at most twice a second. */
+  private chrome(): Rect[] {
+    const now = performance.now();
+    if (this.chromeRects && now - this.chromeT < 500) return this.chromeRects;
+    this.chromeT = now;
+    const base = this.el.names.getBoundingClientRect();
+    const out: Rect[] = [];
+    for (const el of this.el.root.querySelectorAll<HTMLElement>(PLATE_CHROME)) {
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height) out.push({ left: r.left - base.left, top: r.top - base.top, right: r.right - base.left, bottom: r.bottom - base.top });
+    }
+    return (this.chromeRects = out);
+  }
+
+  /** Practice and the melee-only chip share one compact line; it hides when neither shows. */
+  private syncModes(): void {
+    const box = document.getElementById('hud-modes');
+    if (box) box.hidden = this.el.practice.hidden && $('hud-rules').hidden;
+  }
+
+  /** Where the visible name tags are, in px relative to the label layer (the cafecito hint keeps off them). From the last placement: no layout read. */
+  nameRects(): Array<{ left: number; top: number; right: number; bottom: number }> {
+    const out = [];
+    for (const pl of this.nameEls.values()) if (pl.on && pl.rect && pl.w) out.push(pl.rect);
+    return out;
+  }
+
+  /** At spawn and respawn: a short reminder of the player's team (and, on the first, of melee-only rules). */
   spawnBanner(team: number, first: boolean): void {
-    this.el.banner.className = `spawn-banner ${team === 0 ? 'sol' : 'luna'}${first ? ' first' : ''}`;
+    const rulesLine = first && this.rules === 'melee';
+    this.el.banner.className = `spawn-banner ${team === 0 ? 'sol' : 'luna'}${first ? ' first' : ''}${rulesLine ? ' with-rules' : ''}`;
     this.el.bannerIcon.textContent = teamIcon(team);
     this.el.bannerText.textContent = t('hud.youAre', { team: teamName(team).toUpperCase() });
+    const rl = $('spawn-banner-rules');
+    rl.hidden = !rulesLine;
+    if (rulesLine) rl.textContent = `${t('mode.chip')} · ${t(this.touchHints ? 'mode.introTouch' : 'mode.intro')}`;
     this.el.banner.hidden = false;
     this.bannerT = first ? 2.8 : 1.6;
   }
 
   // Name tags above players, plus floating damage numbers. Teammates and
-  // opponents differ by a role tag and its shape, not only by team colour.
-  // Visibility rules are the caller's: opponents only in plain sight.
+  // opponents differ by a role glyph and its badge shape (a diamond on a
+  // light badge, a cross on a dark one) and the ally outline, not only by
+  // team colour. Visibility rules are the caller's: opponents only in plain
+  // sight. Distance picks a tier (near: role word, name, bar; mid: glyph,
+  // name, bar; far: glyph and name, smaller) and declutterPlates keeps the
+  // nearer tags clear: a farther one stacks above, or fades when it cannot.
+  // DOM: content and class are written only when they change, sizes are
+  // measured only then (offsetWidth, batched after all writes), and the
+  // per-frame work is one transform per visible tag.
   placeLabels(
     camera: THREE.Camera, w: number, h: number,
     players: Array<{ id: number; name: string; team: number; pos: THREE.Vector3; hp: number; visible: boolean; bot: boolean }>,
@@ -227,32 +394,62 @@ export class Hud {
   ): void {
     const seen = new Set<number>();
     const v = new THREE.Vector3();
+    const e = camera.matrixWorld.elements;
+    const cx = e[12]!, cy = e[13]!, cz = e[14]!;
+    const shown: Array<{ p: Plate; ax: number; ay: number; d: number; enemy: boolean }> = [];
     for (const p of players) {
-      let el = this.nameEls.get(p.id);
-      if (!el) {
-        el = document.createElement('div');
+      let pl = this.nameEls.get(p.id);
+      if (!pl) {
+        const el = document.createElement('div');
         el.className = 'nameplate';
-        el.innerHTML = '<span class="role"></span><span class="n"></span><span class="bar"><i></i></span>';
+        el.innerHTML = '<span class="role"></span><span class="n"></span><span class="bot"></span><span class="bar"><i></i></span>';
+        el.style.display = 'none';
         this.el.names.appendChild(el);
-        this.nameEls.set(p.id, el);
+        pl = {
+          el, role: el.querySelector('.role') as HTMLElement, n: el.querySelector('.n') as HTMLElement,
+          bot: el.querySelector('.bot') as HTMLElement, hp: el.querySelector('i') as HTMLElement,
+          on: false, tier: -1, key: '', hpW: '', tx: '', w: 0, h: 0, rect: null,
+        };
+        this.nameEls.set(p.id, pl);
       }
       seen.add(p.id);
       v.copy(p.pos).project(camera);
       const on = p.visible && v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
-      el.style.display = on ? 'flex' : 'none';
+      if (on !== pl.on) { pl.on = on; pl.el.style.display = on ? 'flex' : 'none'; if (on) pl.w = 0; }
+      pl.rect = null;
       if (!on) continue;
+      const d = Math.hypot(p.pos.x - cx, p.pos.y - cy, p.pos.z - cz);
+      pl.tier = plateTier(d, pl.tier);
       const ally = myTeam !== null && p.team === myTeam;
-      el.className = `nameplate ${p.team === 0 ? 'sol' : 'luna'} ${ally ? 'ally' : 'enemy'}`;
-      const role = el.querySelector('.role') as HTMLElement;
-      const roleText = ally ? `◆ ${t('hud.ally')}` : `✖ ${t('hud.enemy')}`;
-      if (role.textContent !== roleText) role.textContent = roleText;
-      const n = el.querySelector('.n') as HTMLElement;
-      const label = `${p.team === 0 ? '☀' : '☾'} ${p.name}${p.bot ? ` · ${t('lobby.bot')}` : ''}`;
-      if (n.textContent !== label) n.textContent = label;
-      (el.querySelector('i') as HTMLElement).style.width = `${Math.max(0, p.hp)}%`;
-      el.style.transform = `translate(${((v.x + 1) / 2 * w).toFixed(1)}px, ${((1 - v.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
+      const cls = `nameplate ${p.team === 0 ? 'sol' : 'luna'} ${ally ? 'ally' : 'enemy'} t${pl.tier}`;
+      const key = `${cls}|${p.name}|${p.bot}|${getLang()}`;
+      if (key !== pl.key) {
+        pl.key = key;
+        pl.el.className = cls;
+        pl.role.textContent = pl.tier === 0 ? `${ally ? '◆' : '✖'} ${t(ally ? 'hud.ally' : 'hud.enemy')}` : ally ? '◆' : '✖';
+        pl.n.textContent = `${p.team === 0 ? '☀' : '☾'} ${p.name}`;
+        pl.bot.textContent = p.bot ? t('lobby.bot') : '';
+        pl.w = 0; // remeasure
+      }
+      const hpW = `${Math.max(0, Math.min(100, Math.round(p.hp)))}%`;
+      if (hpW !== pl.hpW) { pl.hpW = hpW; pl.hp.style.width = hpW; }
+      shown.push({ p: pl, ax: (v.x + 1) / 2 * w, ay: (1 - v.y) / 2 * h, d, enemy: !ally });
     }
-    for (const [id, el] of this.nameEls) if (!seen.has(id)) { el.remove(); this.nameEls.delete(id); }
+    // Sizes: read only for tags whose content changed, after every write above (one layout at most).
+    for (const s of shown) if (!s.p.w) { s.p.w = s.p.el.offsetWidth; s.p.h = s.p.el.offsetHeight; }
+    // Anchors are pulled in so the whole tag stays on screen (a player at the edge of view would otherwise show half a tag).
+    const placed = declutterPlates(
+      shown.map((s, i) => ({ id: i, x: Math.min(Math.max(s.ax, s.p.w / 2 + 4), w - s.p.w / 2 - 4), y: s.ay, w: s.p.w, h: s.p.h, d: s.d, enemy: s.enemy })),
+      { obstacles: shown.length ? this.chrome() : [], vw: w },
+    );
+    for (let i = 0; i < shown.length; i++) {
+      const pl = shown[i]!.p, q = placed[i]!;
+      const tx = `translate(${Math.round(q.left)}px, ${Math.round(q.top)}px)`;
+      if (tx !== pl.tx) { pl.tx = tx; pl.el.style.transform = tx; }
+      if (q.dim !== pl.el.classList.contains('dim')) pl.el.classList.toggle('dim', q.dim);
+      pl.rect = { left: q.left, top: q.top, right: q.left + pl.w, bottom: q.top + pl.h };
+    }
+    for (const [id, pl] of this.nameEls) if (!seen.has(id)) { pl.el.remove(); this.nameEls.delete(id); }
     for (const f of this.floats) {
       f.t += dt;
       v.copy(f.pos);
@@ -267,6 +464,9 @@ export class Hud {
 
   scoreboard(open: boolean, room: RoomView | null, stats: Map<number, { k: number; d: number }>, me: number): void {
     this.el.sb.hidden = !open;
+    // The touch Scores button shows whether the scoreboard is open.
+    const btn = document.getElementById('ft-score');
+    if (btn) { btn.setAttribute('aria-pressed', String(open)); btn.classList.toggle('on', open); }
     if (!open || !room) return;
     const rows = [...room.members].sort((a, b) => a.team - b.team || (stats.get(b.id)?.k ?? 0) - (stats.get(a.id)?.k ?? 0));
     const table = document.createElement('table');

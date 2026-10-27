@@ -16,7 +16,7 @@ import { chanclaGrip, fpChanclaGeometry, fpPesadaGeometry, pesadaGrip } from './
 const SKIN = PALETTE.skin1;
 const NAIL = 0xc0142f;
 
-interface Grip { z: number; xl: number; xr: number; yb: number; yt: number }
+export interface Grip { z: number; xl: number; xr: number; yb: number; yt: number }
 
 interface GripOpts {
   /** Where the knuckles sit under the item, as a fraction of its width from the left edge. */
@@ -35,7 +35,7 @@ interface GripOpts {
  * The fingers' path round the grip cross-section: from the knuckles under the
  * item, round its left edge and back over the top face (offset by `o`).
  */
-function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
+export function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
   const pts: THREE.Vector2[] = [new THREE.Vector2(kx, g.yb - o)];
   const corner = (cx: number, cy: number, a0: number, a1: number) => {
     for (let i = 0; i <= 4; i++) { const a = a0 + ((a1 - a0) * i) / 4; pts.push(new THREE.Vector2(cx + Math.cos(a) * o, cy + Math.sin(a) * o)); }
@@ -46,7 +46,7 @@ function wrapPath(g: Grip, o: number, kx: number): THREE.Vector2[] {
   return pts;
 }
 
-function along(path: THREE.Vector2[], dist: number): THREE.Vector2 {
+export function along(path: THREE.Vector2[], dist: number): THREE.Vector2 {
   let d = dist;
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i]!, b = path[i + 1]!, l = a.distanceTo(b);
@@ -133,7 +133,9 @@ function gripSkin(g: Grip, opt: GripOpts): GripBuild {
   const forearm = new THREE.Vector3(...opt.forearm).normalize();
   const w0 = new THREE.Vector3(px1 - 0.016, py, g.z + 0.006);
   const wrist = w0.clone().addScaledVector(forearm, 0.03);
-  const w = segment(w0, wrist.clone().addScaledVector(forearm, 0.05), 0.029, 0.03, 10);
+  // On under the bangles to the cuff (slimmer than them), so the wrist runs
+  // on in the forearm's line instead of stopping short of the sleeve.
+  const w = segment(w0, wrist.clone().addScaledVector(forearm, 0.07), 0.029, 0.03, 10);
   // Flatten across the thickness of the hand.
   const flat = new THREE.Matrix4().makeTranslation(w0.x, w0.y, w0.z)
     .multiply(new THREE.Matrix4().makeScale(1, 0.7, 1))
@@ -153,7 +155,9 @@ function gripSkin(g: Grip, opt: GripOpts): GripBuild {
 function sideGrip(g: Grip): GripBuild {
   // Item (x, y) -> turned (y, -x).
   const t: Grip = { z: g.z, xl: g.yb, xr: g.yt, yb: -g.xr, yt: -g.xl };
-  const b = gripSkin(t, { knuckle: 0.25, reach: 1.0, clear: 0.002, forearm: [0.55, -0.55, 0.62], thumb: 'along' });
+  // Knuckles halfway down the side, so the fingers hook round the edge of the
+  // heel block instead of lying out flat under the sole.
+  const b = gripSkin(t, { knuckle: 0.5, reach: 1.0, clear: 0.002, forearm: [0.55, -0.55, 0.62], thumb: 'along' });
   const back = new THREE.Matrix4().makeRotationZ(Math.PI / 2); // turned (x, y) -> item (-y, x)
   b.skin.applyMatrix4(back);
   b.wrist.applyMatrix4(back);

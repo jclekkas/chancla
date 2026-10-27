@@ -102,3 +102,21 @@ describe('graphics benchmark scene', () => {
     });
   });
 });
+
+describe('character and combat workload', () => {
+  it('is a pure function of scene time, with events at fixed times', async () => {
+    const { combatAt, combatEvents } = await import('../src/fps/bench');
+    for (const t of [0, 0.33, 1.2, 1.5, 12.71, 69.9]) expect(JSON.stringify(combatAt(tl, t))).toBe(JSON.stringify(combatAt(tl, t)));
+    // Splitting the timeline into frames of any size yields the same events.
+    const run = (dt: number) => { const out: string[] = []; for (let t = 0; t < 30; t += dt) out.push(...combatEvents(t, Math.min(30, t + dt)).map((e) => `${e.kind}@${e.at.toFixed(4)}`)); return out; };
+    expect(run(1 / 60)).toEqual(run(1 / 7));
+    const one = combatEvents(0, 2.4);
+    expect(one.map((e) => e.kind)).toEqual(['hit', 'impact', 'whiff', 'impact']);
+    // B's roller is off from the hit until the next cycle.
+    expect(combatAt(tl, 0.2).walkers[1]!.ruleros).toBe(15);
+    expect(combatAt(tl, 0.5).walkers[1]!.ruleros).toBe(14);
+    expect(combatAt(tl, 2.6).walkers[1]!.ruleros).toBe(15);
+    expect(benchParams('?bench&scene=combat')!.scene).toBe('combat');
+    expect(benchParams('?bench')!.scene).toBe('cafe');
+  });
+});

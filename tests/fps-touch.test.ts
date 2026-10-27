@@ -179,6 +179,15 @@ describe('touch controls', () => {
     expect(sb).toEqual([true, false]);
   });
 
+  it('the Scores button is a labelled scoreboard toggle, not a second menu icon', () => {
+    const b = $('ft-score');
+    expect(b.dataset.tAria).toBe('touch.scoresAria');
+    expect(b.getAttribute('aria-pressed')).toBe('false');
+    expect(b.querySelector('svg.ft-sico')).not.toBeNull();
+    expect(b.querySelector('.ft-lbl')!.getAttribute('data-t')).toBe('touch.scores');
+    expect(b.textContent).not.toContain('≡');
+  });
+
   it('the Throw button shows its cooldown', () => {
     touch.setReady(0.25);
     expect($('ft-throw').style.getPropertyValue('--ready')).toBe('0.250');

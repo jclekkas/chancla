@@ -2,7 +2,7 @@
 // Transport-agnostic: members talk through a Conn, so the WebSocket server
 // and the in-browser practice host run exactly this code.
 
-import { MATCH, NET, type BotDifficulty } from './config';
+import { DEFAULT_RULESET, MATCH, NET, type BotDifficulty, type RulesetId } from './config';
 import { MatchSim, BTN, type SimEvent } from './sim';
 import type { Team } from './map';
 import { DEFAULT_MAP, mapData, type MapId } from './maps';
@@ -32,6 +32,8 @@ export interface Member {
 
 const BOT_NAMES = ['Lupita', 'Chayo', 'Conchita', 'Doña Mago', 'Tía Chela', 'Nena', 'Doña Pili', 'Cuca'];
 const TICK_MS = 1000 / NET.tickRate;
+/** A knockback this recent is still under way when practice pauses: its momentum is kept. */
+const PAUSE_KNOCK_KEEP_MS = 250;
 const SNAP_EVERY = Math.round(NET.tickRate / NET.snapshotRate);
 
 export interface RoomOptions {
@@ -52,6 +54,7 @@ export class Room {
   results: Results | null = null;
   bots: { enabled: boolean; difficulty: BotDifficulty } = { enabled: false, difficulty: 'normal' };
   map: MapId = DEFAULT_MAP;
+  rules: RulesetId = DEFAULT_RULESET;
   emptySince: number;
   private acc = 0;
   private lastUpdate = -1;
@@ -104,7 +107,7 @@ export class Room {
     };
     this.members.set(id, m);
     if (this.owner < 0 || !this.members.has(this.owner)) this.owner = id;
-    if (this.sim) this.sim.addPlayer(id, team);
+    if (this.sim) { this.sim.addPlayer(id, team); this.sim.setViewDelay(id, viewDelay(0)); }
     this.fillBots();
     this.roomDirty = true;
     return m;
@@ -184,7 +187,7 @@ export class Room {
       .map((m) => ({ id: m.id, name: m.name, team: m.team, ready: m.bot || m.ready || m.id === this.owner, connected: m.bot || !!m.conn, bot: m.bot, ping: m.ping }));
     return {
       code: this.code, owner: this.owner, phase: this.phase, practice: this.practice, members,
-      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize, map: this.map,
+      bots: { ...this.bots }, results: this.results, maxPlayers: MATCH.maxPlayers, teamSize: MATCH.teamSize, map: this.map, rules: this.rules,
     };
   }
 
@@ -230,6 +233,12 @@ export class Room {
         if (this.phase !== 'lobby' && this.phase !== 'results') return 'bad_message';
         if (this.map !== msg.map) { this.map = msg.map; this.roomDirty = true; }
         return null;
+      case 'rules':
+        // Like the map: the owner's call between matches, broadcast to everyone; a match keeps the rules it started with.
+        if (!isOwner) return 'not_owner';
+        if (this.phase !== 'lobby' && this.phase !== 'results') return 'bad_message';
+        if (this.rules !== msg.rules) { this.rules = msg.rules; this.roomDirty = true; }
+        return null;
       case 'start':
         if (!isOwner) return 'not_owner';
         if (this.phase !== 'lobby') return 'bad_message';
@@ -252,7 +261,7 @@ export class Room {
         const sp = this.sim?.players.get(id);
         if (!sp) return null;
         for (const d of msg.d) {
-          this.sim!.queueInput(id, { seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4], buttons: d[5] & 7, weapon: weaponOf(d[6]) });
+          this.sim!.queueInput(id, { seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4], buttons: d[5] & 15, weapon: weaponOf(d[6]) });
         }
         return null;
       }
@@ -267,6 +276,7 @@ export class Room {
     const m = this.members.get(id);
     if (!m || m.bot) return;
     if (Math.abs(m.ping - ms) >= 15 || (m.ping === 0) !== (ms === 0)) { m.ping = ms; this.roomDirty = true; }
+    this.sim?.setViewDelay(id, viewDelay(ms));
   }
 
   // Everyone but the owner must be ready; at least two participants.
@@ -284,12 +294,13 @@ export class Room {
     // Rebalance if one team is over capacity (people may have left).
     const sim = new MatchSim(mapData(this.map), {
       seed: this.opts.seed ?? Math.floor(Math.random() * 1e9),
-      durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs,
+      durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs, rules: this.rules,
     });
     this.sim = sim;
     for (const m of this.members.values()) {
       const p = sim.addPlayer(m.id, m.team, m.bot);
       if (!m.bot && !m.conn) p.active = false;
+      if (!m.bot) sim.setViewDelay(m.id, viewDelay(m.ping));
       if (m.bot) m.brain = new BotBrain(sim, m.id, this.bots.difficulty);
       m.snapPending = true;
     }
@@ -339,6 +350,37 @@ export class Room {
     return true;
   }
 
+  /**
+   * The practice pause transition. Nothing is simulated: the match clock,
+   * bots, projectiles, swings and cooldowns stay exactly where they are.
+   * For each connected player:
+   *   - inputs sent but not yet simulated are discarded and counted as
+   *     acknowledged, so the client drops them instead of replaying them;
+   *   - a buffered melee press is dropped (it was intent, not an action);
+   *   - walking momentum on the ground goes with the intent that produced
+   *     it; a jump arc or a knockback taken in the last PAUSE_KNOCK_KEEP_MS
+   *     is left as it is and carries on after Resume.
+   * A snapshot goes out at once so the client's prediction matches.
+   */
+  pauseSync(): Array<{ id: number; ackBefore: number; discarded: number; keptVelocity: boolean }> {
+    const out: Array<{ id: number; ackBefore: number; discarded: number; keptVelocity: boolean }> = [];
+    const sim = this.sim;
+    if (!sim || (this.phase !== 'countdown' && this.phase !== 'playing')) return out;
+    for (const m of this.members.values()) {
+      if (m.bot || !m.conn) continue;
+      const p = sim.players.get(m.id);
+      if (!p) continue;
+      const ackBefore = p.lastSeq, discarded = p.queue.length;
+      if (discarded) { p.lastSeq = p.queue[discarded - 1]!.seq; p.queue.length = 0; }
+      p.meleeQueued = false;
+      const keptVelocity = !p.alive || !p.body.onGround || sim.timeMs - p.lastHitAt < PAUSE_KNOCK_KEEP_MS;
+      if (!keptVelocity) { p.body.vx = 0; p.body.vz = 0; }
+      out.push({ id: m.id, ackBefore, discarded, keptVelocity });
+    }
+    this.sendSnapshots();
+    return out;
+  }
+
   private tick(): void {
     const sim = this.sim!;
     for (const m of this.members.values()) {
@@ -379,6 +421,7 @@ export class Room {
       players.push([
         p.id, r2(p.body.x), r2(p.body.y), r2(p.body.z), r3(p.yaw), r3(p.pitch), r2(p.body.vx), r2(p.body.vz), flags, p.hp, p.weapon,
         Math.min(9999, Math.round(sim.timeMs - p.lastThrowAt)), Math.min(9999, Math.round(sim.timeMs - p.lastHitAt)),
+        Math.min(9999, Math.round(sim.timeMs - p.lastMeleeAt)), p.ruleros,
       ]);
     }
     const ev = this.eventBuf;
@@ -389,8 +432,9 @@ export class Room {
       const p = sim.players.get(m.id);
       const me: SelfTuple | null = p ? [
         p.body.x, p.body.y, p.body.z, p.body.vx, p.body.vy, p.body.vz,
-        (p.alive ? 1 : 0) | (p.body.crouched ? 2 : 0) | (p.body.onGround ? 4 : 0), p.hp, Math.round(p.cooldownMs), Math.round(p.switchMs), p.weapon,
+        (p.alive ? 1 : 0) | (p.body.crouched ? 2 : 0) | (p.body.onGround ? 4 : 0) | (p.meleeQueued ? 8 : 0), p.hp, Math.round(p.cooldownMs), Math.round(p.switchMs), p.weapon,
         p.alive ? 0 : Math.max(0, Math.round(p.respawnAt - sim.timeMs)), Math.max(0, Math.round(p.protectedUntil - sim.timeMs)),
+        Math.round(p.meleeMs),
       ] : null;
       const snap: Snapshot = {
         t: 'snap', k: sim.tick, st: Math.round(sim.timeMs), ack: p?.lastSeq ?? 0, ph: this.phase,
@@ -403,6 +447,10 @@ export class Room {
 }
 
 function r2(v: number): number { return Math.round(v * 100) / 100; }
+
+// How far behind the server a client draws the other players: the
+// interpolation delay plus half its round trip. Melee contact is judged there.
+function viewDelay(pingMs: number): number { return NET.interpDelayMs + pingMs / 2; }
 function r3(v: number): number { return Math.round(v * 1000) / 1000; }
 
 function performanceNow(): number {

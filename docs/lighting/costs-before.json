@@ -1,0 +1,179 @@
+{
+ "env": {
+  "gpu": false,
+  "webgl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "renderer": "Chromium, SwiftShader (software)",
+  "host": "linux x64 Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "at": "2026-10-24T18:33:49.623Z"
+ },
+ "costs": {
+  "patio/sun-close-high": {
+   "calls": 136,
+   "tris": 133688,
+   "medianMs": 333.4,
+   "p95Ms": 333.4,
+   "frames": 1
+  },
+  "patio/sun-combat-high": {
+   "calls": 142,
+   "tris": 133914,
+   "medianMs": 366.6,
+   "p95Ms": 366.6,
+   "frames": 1
+  },
+  "patio/alley-shade-high": {
+   "calls": 138,
+   "tris": 133692,
+   "medianMs": 383.3,
+   "p95Ms": 383.3,
+   "frames": 1
+  },
+  "patio/sun-close-medium": {
+   "calls": 128,
+   "tris": 114346,
+   "medianMs": 800,
+   "p95Ms": 800,
+   "frames": 1
+  },
+  "patio/sun-combat-medium": {
+   "calls": 134,
+   "tris": 114572,
+   "medianMs": 250,
+   "p95Ms": 250,
+   "frames": 2
+  },
+  "patio/alley-shade-medium": {
+   "calls": 130,
+   "tris": 114350,
+   "medianMs": 249.9,
+   "p95Ms": 249.9,
+   "frames": 2
+  },
+  "patio/sun-close-low": {
+   "calls": 89,
+   "tris": 63664,
+   "medianMs": 100,
+   "p95Ms": 116.7,
+   "frames": 6
+  },
+  "patio/sun-combat-low": {
+   "calls": 95,
+   "tris": 63890,
+   "medianMs": 100,
+   "p95Ms": 116.7,
+   "frames": 6
+  },
+  "patio/alley-shade-low": {
+   "calls": 91,
+   "tris": 63668,
+   "medianMs": 116.6,
+   "p95Ms": 116.7,
+   "frames": 6
+  },
+  "patio/sun-close-phone-low": {
+   "calls": 91,
+   "tris": 63688,
+   "medianMs": 133.3,
+   "p95Ms": 133.4,
+   "frames": 6
+  },
+  "plaza/market-high": {
+   "calls": 150,
+   "tris": 132398,
+   "medianMs": 266.6,
+   "p95Ms": 266.8,
+   "frames": 3
+  },
+  "plaza/walkway-high": {
+   "calls": 149,
+   "tris": 132374,
+   "medianMs": 566.7,
+   "p95Ms": 566.7,
+   "frames": 1
+  },
+  "plaza/market-medium": {
+   "calls": 142,
+   "tris": 110662,
+   "medianMs": 216.7,
+   "p95Ms": 216.7,
+   "frames": 2
+  },
+  "plaza/walkway-medium": {
+   "calls": 141,
+   "tris": 110638,
+   "medianMs": 283.4,
+   "p95Ms": 283.4,
+   "frames": 2
+  },
+  "plaza/market-low": {
+   "calls": 103,
+   "tris": 54036,
+   "medianMs": 99.9,
+   "p95Ms": 100.1,
+   "frames": 6
+  },
+  "plaza/walkway-low": {
+   "calls": 102,
+   "tris": 54012,
+   "medianMs": 100,
+   "p95Ms": 133.3,
+   "frames": 6
+  },
+  "plaza/market-phone-low": {
+   "calls": 103,
+   "tris": 54036,
+   "medianMs": 66.6,
+   "p95Ms": 66.7,
+   "frames": 9
+  },
+  "fiesta/dance-floor-high": {
+   "calls": 145,
+   "tris": 120872,
+   "medianMs": 250,
+   "p95Ms": 250,
+   "frames": 1
+  },
+  "fiesta/hedge-route-high": {
+   "calls": 155,
+   "tris": 121360,
+   "medianMs": 283.3,
+   "p95Ms": 283.3,
+   "frames": 2
+  },
+  "fiesta/dance-floor-medium": {
+   "calls": 137,
+   "tris": 86988,
+   "medianMs": 200,
+   "p95Ms": 216.6,
+   "frames": 3
+  },
+  "fiesta/hedge-route-medium": {
+   "calls": 147,
+   "tris": 87476,
+   "medianMs": 433.4,
+   "p95Ms": 433.4,
+   "frames": 1
+  },
+  "fiesta/dance-floor-low": {
+   "calls": 98,
+   "tris": 40294,
+   "medianMs": 66.7,
+   "p95Ms": 83.3,
+   "frames": 10
+  },
+  "fiesta/hedge-route-low": {
+   "calls": 108,
+   "tris": 40782,
+   "medianMs": 66.7,
+   "p95Ms": 83.4,
+   "frames": 8
+  },
+  "fiesta/dance-floor-phone-low": {
+   "calls": 98,
+   "tris": 40294,
+   "medianMs": 66.6,
+   "p95Ms": 100,
+   "frames": 10
+  }
+ }
+}

@@ -1,0 +1,196 @@
+[
+ {
+  "name": "practice: Classic is selected by default",
+  "ok": true
+ },
+ {
+  "name": "practice: choosing ¡Puro Chanclazo! suggests La Fiesta",
+  "ok": true,
+  "detail": {
+   "melee": "true",
+   "map": "fiesta"
+  }
+ },
+ {
+  "name": "melee-only HUD: mode chip shown, swing key reads Click · V",
+  "ok": true,
+  "detail": {
+   "chip": true,
+   "kbd": "Click · V",
+   "rules": "melee"
+  }
+ },
+ {
+  "name": "primary held 1.2 s: one Chanclazo, no throw",
+  "ok": true,
+  "detail": {
+   "swings": 1,
+   "throws": 0,
+   "hits": 1
+  }
+ },
+ {
+  "name": "primary and V together: one swing",
+  "ok": true,
+  "detail": {
+   "swings": 1
+  }
+ },
+ {
+  "name": "V alone still swings",
+  "ok": true
+ },
+ {
+  "name": "switch to La Pesada: the primary button is El Revés",
+  "ok": true,
+  "detail": {
+   "weapon": 1,
+   "botHp": 55
+  }
+ },
+ {
+  "name": "pause: menu shows Combat mode: ¡Puro Chanclazo!",
+  "ok": true,
+  "detail": {
+   "screen": "pause",
+   "line": "Combat mode: ¡Puro Chanclazo!"
+  }
+ },
+ {
+  "name": "resume: back in play",
+  "ok": true,
+  "detail": {
+   "swings": 5,
+   "throws": 0,
+   "meleeHits": 4,
+   "weapon": 1,
+   "botHp": 55,
+   "rules": "melee",
+   "refused": 0,
+   "held": 0,
+   "vy": 0,
+   "onGround": true,
+   "screen": "none"
+  }
+ },
+ {
+  "name": "killcam: attributed to El Revés (a primary-button swing)",
+  "ok": true,
+  "detail": "Eliminated by ☾ Lupita (Luna) · El Revés"
+ },
+ {
+  "name": "a press shorter than a tick still swings once",
+  "ok": true,
+  "detail": {
+   "swings": 1
+  }
+ },
+ {
+  "name": "Classic again: no chip, V hint, nothing held",
+  "ok": true,
+  "detail": {
+   "chip": false,
+   "kbd": "V",
+   "rules": "classic",
+   "held": 0
+  }
+ },
+ {
+  "name": "Classic again: the primary button throws",
+  "ok": true,
+  "detail": {
+   "swings": 0,
+   "throws": 1,
+   "meleeHits": 0,
+   "weapon": 0,
+   "botHp": 49,
+   "rules": "classic",
+   "refused": 0,
+   "held": 0,
+   "vy": 0,
+   "onGround": true,
+   "screen": "none",
+   "inputEnabled": true
+  }
+ },
+ {
+  "name": "switching modes in one page: Classic restored, nothing held carried over",
+  "ok": true,
+  "detail": {
+   "heldBefore": 1,
+   "after": 0,
+   "rules": "classic"
+  }
+ },
+ {
+  "name": "phone (en): the throw button is the Slap button; the duplicate melee button is gone; jump and menu there",
+  "ok": true,
+  "detail": {
+   "label": "Slap",
+   "aria": "Slap",
+   "melee": false,
+   "jump": true,
+   "menu": true
+  }
+ },
+ {
+  "name": "phone: a tap on Slap is one swing, no throw",
+  "ok": true,
+  "detail": {
+   "swings": 1
+  }
+ },
+ {
+  "name": "phone: jump works",
+  "ok": true,
+  "detail": {
+   "vy": 4.900000000000002,
+   "onGround": false
+  }
+ },
+ {
+  "name": "phone: menu opens",
+  "ok": true
+ },
+ {
+  "name": "phone, Classic: Throw and the melee button as before",
+  "ok": true,
+  "detail": {
+   "label": "Throw",
+   "melee": true
+  }
+ },
+ {
+  "name": "phone (es): the throw button is the Chanclazo button; the duplicate melee button is gone; jump and menu there",
+  "ok": true,
+  "detail": {
+   "label": "Chanclazo",
+   "aria": "Chanclazo",
+   "melee": false,
+   "jump": true,
+   "menu": true
+  }
+ },
+ {
+  "name": "lobby: the host sees ¡Puro Chanclazo! and can change it",
+  "ok": true,
+  "detail": {
+   "melee": "true",
+   "classicDisabled": false,
+   "rules": "Team deathmatch · melee only · 5 minutes · first team to 25 · respawn in 3 s · no friendly fire"
+  }
+ },
+ {
+  "name": "lobby: the joiner (Classic saved) gets the host's ¡Puro Chanclazo!, read-only",
+  "ok": true,
+  "detail": {
+   "melee": "true",
+   "classicDisabled": true,
+   "rules": "Team deathmatch · melee only · 5 minutes · first team to 25 · respawn in 3 s · no friendly fire"
+  }
+ },
+ {
+  "name": "lobby: the host's change reaches the joiner",
+  "ok": true
+ }
+]

@@ -1,0 +1,446 @@
+{
+ "results": [
+  {
+   "name": "chanclazo: replay starts after the death screen",
+   "ok": true,
+   "detail": {
+    "view": "melee",
+    "length": 1500,
+    "killer": 1000
+   }
+  },
+  {
+   "name": "chanclazo: the melee view (both of them, not her eyes), 1.5 s (1.2 s before the blow, 0.3 s after)",
+   "ok": true,
+   "detail": {
+    "view": "melee",
+    "length": 1500
+   }
+  },
+  {
+   "name": "chanclazo: the contact is on screen and no overlay covers it (desktop)",
+   "ok": true,
+   "detail": {
+    "ok": true,
+    "x": 484,
+    "y": 267,
+    "covers": [],
+    "active": true
+   }
+  },
+  {
+   "name": "chanclazo: overlay names killer, team and attack",
+   "ok": true,
+   "detail": "Eliminated by ☾ Lupita (Luna) · El Chanclazo"
+  },
+  {
+   "name": "chanclazo: live health, scores, timer, crosshair and kill feed hidden",
+   "ok": true,
+   "detail": {
+    "overlay": true,
+    "by": "Eliminated by ☾ Lupita (Luna) · El Chanclazo",
+    "nameClass": "kc-name luna",
+    "hp": false,
+    "scores": false,
+    "timer": false,
+    "crosshair": false,
+    "killfeed": false,
+    "menu": false,
+    "skip": true,
+    "tap": false
+   }
+  },
+  {
+   "name": "chanclazo: menu button kept; desktop Skip shown, no tap layer",
+   "ok": true,
+   "detail": {
+    "overlay": true,
+    "by": "Eliminated by ☾ Lupita (Luna) · El Chanclazo",
+    "nameClass": "kc-name luna",
+    "hp": false,
+    "scores": false,
+    "timer": false,
+    "crosshair": false,
+    "killfeed": false,
+    "menu": false,
+    "skip": true,
+    "tap": false
+   }
+  },
+  {
+   "name": "chanclazo: the attacker is drawn mid-swing in the replay",
+   "ok": true,
+   "detail": {
+    "startedAt": 12394,
+    "endedAt": 14026,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.54,
+    "frames": 14
+   }
+  },
+  {
+   "name": "chanclazo: plays to its end in real time, then the death screen",
+   "ok": true,
+   "detail": {
+    "startedAt": 12394,
+    "endedAt": 14026,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.54,
+    "frames": 14
+   }
+  },
+  {
+   "name": "chanclazo: two replay sounds at most (the swing and the slap)",
+   "ok": true,
+   "detail": 2
+  },
+  {
+   "name": "chanclazo: one kill and one death scored; the replay adds no damage, score or kill",
+   "ok": true,
+   "detail": {
+    "before": {
+     "scores": [
+      0,
+      0
+     ],
+     "botHp": 100,
+     "deaths": 0
+    },
+    "after": {
+     "scores": [
+      0,
+      1
+     ],
+     "botHp": 100,
+     "deaths": 1,
+     "kills": 1,
+     "alive": true,
+     "held": 0,
+     "vy": 0,
+     "onGround": true
+    }
+   }
+  },
+  {
+   "name": "revés: the melee view, the attacker drawn mid-swing",
+   "ok": true,
+   "detail": {
+    "startedAt": 17465,
+    "endedAt": 19118,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 2,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.32,
+    "frames": 14
+   }
+  },
+  {
+   "name": "revés: the rollers the server sent fly once in the replay",
+   "ok": true,
+   "detail": {
+    "shown": 2,
+    "sent": 4,
+    "expected": 2
+   }
+  },
+  {
+   "name": "thrown: replay with the chancla in flight",
+   "ok": true,
+   "detail": {
+    "startedAt": 22337,
+    "endedAt": 24045,
+    "reason": "done",
+    "view": "attacker",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 1,
+    "shownMs": 1500,
+    "swingShown": false,
+    "jsMsPerFrame": 0.36,
+    "frames": 13
+   }
+  },
+  {
+   "name": "thrown: overlay says La Chancla, thrown",
+   "ok": true,
+   "detail": "Eliminated by ☾ Lupita (Luna) · La Chancla, thrown"
+  },
+  {
+   "name": "Space skips the replay",
+   "ok": true,
+   "detail": {
+    "startedAt": 26959,
+    "endedAt": 26993,
+    "reason": "skip",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 0,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 0,
+    "swingShown": false,
+    "jsMsPerFrame": 0.4,
+    "frames": 1
+   }
+  },
+  {
+   "name": "after Skip: back to the death screen, nothing held",
+   "ok": true,
+   "detail": {
+    "scores": [
+     0,
+     4
+    ],
+    "botHp": 100,
+    "deaths": 4,
+    "kills": 4,
+    "alive": false,
+    "held": 0,
+    "vy": 0,
+    "onGround": true
+   }
+  },
+  {
+   "name": "Space held through respawn (auto-repeat): no jump",
+   "ok": true,
+   "detail": {
+    "maxVy": 0,
+    "airborne": false,
+    "held": 0
+   }
+  },
+  {
+   "name": "a fresh Space press afterwards jumps",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "respawn during playback ends it immediately and play resumes",
+   "ok": true,
+   "detail": {
+    "last": {
+     "startedAt": 34049,
+     "endedAt": 34192,
+     "reason": "respawn",
+     "view": "melee",
+     "killer": 1000,
+     "ms": 1500,
+     "cues": 0,
+     "ruleros": 0,
+     "projMax": 0,
+     "shownMs": 0,
+     "swingShown": false,
+     "jsMsPerFrame": 0.2,
+     "frames": 1
+    },
+    "alive": true
+   }
+  },
+  {
+   "name": "Esc: the menu opens and the replay holds still with the paused match",
+   "ok": true,
+   "detail": {
+    "screen": "pause",
+    "rt0": 0,
+    "rt": 0
+   }
+  },
+  {
+   "name": "Resume: the replay carries on to its end",
+   "ok": true,
+   "detail": {
+    "startedAt": 36673,
+    "endedAt": 39599,
+    "reason": "done",
+    "view": "melee",
+    "killer": 1000,
+    "ms": 1500,
+    "cues": 2,
+    "ruleros": 0,
+    "projMax": 0,
+    "shownMs": 1500,
+    "swingShown": true,
+    "jsMsPerFrame": 0.25,
+    "frames": 20
+   }
+  },
+  {
+   "name": "focus loss: menu, nothing held, replay paused with the match",
+   "ok": true,
+   "detail": {
+    "active": true,
+    "held7": 0
+   }
+  },
+  {
+   "name": "setting off: no replay, the death screen as before",
+   "ok": true,
+   "detail": {
+    "lastFallback": "off",
+    "center": "Lupita got you"
+   }
+  },
+  {
+   "name": "repeated deaths: one replay each; characters, geometry and buffer do not grow",
+   "ok": true,
+   "detail": {
+    "mem0": {
+     "geometries": 103,
+     "textures": 19,
+     "pool": 2
+    },
+    "mem1": {
+     "geometries": 103,
+     "textures": 19,
+     "pool": 2
+    },
+    "size": {
+     "snaps": 71,
+     "events": 3
+    },
+    "started": 12
+   }
+  },
+  {
+   "name": "match end on the elimination: no replay, results",
+   "ok": true,
+   "detail": {
+    "ended": {
+     "session": "playing",
+     "room": "results",
+     "sim": "ended",
+     "scores": [
+      0,
+      25
+     ],
+     "screen": "results"
+    },
+    "sc": {
+     "scores": [
+      0,
+      24
+     ],
+     "toWin": 25
+    }
+   }
+  },
+  {
+   "name": "touch: large Tap to skip, no desktop button",
+   "ok": true,
+   "detail": {
+    "touchOn": true,
+    "hud": {
+     "overlay": true,
+     "by": "Eliminated by ☾ Lupita (Luna) · El Revés",
+     "nameClass": "kc-name luna",
+     "hp": false,
+     "scores": false,
+     "timer": false,
+     "crosshair": false,
+     "killfeed": false,
+     "menu": true,
+     "skip": false,
+     "tap": true
+    }
+   }
+  },
+  {
+   "name": "touch: the contact is on screen and no overlay covers it (phone)",
+   "ok": true,
+   "detail": {
+    "ok": true,
+    "x": 431,
+    "y": 168,
+    "covers": [],
+    "active": true
+   }
+  },
+  {
+   "name": "touch: a tap skips; nothing held; touch controls back",
+   "ok": true,
+   "detail": {
+    "last": {
+     "startedAt": 10248,
+     "endedAt": 10745,
+     "reason": "skip",
+     "view": "melee",
+     "killer": 1000,
+     "ms": 1500,
+     "cues": 0,
+     "ruleros": 0,
+     "projMax": 0,
+     "shownMs": 491,
+     "swingShown": false,
+     "jsMsPerFrame": 1.42,
+     "frames": 5
+    },
+    "held": 0,
+    "touchUi": true
+   }
+  },
+  {
+   "name": "Spanish: REPETICIÓN, Te eliminó … · El Revés, Saltar",
+   "ok": true,
+   "detail": {
+    "tag": "REPETICIÓN",
+    "by": "Te eliminó ☾ Lupita (Luna) · El Revés"
+   }
+  }
+ ],
+ "report": {
+  "buffer": {
+   "snapshotsOnlyHere": 31,
+   "playersBytes": 14961,
+   "eventsBytes": 345,
+   "size": {
+    "snaps": 71,
+    "events": 3
+   }
+  },
+  "costs": {
+   "live": {
+    "frames": 228,
+    "calls": 73,
+    "tris": 59544,
+    "cpuMs": 3.7
+   },
+   "dead": {
+    "frames": 164,
+    "calls": 62,
+    "tris": 53969,
+    "cpuMs": 4.8
+   },
+   "replay": {
+    "frames": 161,
+    "calls": 67,
+    "tris": 57155,
+    "cpuMs": 5.9
+   }
+  }
+ }
+}

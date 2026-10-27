@@ -8,12 +8,23 @@ import { EL_PATIO, type MapBox, type MapData } from '../../../shared/map';
 import { COLORS, GeoBatch, boxGeo, flat, groundTexture, signTexture, stuccoTexture, toon, toonRamp, woodTexture } from './materials';
 import { buildSandal, GOLD_SKIN } from '../../models/sandal';
 import { buildSection, inSection, sectionEnabled } from './section';
-import { patioGround, patioLight } from './patio-materials';
+import { FOCAL_MATS, buildFocal } from './patio-focal';
+import type { DressingModule, SceneLight } from './map-dressing';
+import { PLAZA_DRESSING } from './plaza-dressing';
+import { FIESTA_DRESSING } from './fiesta-dressing';
+import { GROUND_ZONES, patioGround } from './patio-materials';
+import { sourcedSet } from './patio-sourced';
+import { kitLight, shadowSettings } from './lighting';
+import { AO_TUNE, buildAoField } from './ao-field';
 import type { Quality } from '../settings';
 
 export interface WorldView {
   group: THREE.Group;
   sun: THREE.DirectionalLight;
+  /** The fog colour this world uses (the engine owns the fog itself). */
+  fog: number;
+  /** The arena maps' light (the first-person hand is lit to match); absent for campaign layouts, which keep theirs. */
+  light?: SceneLight;
   update(t: number): void;
   drawCalls: number;
   // Campaign: lift the ambient light (the patio brightening as it is cleaned).
@@ -45,6 +56,12 @@ export interface WorldOptions {
   boxes?: readonly MapBox[]; // a campaign layout instead of the map's own boxes
   theme?: ThemeName;
   teamDecor?: boolean; // Sol/Luna banners and emblems (multiplayer only)
+  /**
+   * El Patio's sourced surface textures (patio-sourced.ts), in the variant the page asked for
+   * (?mat=). Only the shooter engine sets it, and only for El Patio; ignored on any other map
+   * or a campaign layout, and while the textures are not loaded.
+   */
+  sourced?: boolean;
 }
 
 const STUCCO: Record<string, number> = {
@@ -82,11 +99,23 @@ const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
   const map = opts.map ?? EL_PATIO;
-  // Graphics experiment: the El Patio arena itself (not a campaign layout,
-  // which also builds on El Patio's map) is drawn with the patio kit.
-  const patioKit = map === EL_PATIO && !opts.boxes && sectionEnabled();
+  // Graphics experiment: the arena maps themselves (not a campaign layout,
+  // which also builds on El Patio's map) are drawn with the El Patio kit.
+  // `patioKit` keeps what belongs to El Patio alone: the café and Panadería
+  // hero blocks, the paving zones, the fountain path rings and its focal
+  // objects (patio-focal.ts).
+  const kit = !opts.boxes && sectionEnabled();
+  const patioKit = kit && map === EL_PATIO;
+  const sourced = patioKit && opts.sourced ? sourcedSet(quality) : null;
+  // A map's own props (map-dressing.ts): La Plaza's market, La Fiesta's party.
+  const dressing: DressingModule | null = !kit ? null : map.id === 'plaza' ? PLAZA_DRESSING : map.id === 'fiesta' ? FIESTA_DRESSING : null;
+  const dressed = (k: 'awnings' | 'trees' | 'danceFloor') => !!dressing?.decor.has(k);
   const th0 = THEMES[opts.theme ?? 'afternoon'];
-  const th: Theme = patioKit ? { ...th0, ...patioLight({ hemi: th0.hemi, sun: th0.sun }) } : th0;
+  let th: Theme = th0;
+  if (kit) {
+    th = { ...th0, ...kitLight({ hemi: th0.hemi, sun: th0.sun, fog: th0.fog }) };
+    if (dressing?.light) th = { ...th, ...dressing.light({ hemi: th.hemi, sun: th.sun, fog: th.fog }, quality) };
+  }
   const decor = map.decor ?? EL_PATIO.decor!;
   const bd = map.bounds;
   const group = new THREE.Group();
@@ -127,23 +156,25 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   sc.left = bd.minX - 5; sc.right = bd.maxX + 5; sc.top = bd.maxZ + 7; sc.bottom = bd.minZ - 7; sc.near = 1; sc.far = 100;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.04;
-  const shadowSize = quality === 'high' ? 2048 : 1024;
-  sun.shadow.mapSize.set(shadowSize, shadowSize);
-  sun.castShadow = quality !== 'low';
+  const shadowCfg = shadowSettings(quality);
+  sun.shadow.mapSize.set(shadowCfg?.size ?? 1024, shadowCfg?.size ?? 1024);
+  // Campaign layouts keep the original filter (the softer penumbra is the arena's).
+  sun.shadow.radius = kit ? shadowCfg?.radius ?? 1 : 1;
+  sun.castShadow = !!shadowCfg;
   group.add(sun, sun.target);
 
   // ------------------------------------------------------------- ground
   // El Patio: one repeating paving texture, with production's ground zones
   // (streets, team courts) kept as vertex tints, and the fountain's path
   // rings as a flat mesh (they were painted into production's ground canvas).
-  const pg = patioKit ? patioGround(quality, decor.ground, true) : null;
+  const pg = kit ? patioGround(quality, decor.ground, GROUND_ZONES[map.id ?? 'patio'] ?? false, sourced) : null;
   const ground = pg
     ? new THREE.Mesh(pg.geometry, pg.material)
     : new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18) }));
   if (!pg) ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
-  if (pg) group.add(fountainRings());
+  if (pg && patioKit) group.add(fountainRings());
   const beyond = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), toon(0xc9a27a));
   beyond.rotation.x = -Math.PI / 2;
   beyond.position.y = -0.02;
@@ -158,9 +189,12 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // Graphics experiment: the café section gets the detailed kit (section.ts);
   // its boxes skip the generic dressing below. Collision is unchanged.
-  const sectionBoxes: MapBox[] = [];
+  const sectionBoxes: MapBox[] = [], focalBoxes: MapBox[] = [], dressBoxes: MapBox[] = [];
   for (const bx of opts.boxes ?? map.boxes) {
-    if (patioKit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    if (kit && inSection(bx)) { sectionBoxes.push(bx); if (bx.sign) signs.push(signFor(bx)); continue; }
+    // El Patio's fountain, statue and kiosks at the kit's quality (patio-focal.ts); the kiosks keep their signs.
+    if (patioKit && FOCAL_MATS.has(bx.mat)) { focalBoxes.push(bx); if (bx.mat === 'kiosk') kioskSigns(bx); continue; }
+    if (dressing?.mats.has(bx.mat)) { dressBoxes.push(bx); if (bx.mat === 'kiosk') kioskSigns(bx); continue; }
     addBox(bx);
   }
 
@@ -240,8 +274,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       case 'kiosk':
         batch.add(toon(b.sign === 'ELOTES' ? 0xf5d35a : 0x3f8f6a, { map: stucco }), boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.3, b.maxZ, 2));
         batch.add(toon(COLORS.terracotta), boxGeo(b.minX - 0.15, b.maxY - 0.3, b.minZ - 0.15, b.maxX + 0.15, b.maxY, b.maxZ + 0.15, 2));
-        if (b.sign) signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.maxZ + 0.02, ry: 0, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
-        if (b.sign) signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.minZ - 0.02, ry: Math.PI, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
+        kioskSigns(b);
         return;
       case 'crate':
         batch.add(woodMat, boxGeo(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0.8));
@@ -378,6 +411,13 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     }
   }
 
+  function kioskSigns(b: MapBox): void {
+    if (!b.sign) return;
+    const cx = (b.minX + b.maxX) / 2, w = b.maxX - b.minX;
+    signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.maxZ + 0.02, ry: 0, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
+    signs.push({ text: b.sign, x: cx, y: b.maxY - 0.7, z: b.minZ - 0.02, ry: Math.PI, w: w * 0.9, bg: '#f4e6c8', fg: '#4b2a6b' });
+  }
+
   function signFor(b: MapBox): { text: string; x: number; y: number; z: number; ry: number; w: number; bg: string; fg: string } {
     const f = faceFrame(b);
     const mid = f.len / 2;
@@ -456,8 +496,25 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   for (const [ax, az, bx2, bz, y] of decor.lights ?? []) string(ax, az, bx2, bz, y);
   group.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(bulbPts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink })));
   const bulbMesh = bulbs.build(new THREE.SphereGeometry(0.5, 6, 4), flat(0xffffff));
-  if (bulbMesh && th.bulbsGlow) bulbMesh.scale.setScalar(1);
   if (bulbMesh) group.add(bulbMesh);
+  let haloCalls = 0;
+  // At dusk the bulbs are lit: each gets a soft additive halo of its own
+  // colour (one instanced draw; no lights, no post-processing).
+  if (bulbMesh && th.bulbsGlow && kit) {
+    const halo = new THREE.InstancedMesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }), bulbMesh.count);
+    const m = new THREE.Matrix4(), c = new THREE.Color(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    for (let i = 0; i < bulbMesh.count; i++) {
+      bulbMesh.getMatrixAt(i, m);
+      m.decompose(p, q, sc);
+      halo.setMatrixAt(i, m.compose(p, q, sc.set(0.5, 0.5, 0.5)));
+      bulbMesh.getColorAt(i, c);
+      halo.setColorAt(i, c.lerp(new THREE.Color(0xffc070), 0.6));
+    }
+    halo.name = 'bulb-halos';
+    halo.renderOrder = 2;
+    group.add(halo);
+    haloCalls = 1;
+  }
 
   // ---------------------------------------------- skyline landmark: church
   const church = new THREE.Group();
@@ -485,8 +542,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     const hgt = 6 + ((i * 7) % 5) * 1.6;
     const m = new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a) * r, hgt / 2, Math.sin(a) * r), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0)), new THREE.Vector3(9, hgt, 6));
     batch.addMesh(toon([0xd8765a, 0xf1dfbc, 0x7cc7bb, 0xf0b45a, 0x8a6aa8][i % 5]!, { map: stucco }), UNIT, m);
-    if (patioKit) {
-      // El Patio: the skyline gets the same roofline as the arena's houses
+    if (kit) {
+      // The skyline gets the same roofline as the arena's houses
       // (a cream cornice and a terracotta tile slab), instanced: no new draws.
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       trims.add(x, hgt + 0.1, z, 9.3, 0.2, 6.3, -a, COLORS.cream);
@@ -505,7 +562,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ---------------------------------------------------- map-specific dressing
   // Awnings over market stalls: the poles stand inside the stall's own footprint.
-  for (const a of decor.awnings ?? []) {
+  for (const a of dressed('awnings') ? [] : decor.awnings ?? []) {
     const stall = (opts.boxes ?? map.boxes).find((q) => q.mat === 'stall' && q.minX < a.maxX && q.maxX > a.minX && q.minZ < a.maxZ && q.maxZ > a.minZ);
     const aw = a.maxX - a.minX;
     for (let i = 0; i < 4; i++) batch.add(toon(i % 2 ? 0xffffff : a.color), boxGeo(a.minX + (aw / 4) * i, a.y, a.minZ, a.minX + (aw / 4) * (i + 1), a.y + 0.08, a.maxZ, 1));
@@ -517,14 +574,14 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     }
   }
   // Trees growing out of planters: trunk inside the planter, canopy above head height.
-  for (const tr of decor.trees ?? []) {
+  for (const tr of dressed('trees') ? [] : decor.trees ?? []) {
     batch.add(toon(COLORS.woodDark), boxGeo(tr.x - 0.12, tr.y, tr.z - 0.12, tr.x + 0.12, 3.3, tr.z + 0.12, 1));
     for (const [dx, dy, dz, r] of [[0, 4.1, 0, 1.15], [0.7, 3.8, 0.3, 0.8], [-0.6, 3.9, -0.4, 0.85], [0.1, 4.6, -0.2, 0.75]] as const) {
       bushes.add(tr.x + dx, dy, tr.z + dz, r * 2, r * 1.6, r * 2, dx, dy > 4.2 ? COLORS.leaf : COLORS.leafDark);
     }
   }
   // Dance floor tiles, painted flush with the ground.
-  if (decor.danceFloor) {
+  if (decor.danceFloor && !dressed('danceFloor')) {
     const df = decor.danceFloor;
     const n = 8, step = (df.r / n) * 1.2;
     for (let i = -n; i < n; i++) for (let j = -n; j < n; j++) {
@@ -538,8 +595,12 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   const pinata = decor.pinata ? buildPinata(decor.pinata, group) : null;
 
   // ------------------------------------------------------ bake and finish
-  let calls = batch.build(group, (gs) => mergeGeometries(gs, false));
-  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality); group.add(sec.group); calls += sec.calls; }
+  let calls = batch.build(group, (gs) => mergeGeometries(gs, false)) + haloCalls;
+  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality, { heroZone: patioKit, banners: decor.banners ?? [], sourced }); group.add(sec.group); calls += sec.calls; }
+  const focal = focalBoxes.length ? buildFocal(focalBoxes, quality) : null;
+  if (focal) { group.add(focal.group); calls += focal.calls; }
+  const dress = dressing ? dressing.build(dressBoxes, decor, quality) : null;
+  if (dress) { group.add(dress.group); calls += dress.calls; }
   const add = (im: THREE.InstancedMesh | null) => { if (im) { group.add(im); calls++; } };
   add(glass.build(UNIT, toon(0x3a2a52, { emissive: 0x120a20 })));
   add(frames.build(UNIT, toon(0xffffff)));
@@ -554,12 +615,21 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   add(doors.build(UNIT, toon(0xffffff, { map: wood })));
   add(slabs.build(UNIT, toon(0xffffff)));
 
+  // The arena maps' baked occlusion and grounding (ao-field.ts); campaign layouts keep their look.
+  if (kit && aoFieldOn()) {
+    const ao = buildAoField(map.boxes, map.bounds, quality, AO_TUNE, sun.position.clone());
+    const n = ao.apply(group);
+    group.userData.aoField = { materials: n, bytes: ao.bytes, bakeMs: ao.bakeMs };
+  }
+
   const water = group.getObjectByName('water') as THREE.Mesh | undefined;
   const statue = group.getObjectByName('statue');
   let lastT = 0;
   return {
     group,
     sun,
+    fog: th.fog,
+    light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
     pinata: pinata?.view,
     setBrightness(k: number) {
@@ -570,11 +640,18 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       lines.children.forEach((o) => { if ((o as THREE.InstancedMesh).isInstancedMesh) o.position.y = Math.sin(t * 1.3) * 0.03; });
       if (water) (water.material as THREE.MeshToonMaterial).emissive.setHSL(0.52, 0.6, 0.08 + Math.sin(t * 2) * 0.02);
       if (statue) statue.rotation.y = 0.4 + Math.sin(t * 0.3) * 0.1;
+      focal?.update(t);
+      dress?.update?.(t);
       const dt = Math.min(0.1, Math.max(0, t - lastT));
       lastT = t;
       pinata?.step(dt, t);
     },
   };
+}
+
+/** Review switch: ?ao=0 in the page URL builds the arena without the occlusion field. */
+function aoFieldOn(): boolean {
+  try { return typeof location === 'undefined' || new URLSearchParams(location.search).get('ao') !== '0'; } catch { return true; }
 }
 
 /** The cream path ring and thin violet ring around El Patio's fountain, flush with the ground. */

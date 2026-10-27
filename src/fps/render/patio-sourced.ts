@@ -1,27 +1,41 @@
-// Sourced surface textures for El Patio (Visual Director comparison, phase 1):
-// Poly Haven CC0 sets prepared by scripts/patio-textures.py into
-// public/textures/patio/ (see SOURCES.md there). The shooter only, on El
-// Patio only: the engine asks for them through WorldOptions.sourced, so
-// Plaza, Fiesta, Campaign and Arcade never see them.
+// Sourced surface textures for El Patio (Poly Haven CC0 sets prepared by
+// scripts/patio-textures.py into public/textures/patio/, see SOURCES.md
+// there). The shooter only, on El Patio only: the engine asks for them
+// through WorldOptions.sourced, so Plaza, Fiesta, Campaign and Arcade never
+// see them.
 //
-// The look is picked per page load with a query parameter:
-//   ?mat=classic  today's procedural canvases (the default)
-//   ?mat=toon     variant a: MeshToonMaterial with the sourced colour + normal maps
-//   ?mat=std      variant b: MeshStandardMaterial (colour, normal, roughness) on the
-//                 plaster walls, the street cobbles and the door wood only
-// The textures are loaded before the engine builds its first world (main.ts
-// awaits preloadSourced), so the world is built once, with them, and
-// engine.warmWorld() compiles and uploads it: no pop-in, no late compile. A
-// failed or slow load (4 s) falls back to classic and says so in the diag log.
+// The look per quality tier (Visual Director, checkpoint 2):
+//   High    std: MeshStandardMaterial on the plaster walls, street cobbles and
+//           door wood (colour + normal maps, 512 px, anisotropy 8)
+//   Medium  std, the same 512 px files at anisotropy 4: Medium keeps the
+//           shadow map, so the walls' raking-sun relief and the cobbles' light
+//           still read there, and a High <-> Medium switch needs no download
+//   Low     toon with the colour maps only (256 px; no normal maps loaded):
+//           std bought nothing visible at phone size and cost +50 % render time
+// Query parameter, for comparison: ?mat=classic (today's procedural look on
+// every tier), ?mat=std or ?mat=toon (force that variant on any tier; toon
+// keeps its normal maps above Low).
+// Roughness is a constant on the standard materials: maps remapped into a
+// matte 0.85..1 made no visible difference (checkpoint 2) and cost 1.4 MB of
+// texture memory each.
+//
+// The textures are loaded before the engine builds a world that needs them:
+// main.ts awaits preloadSourced before the engine exists, and a quality change
+// waits for the new tier's files (engine.applySettings) before rebuilding, so
+// a world is only ever built with its textures in place and warmWorld
+// compiles and uploads it: no pop-in, no late compile. A failed or slow load
+// (4 s) leaves that tier classic and says so in the diag log.
 import * as THREE from 'three';
 import type { Quality } from '../settings';
 import { diagLog } from '../../diag';
 
 export type MatMode = 'classic' | 'toon' | 'std';
+/** What the page asked for: a forced variant, or 'auto' (the tier's default). */
+export type MatRequest = MatMode | 'auto';
 export type SourcedName = 'plaster' | 'cobble' | 'wood';
 
-/** One surface's maps at one tier. normal and rough are absent where the tier does without them. */
-export interface SourcedSurface { map: THREE.Texture; normal: THREE.Texture | null; rough: THREE.Texture | null }
+/** One surface's maps for one variant and tier; normal is absent where the variant does without it. */
+export interface SourcedSurface { map: THREE.Texture; normal: THREE.Texture | null }
 export interface SourcedSet { mode: Exclude<MatMode, 'classic'>; quality: Quality; plaster: SourcedSurface; cobble: SourcedSurface; wood: SourcedSurface }
 
 /**
@@ -36,93 +50,98 @@ export const SOURCED = {
   wood: { metres: 1.0, mean: 0.4647 },
 } as const;
 
-/** The query parameter (?mat=classic|toon|std); classic when absent or unknown. */
-export function requestedMatMode(search?: string): MatMode {
+/** The query parameter: ?mat=classic|toon|std; 'auto' when absent or unknown. */
+export function requestedMatMode(search?: string): MatRequest {
   try {
     const s = search ?? (typeof location === 'undefined' ? '' : location.search);
     const v = new URLSearchParams(s).get('mat');
-    return v === 'toon' || v === 'std' ? v : 'classic';
-  } catch { return 'classic'; }
+    return v === 'toon' || v === 'std' || v === 'classic' ? v : 'auto';
+  } catch { return 'auto'; }
+}
+
+/** The variant a tier gets for a request. */
+export function modeFor(q: Quality, req: MatRequest = requestedMatMode()): MatMode {
+  if (req !== 'auto') return req;
+  return q === 'low' ? 'toon' : 'std';
 }
 
 const ANISO: Record<Quality, number> = { high: 8, medium: 4, low: 2 };
-const tierOf = (q: Quality) => (q === 'low' ? 256 : 512);
-/** Low draws the toon variant without normal maps; its std variant keeps all three maps at 256 px. */
-const kindsFor = (mode: MatMode, q: Quality): Array<'map' | 'normal' | 'rough'> =>
-  mode === 'std' ? ['map', 'normal', 'rough'] : q === 'low' ? ['map'] : ['map', 'normal'];
+const sizeOf = (q: Quality) => (q === 'low' ? 256 : 512);
+/** Low's toon loads colour maps only; every other combination loads colour + normal. */
+const withNormals = (mode: MatMode, q: Quality) => !(mode === 'toon' && q === 'low');
+const keyOf = (mode: MatMode, q: Quality) => `${mode}-${sizeOf(q)}-${withNormals(mode, q) ? 'n' : 'c'}-a${ANISO[q]}`;
 
-const loaded = new Map<number, SourcedSet>();
-let failed = false;
-let maxAniso = 8;
+const loaded = new Map<string, SourcedSet>();
+const failed = new Set<string>();
+const pending = new Map<string, Promise<void>>();
 
 function baseUrl(): string {
   try { return (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/'; } catch { return '/'; }
 }
 
-async function loadTier(mode: Exclude<MatMode, 'classic'>, q: Quality): Promise<SourcedSet> {
-  const size = tierOf(q), kinds = kindsFor(mode, q), loader = new THREE.TextureLoader();
-  const one = async (name: SourcedName, kind: 'map' | 'normal' | 'rough'): Promise<THREE.Texture | null> => {
-    if (!kinds.includes(kind)) return null;
+async function loadSet(mode: Exclude<MatMode, 'classic'>, q: Quality): Promise<SourcedSet> {
+  const size = sizeOf(q), normals = withNormals(mode, q), loader = new THREE.TextureLoader();
+  const one = async (name: SourcedName, kind: 'map' | 'normal'): Promise<THREE.Texture> => {
     const t = await loader.loadAsync(`${baseUrl()}textures/patio/${name}-${kind}-${size}.webp`);
     t.colorSpace = kind === 'map' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.generateMipmaps = true;
     t.minFilter = THREE.LinearMipmapLinearFilter;
-    t.anisotropy = Math.min(ANISO[q], maxAniso);
+    t.anisotropy = ANISO[q]; // three clamps it to the device's maximum
     t.name = `patio-${name}-${kind}-${size}`;
     return t;
   };
   const surface = async (name: SourcedName): Promise<SourcedSurface> => {
-    const [map, normal, rough] = await Promise.all([one(name, 'map'), one(name, 'normal'), one(name, 'rough')]);
-    return { map: map!, normal, rough };
+    const [map, normal] = await Promise.all([one(name, 'map'), normals ? one(name, 'normal') : Promise.resolve(null)]);
+    return { map, normal };
   };
   const [plaster, cobble, wood] = await Promise.all([surface('plaster'), surface('cobble'), surface('wood')]);
   return { mode, quality: q, plaster, cobble, wood };
 }
 
 /**
- * Loads the requested variant's textures for this quality (main.ts awaits it
- * before the engine exists). Resolves either way: on failure or after
- * `timeoutMs` the page stays classic.
+ * Loads the textures this tier's variant needs (main.ts awaits it before the
+ * engine exists; the engine awaits it before a quality change rebuilds).
+ * Resolves either way: on failure or after `timeoutMs` that tier stays classic.
  */
-export async function preloadSourced(quality: Quality, opts: { mode?: MatMode; timeoutMs?: number; maxAnisotropy?: number } = {}): Promise<void> {
-  const mode = opts.mode ?? requestedMatMode();
-  if (mode === 'classic' || typeof document === 'undefined') return;
-  if (opts.maxAnisotropy) maxAniso = opts.maxAnisotropy;
-  const t0 = performance.now(), size = tierOf(quality);
-  if (loaded.has(size)) return;
+export function preloadSourced(quality: Quality, opts: { request?: MatRequest; timeoutMs?: number } = {}): Promise<void> {
+  const mode = modeFor(quality, opts.request);
+  if (mode === 'classic' || typeof document === 'undefined') return Promise.resolve();
+  const key = keyOf(mode, quality);
+  if (loaded.has(key) || failed.has(key)) return Promise.resolve();
+  const inFlight = pending.get(key);
+  if (inFlight) return inFlight;
+  const ms = opts.timeoutMs ?? 4000, t0 = performance.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const set = await Promise.race([
-      loadTier(mode, quality),
-      new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(`timed out after ${opts.timeoutMs ?? 4000} ms`)), opts.timeoutMs ?? 4000); }),
-    ]);
-    loaded.set(size, set);
-    diagLog('gfx', `patio textures (${mode}, ${size} px) loaded in ${Math.round(performance.now() - t0)} ms`);
-  } catch (err) {
-    if (!loaded.size) failed = true;
-    diagLog('gfx', `patio textures (${mode}) failed: ${String(err)}; El Patio stays classic`);
-  } finally { if (timer) clearTimeout(timer); }
+  const p = Promise.race([
+    loadSet(mode, quality),
+    new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(`timed out after ${ms} ms`)), ms); }),
+  ]).then((set) => {
+    loaded.set(key, set);
+    diagLog('gfx', `patio textures (${key}) loaded in ${Math.round(performance.now() - t0)} ms`);
+  }, (err: unknown) => {
+    failed.add(key);
+    diagLog('gfx', `patio textures (${key}) failed: ${String(err)}; El Patio stays classic on ${quality}`);
+  }).finally(() => { if (timer) clearTimeout(timer); pending.delete(key); });
+  pending.set(key, p);
+  return p;
 }
 
-/** The variant in effect: the requested one once its textures are in, else classic. */
-export function sourcedMode(): MatMode {
-  return failed || !loaded.size ? 'classic' : [...loaded.values()][0]!.mode;
+/** True when a world for this tier can be built now: its textures are in, failed (classic), or not wanted. */
+export function sourcedReady(quality: Quality, request?: MatRequest): boolean {
+  const mode = modeFor(quality, request);
+  if (mode === 'classic' || typeof document === 'undefined') return true;
+  const key = keyOf(mode, quality);
+  return loaded.has(key) || failed.has(key);
 }
 
-/**
- * The loaded set for a quality: its own tier, or (after a quality change to a
- * tier that is not loaded) the other one, while that tier loads for next time.
- */
-export function sourcedSet(quality: Quality): SourcedSet | null {
-  if (sourcedMode() === 'classic') return null;
-  const own = loaded.get(tierOf(quality));
-  if (own) return own;
-  void preloadSourced(quality, { mode: sourcedMode() });
-  return [...loaded.values()][0] ?? null;
+/** The loaded set for this tier, or null (classic: not wanted, not loaded, or failed). */
+export function sourcedSet(quality: Quality, request?: MatRequest): SourcedSet | null {
+  const mode = modeFor(quality, request);
+  return mode === 'classic' ? null : loaded.get(keyOf(mode, quality)) ?? null;
 }
 
 /** Tests only: forget what was loaded. */
-export function resetSourced(): void { loaded.clear(); failed = false; }
+export function resetSourced(): void { loaded.clear(); failed.clear(); pending.clear(); }
 /** Tests only: install a set without loading files. */
-export function installSourced(set: SourcedSet): void { loaded.set(tierOf(set.quality), set); failed = false; }
+export function installSourced(set: SourcedSet): void { loaded.set(keyOf(set.mode, set.quality), set); }

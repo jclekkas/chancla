@@ -626,7 +626,9 @@ export function noBackfaceShadow<T extends THREE.Material>(m: T): T {
 /**
  * Sourced variants (patio-sourced.ts). Toon: the sourced colour map and a
  * modest normal map on the same toon material. Std: MeshStandardMaterial
- * (colour, normal, roughness; matte, no metal) for these surfaces only.
+ * (colour and normal maps, a constant matte roughness, no metal) for these
+ * surfaces only. Roughness maps (remapped into 0.85..1) were dropped: no visible
+ * difference in the fight and door crops, 1.4 MB of texture memory each.
  *
  * Brightness: the toon ramp lights every face within ~70 degrees of the sun
  * at a flat 100 % (the world ramp: 18 / 44 / 100 %), and faces turned away
@@ -642,6 +644,10 @@ export function noBackfaceShadow<T extends THREE.Material>(m: T): T {
  * as the toon walls do (their shadow test is skipped there, noBackfaceShadow).
  */
 export const SOURCED_NORMAL_SCALE = { plaster: 0.45, wood: 0.5, cobble: 0.55 } as const;
+/** Std plaster: stronger, so a raking sun shows the trowel relief on a lit wall (toon keeps 0.45: its bands turn more into blotches). */
+export const STD_PLASTER_NORMAL = 1.0;
+/** Std roughness per surface: the means of the sourced roughness maps after their matte remap. */
+export const STD_ROUGHNESS = { plaster: 0.98, cobble: 0.95, wood: 0.93 } as const;
 // The floor faces one way: its gain puts a sunlit cobble exactly at the toon floor's lit band.
 const SUN_UP = 0.68; // the sun's elevation sine (world.ts kitLight's sun direction)
 export const STD_TUNE = { wrap: 0.5, sun: 1.6, floorSun: (1 + 0.5) / (SUN_UP + 0.5), back: WORLD_RAMP[0] / 255, color: 1.0 };
@@ -655,12 +661,12 @@ function stdDiffuseWrap<T extends THREE.Material>(m: T, sun = STD_TUNE.sun): T {
       `reflectedLight.directDiffuse += max( saturate( ( dot( geometryNormal, directLight.direction ) + ${STD_TUNE.wrap.toFixed(3)} ) / ${(1 + STD_TUNE.wrap).toFixed(3)} ) * ${sun.toFixed(3)}, ${STD_TUNE.back.toFixed(3)} ) * directLight.color * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`));
   });
 }
-function sourcedMat(set: SourcedSet, s: SourcedSurface, normalScale: number, uvPerMetre: number, metres: number, color: THREE.Color): THREE.Material {
+function sourcedMat(set: SourcedSet, s: SourcedSurface, normalScale: number, uvPerMetre: number, metres: number, color: THREE.Color, roughness: number): THREE.Material {
   const rep = 1 / (uvPerMetre * metres);
-  for (const t of [s.map, s.normal, s.rough]) t?.repeat.set(rep, rep);
+  for (const t of [s.map, s.normal]) t?.repeat.set(rep, rep);
   const ns = new THREE.Vector2(normalScale, normalScale);
   if (set.mode === 'std') {
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: color.clone().multiplyScalar(STD_GAIN), map: s.map, normalMap: s.normal, normalScale: ns, roughnessMap: s.rough, roughness: 1, metalness: 0 });
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: color.clone().multiplyScalar(STD_GAIN), map: s.map, normalMap: s.normal, normalScale: ns, roughness, metalness: 0 });
     m.userData.aoStd = true; // ao-field.ts patches this standard material too
     return noBackfaceShadow(stdDiffuseWrap(m));
   }
@@ -680,11 +686,11 @@ export function kitMaterials(quality: Quality, sourced: SourcedSet | null = null
   // A sourced map is graded to a known linear mean; the material carries the classic canvas's own
   // mean over it, so a wall or a door is exactly as bright on average as before.
   const plaster = sourced
-    ? plasterMacro(sourcedMat(sourced, sourced.plaster, SOURCED_NORMAL_SCALE.plaster, 1 / 2, SOURCED.plaster.metres, new THREE.Color(1, 1, 1).multiplyScalar(meanLinearG(plasterTex) / SOURCED.plaster.mean)), SOURCED.plaster.mean)
+    ? plasterMacro(sourcedMat(sourced, sourced.plaster, sourced.mode === 'std' ? STD_PLASTER_NORMAL : SOURCED_NORMAL_SCALE.plaster, 1 / 2, SOURCED.plaster.metres, new THREE.Color(1, 1, 1).multiplyScalar(meanLinearG(plasterTex) / SOURCED.plaster.mean), STD_ROUGHNESS.plaster), SOURCED.plaster.mean)
     : plasterMacro(toonOf({ vertexColors: true, map: plasterTex }), meanLinearG(plasterTex));
   // Door leaves have UVs of 1 per 0.6 m (beams 1.2 m, crates 1 m): the grain runs up the leaf.
   const wood = sourced
-    ? sourcedMat(sourced, sourced.wood, SOURCED_NORMAL_SCALE.wood, 1 / 0.6, SOURCED.wood.metres, new THREE.Color(WOOD_TINT).multiplyScalar(meanLinearG(woodTex) / SOURCED.wood.mean))
+    ? sourcedMat(sourced, sourced.wood, SOURCED_NORMAL_SCALE.wood, 1 / 0.6, SOURCED.wood.metres, new THREE.Color(WOOD_TINT).multiplyScalar(meanLinearG(woodTex) / SOURCED.wood.mean), STD_ROUGHNESS.wood)
     // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
     // Vertex colours are white wherever nothing bakes shading into them (every dressing's wood).
     : toonOf({ color: WOOD_TINT, vertexColors: true, map: woodTex });
@@ -791,7 +797,7 @@ export function patioGround(quality: Quality, ground: { w: number; d: number } =
   // own UV scaled (vMapUv runs one paving period per unit), so the normal map's tangent frame,
   // which three derives from the UVs, matches it.
   const period = GROUND_TILES * GROUND_TILE_M;
-  if (cob) for (const t of [cob.map, cob.normal, cob.rough]) t?.repeat.set(ground.w / SOURCED.cobble.metres, ground.d / SOURCED.cobble.metres);
+  if (cob) for (const t of [cob.map, cob.normal]) t?.repeat.set(ground.w / SOURCED.cobble.metres, ground.d / SOURCED.cobble.metres);
   const zoneVert = (sh: THREE.WebGLProgramParametersWithUniforms) => {
     sh.uniforms.gZone = zoneUniform;
     sh.vertexShader = sh.vertexShader
@@ -813,7 +819,7 @@ float gStreetZone() { return 1.0 - max( gIn( gZone[0] ), max( gIn( gZone[1] ), g
       zoneVert(sh);
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nif ( gStreetZone() > 0.5 ) discard;');
     });
-    const std = new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color(1, 1, 1).multiplyScalar(STD_GAIN), map: cob.map, normalMap: cob.normal, roughnessMap: cob.rough, roughness: 1, metalness: 0 });
+    const std = new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color(1, 1, 1).multiplyScalar(STD_GAIN), map: cob.map, normalMap: cob.normal, roughness: STD_ROUGHNESS.cobble, metalness: 0 });
     std.normalScale.set(SOURCED_NORMAL_SCALE.cobble, SOURCED_NORMAL_SCALE.cobble);
     std.userData.aoStd = true;
     stdDiffuseWrap(std, STD_TUNE.floorSun);

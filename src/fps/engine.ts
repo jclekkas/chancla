@@ -15,7 +15,7 @@ import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '../net/session';
 import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
-import { sourcedMode } from './render/patio-sourced';
+import { preloadSourced, sourcedReady } from './render/patio-sourced';
 export { preloadSourced } from './render/patio-sourced';
 import { Avatar, type AvatarState } from './render/rosa';
 import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
@@ -63,6 +63,8 @@ export class Engine {
   frameMs = 0;
   world: WorldView;
   private worldOpts: WorldOptions = {};
+  /** A quality tier whose El Patio textures are loading before the world is rebuilt for it. */
+  private sourcedWait: Quality | null = null;
   private quality: Quality;
   /** Preview: Sol in the arena is the Blender-built candidate (settings.rosaCandidate). */
   private rosaCandidate: boolean;
@@ -269,7 +271,17 @@ export class Engine {
     this.fx.setReducedMotion(s.reducedMotion);
     const candidateChanged = s.rosaCandidate !== this.rosaCandidate;
     this.rosaCandidate = s.rosaCandidate;
-    if (s.quality !== this.quality) {
+    // El Patio's sourced textures for the new tier are loaded before the rebuild (at most 4 s,
+    // then classic): until then the current tier stays on screen, so nothing pops in.
+    let qualityChange = s.quality !== this.quality;
+    if (qualityChange && this.isPatio(this.worldOpts) && !sourcedReady(s.quality)) {
+      qualityChange = false;
+      if (this.sourcedWait !== s.quality) {
+        this.sourcedWait = s.quality;
+        void preloadSourced(s.quality).then(() => { this.sourcedWait = null; this.applySettings(); });
+      }
+    }
+    if (qualityChange) {
       this.quality = s.quality;
       this.fx.setQuality(s.quality);
       this.vm.setQuality(s.quality);
@@ -375,8 +387,11 @@ export class Engine {
    * loaded before the engine started.
    */
   private shooterWorld(opts: WorldOptions): WorldOptions {
-    const patio = !opts.boxes && (opts.map ?? EL_PATIO).id === 'patio';
-    return patio && sourcedMode() !== 'classic' ? { ...opts, sourced: true } : opts;
+    return this.isPatio(opts) ? { ...opts, sourced: true } : opts;
+  }
+
+  private isPatio(opts: WorldOptions): boolean {
+    return !opts.boxes && (opts.map ?? EL_PATIO).id === 'patio';
   }
 
   /** Rebuilds the world: a map, a campaign layout and lighting (or El Patio by default). */

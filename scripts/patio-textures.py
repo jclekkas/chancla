@@ -8,12 +8,11 @@ public/textures/patio/ at 512 px (High and Medium) and 256 px (Low):
 
   <name>-map-<size>.webp     colour, sRGB
   <name>-normal-<size>.webp  tangent-space normal, OpenGL (+Y up), linear
-  <name>-rough-<size>.webp   roughness (green channel), linear
 
 Colour grading happens in linear light. Plaster and wood become neutral grey
 multipliers (the runtime divides by MEAN below, so the kit's vertex paint and
 the wood tint stay the colour); the cobbles are pulled from blue-grey to a warm
-grey and keep their own colour. Roughness is remapped into a matte 0.85..1.
+grey and keep their own colour. Roughness is not shipped: its remapped (0.85..1) mean is printed for the runtime's constant.
 Normals are re-centred (their mean tilt removed) and renormalised. Resizing
 wraps at the edges so the textures still tile.
 """
@@ -30,7 +29,9 @@ SIZES = (512, 256)
 
 # name, Riposte folder, grading
 SETS = {
-    'plaster': {'src': 'plaster2', 'mode': 'neutral', 'contrast': 1.0, 'mean': 0.8},
+    # Plaster: the low band (trowel sweeps and patches, wider than ~2 cm) lifted to about +/-9 %
+    # (p5..p95), the fine grain eased, so it reads hand-trowelled and never as speckle.
+    'plaster': {'src': 'plaster2', 'mode': 'neutral', 'contrast': 0.8, 'low': {'sigma': 8, 'target': 0.09}, 'mean': 0.8},
     'cobble': {'src': 'cobble', 'mode': 'warm', 'contrast': 0.8, 'chroma': 0.3, 'target': (148, 141, 130)},
     'wood': {'src': 'timber', 'mode': 'neutral', 'contrast': 0.7, 'mean': None},
 }
@@ -64,6 +65,14 @@ def resize_wrap(a, size):
 LUM = np.array([0.2126, 0.7152, 0.0722])
 
 
+def blur(x, sigma):
+    """Gaussian blur that wraps (FFT), sigma in pixels."""
+    h, w = x.shape
+    fy, fx = np.fft.fftfreq(h), np.fft.fftfreq(w)
+    k = np.exp(-2 * (np.pi * sigma) ** 2 * (fy[:, None] ** 2 + fx[None, :] ** 2))
+    return np.real(np.fft.ifft2(np.fft.fft2(x) * k))
+
+
 def grade(name, cfg, rgb):
     lin = s2l(rgb)
     if cfg['mode'] == 'neutral':
@@ -71,10 +80,21 @@ def grade(name, cfg, rgb):
         # placed at a mean with headroom for the brighter grain.
         n = lin / lin.reshape(-1, 3).mean(0)
         g = n @ LUM
-        g = 1 + (g - g.mean()) * cfg['contrast']
+        g = g / g.mean()
+        info = {}
+        if 'low' in cfg:
+            lo = blur(g, cfg['low']['sigma'])
+            p5, p95 = np.percentile(lo, [5, 95])
+            gain = cfg['low']['target'] / ((p95 - p5) / 2)
+            g = 1 + (lo - 1) * gain + (g - lo) * cfg['contrast']
+            info['lowGain'] = round(float(gain), 3)
+        else:
+            g = 1 + (g - 1) * cfg['contrast']
+        lo = blur(g, 8)
+        info['lowP5P95'] = [round(float(v), 3) for v in np.percentile(lo, [5, 95])]
         mean = cfg['mean'] or min(0.8, 0.98 / float(np.percentile(g, 99.7)))
         g = np.clip(g * mean, 0, 1)
-        return np.repeat(g[..., None], 3, -1), {'linearMean': round(float(g.mean()), 4)}
+        return np.repeat(g[..., None], 3, -1), {'linearMean': round(float(g.mean()), 4), **info}
     # Warm grey: chroma reduced, contrast eased, mean moved to the target colour.
     L = lin @ LUM
     c = lin - L[..., None]
@@ -107,14 +127,15 @@ def main():
         d = src / cfg['src']
         col, info = grade(name, cfg, load(d / 'map.webp'))
         nrm = normals(load(d / 'normal.webp'))
+        # Roughness maps are not shipped (no visible difference at 0.85..1): the runtime uses
+        # their remapped mean as a constant.
         rough = 0.85 + 0.15 * load(d / 'rough.webp', 'L')
         report[name] = {'source': cfg['src'], **info, 'roughMean': round(float(rough.mean()), 3), 'files': {}}
         for size in SIZES:
             c = l2s(resize_wrap(col, size))
             nn = resize_wrap(nrm, size)
             nn = nn / np.linalg.norm(nn, axis=-1, keepdims=True)
-            r = resize_wrap(rough, size)
-            for kind, arr, q in (('map', c, 86), ('normal', nn * 0.5 + 0.5, 90), ('rough', np.repeat(r[..., None], 3, -1), 80)):
+            for kind, arr, q in (('map', c, 90 if name == 'plaster' else 86), ('normal', nn * 0.5 + 0.5, 90)):
                 p = OUT / f'{name}-{kind}-{size}.webp'
                 report[name]['files'][p.name] = save(arr, p, q)
     print(json.dumps(report, indent=1))

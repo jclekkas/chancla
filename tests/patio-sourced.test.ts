@@ -5,22 +5,28 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EL_PATIO } from '../shared/map';
 import { LA_PLAZA } from '../shared/maps/plaza';
-import { installSourced, requestedMatMode, resetSourced, sourcedMode, type SourcedSet } from '../src/fps/render/patio-sourced';
+import { installSourced, modeFor, requestedMatMode, resetSourced, sourcedSet, type SourcedSet } from '../src/fps/render/patio-sourced';
 import { kitMaterials, patioGround } from '../src/fps/render/patio-materials';
 import { buildWorld } from '../src/fps/render/world';
 
-const surf = () => ({ map: new THREE.Texture(), normal: new THREE.Texture(), rough: new THREE.Texture() });
+const surf = () => ({ map: new THREE.Texture(), normal: new THREE.Texture() });
 const fake = (mode: 'toon' | 'std'): SourcedSet => ({ mode, quality: 'high', plaster: surf(), cobble: surf(), wood: surf() });
 
 afterEach(() => resetSourced());
 
 describe('patio sourced textures', () => {
-  it('reads ?mat= and defaults to classic', () => {
-    expect(requestedMatMode('')).toBe('classic');
+  it('reads ?mat= and picks each tier\'s default', () => {
+    expect(requestedMatMode('')).toBe('auto');
     expect(requestedMatMode('?mat=toon')).toBe('toon');
     expect(requestedMatMode('?x=1&mat=std')).toBe('std');
-    expect(requestedMatMode('?mat=shiny')).toBe('classic');
-    expect(sourcedMode()).toBe('classic'); // nothing loaded
+    expect(requestedMatMode('?mat=classic')).toBe('classic');
+    expect(requestedMatMode('?mat=shiny')).toBe('auto');
+    expect(modeFor('high', 'auto')).toBe('std');
+    expect(modeFor('medium', 'auto')).toBe('std');
+    expect(modeFor('low', 'auto')).toBe('toon');
+    expect(modeFor('high', 'classic')).toBe('classic');
+    expect(modeFor('low', 'std')).toBe('std');
+    expect(sourcedSet('high', 'auto')).toBeNull(); // nothing loaded: classic
   });
 
   it('std swaps plaster and wood only; toon keeps toon materials', () => {

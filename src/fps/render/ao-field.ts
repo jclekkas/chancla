@@ -282,7 +282,9 @@ ${lite ? `
   const patch = (m: THREE.Material): THREE.Material => {
     const done = patched.get(m);
     if (done) return done;
-    if (!(m as THREE.MeshToonMaterial).isMeshToonMaterial || m.transparent || m.userData.aoField) { patched.set(m, m); return m; }
+    // Toon materials, and the few standard ones El Patio's sourced variant marks (patio-materials.ts: aoStd).
+    const std = (m as THREE.MeshStandardMaterial).isMeshStandardMaterial && m.userData.aoStd === true;
+    if ((!(m as THREE.MeshToonMaterial).isMeshToonMaterial && !std) || m.transparent || m.userData.aoField) { patched.set(m, m); return m; }
     // A material from the shared cache may also dress a character or a prop: the world gets its own copy.
     const mm = isSharedMaterial(m) ? m.clone() : m;
     // Chain whatever the material already patches (and extend its cache key, never replace it).

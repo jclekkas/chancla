@@ -7,9 +7,10 @@
 // mipmaps average detail away instead of letting it shimmer. Low quality gets
 // half-size canvases and no anisotropic filtering.
 import * as THREE from 'three';
-import { toonRamp } from './materials';
+import { WORLD_RAMP, toonRamp } from './materials';
 import type { Quality } from '../settings';
 import { EL_PATIO } from '../../../shared/map';
+import { SOURCED, type SourcedSet, type SourcedSurface } from './patio-sourced';
 
 // ------------------------------------------------------------------ textures
 // Small procedural canvases, cached, white or neutral where a colour tints them.
@@ -622,12 +623,73 @@ export function noBackfaceShadow<T extends THREE.Material>(m: T): T {
   });
 }
 
-/** One material per kind for the kit's merged meshes. */
-export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
+/**
+ * Sourced variants (patio-sourced.ts). Toon: the sourced colour map and a
+ * modest normal map on the same toon material. Std: MeshStandardMaterial
+ * (colour, normal, roughness; matte, no metal) for these surfaces only.
+ *
+ * Brightness: the toon ramp lights every face within ~70 degrees of the sun
+ * at a flat 100 % (the world ramp: 18 / 44 / 100 %), and faces turned away
+ * keep 18-44 % of it, where Lambert gives cos(angle) and nothing at all. At
+ * this sun the west walls take cos 0.63 and the south walls 0.36, so plain
+ * standard walls came out at about half the toon walls' luminance (measured,
+ * route-walk 'opening'), while walls in the shadow map's shade matched. A
+ * colour multiplier cannot fix both, so the standard materials' direct
+ * diffuse term (theirs only; the scene lights are untouched) is wrapped,
+ * (cos + wrap) / (1 + wrap), and scaled by `sun`. That keeps a smooth
+ * gradient, so the normal maps still read, and lands near the toon bands.
+ * Faces turned from the sun keep the world ramp's darkest band (18 %) of it,
+ * as the toon walls do (their shadow test is skipped there, noBackfaceShadow).
+ */
+export const SOURCED_NORMAL_SCALE = { plaster: 0.45, wood: 0.5, cobble: 0.55 } as const;
+// The floor faces one way: its gain puts a sunlit cobble exactly at the toon floor's lit band.
+const SUN_UP = 0.68; // the sun's elevation sine (world.ts kitLight's sun direction)
+export const STD_TUNE = { wrap: 0.5, sun: 1.6, floorSun: (1 + 0.5) / (SUN_UP + 0.5), back: WORLD_RAMP[0] / 255, color: 1.0 };
+export const STD_GAIN = STD_TUNE.color;
+function stdDiffuseWrap<T extends THREE.Material>(m: T, sun = STD_TUNE.sun): T {
+  return patchShader(m, `std-wrap-${STD_TUNE.wrap}-${sun.toFixed(3)}-${STD_TUNE.back.toFixed(3)}`, (sh) => {
+    const from = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );';
+    const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+    if (!chunk.includes(from) || !sh.fragmentShader.includes('#include <lights_physical_pars_fragment>')) return; // three.js changed: plain Lambert
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk.replace(from,
+      `reflectedLight.directDiffuse += max( saturate( ( dot( geometryNormal, directLight.direction ) + ${STD_TUNE.wrap.toFixed(3)} ) / ${(1 + STD_TUNE.wrap).toFixed(3)} ) * ${sun.toFixed(3)}, ${STD_TUNE.back.toFixed(3)} ) * directLight.color * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`));
+  });
+}
+function sourcedMat(set: SourcedSet, s: SourcedSurface, normalScale: number, uvPerMetre: number, metres: number, color: THREE.Color): THREE.Material {
+  const rep = 1 / (uvPerMetre * metres);
+  for (const t of [s.map, s.normal, s.rough]) t?.repeat.set(rep, rep);
+  const ns = new THREE.Vector2(normalScale, normalScale);
+  if (set.mode === 'std') {
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: color.clone().multiplyScalar(STD_GAIN), map: s.map, normalMap: s.normal, normalScale: ns, roughnessMap: s.rough, roughness: 1, metalness: 0 });
+    m.userData.aoStd = true; // ao-field.ts patches this standard material too
+    return noBackfaceShadow(stdDiffuseWrap(m));
+  }
+  return noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: toonRamp(), vertexColors: true, color, map: s.map, normalMap: s.normal, normalScale: ns }));
+}
+
+/**
+ * One material per kind for the kit's merged meshes. `sourced` (El Patio in
+ * the shooter only, see WorldOptions.sourced) swaps the plaster and the wood
+ * for the sourced textures; every other kind is unchanged.
+ */
+export function kitMaterials(quality: Quality, sourced: SourcedSet | null = null): Record<Kind, THREE.Material> {
   const ramp = toonRamp();
   const toonOf = (opts: THREE.MeshToonMaterialParameters) => noBackfaceShadow(new THREE.MeshToonMaterial({ gradientMap: ramp, ...opts }));
+  const WOOD_TINT = 0xb8875a;
+  const plasterTex = plasterTexture(quality), woodTex = woodTexture(quality);
+  // A sourced map is graded to a known linear mean; the material carries the classic canvas's own
+  // mean over it, so a wall or a door is exactly as bright on average as before.
+  const plaster = sourced
+    ? plasterMacro(sourcedMat(sourced, sourced.plaster, SOURCED_NORMAL_SCALE.plaster, 1 / 2, SOURCED.plaster.metres, new THREE.Color(1, 1, 1).multiplyScalar(meanLinearG(plasterTex) / SOURCED.plaster.mean)), SOURCED.plaster.mean)
+    : plasterMacro(toonOf({ vertexColors: true, map: plasterTex }), meanLinearG(plasterTex));
+  // Door leaves have UVs of 1 per 0.6 m (beams 1.2 m, crates 1 m): the grain runs up the leaf.
+  const wood = sourced
+    ? sourcedMat(sourced, sourced.wood, SOURCED_NORMAL_SCALE.wood, 1 / 0.6, SOURCED.wood.metres, new THREE.Color(WOOD_TINT).multiplyScalar(meanLinearG(woodTex) / SOURCED.wood.mean))
+    // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
+    // Vertex colours are white wherever nothing bakes shading into them (every dressing's wood).
+    : toonOf({ color: WOOD_TINT, vertexColors: true, map: woodTex });
   return {
-    plaster: plasterMacro(toonOf({ vertexColors: true, map: plasterTexture(quality) }), meanLinearG(plasterTexture(quality))),
+    plaster,
     cantera: toonOf({ vertexColors: true, map: canteraTexture(quality) }),
     flat: toonOf({ vertexColors: true }),
     detail: toonOf({ vertexColors: true }),
@@ -635,9 +697,7 @@ export function kitMaterials(quality: Quality): Record<Kind, THREE.Material> {
     talavera: toonOf({ map: talaveraTexture(quality) }),
     // The glass material carries the kit's atlas: window glass and the lane walls' painted pieces.
     glass: toonOf({ vertexColors: true, map: kitAtlas(quality) }),
-    // Honey-toned wood: the darker brown hid a Luna player's dark skirt against the café door.
-    // Vertex colours are white wherever nothing bakes shading into them (every dressing's wood).
-    wood: toonOf({ color: 0xb8875a, vertexColors: true, map: woodTexture(quality) }),
+    wood,
     // A lit lantern: the glow (emissive) carries it, the lit colour is kept low so the sun cannot wash it to white.
     lamp: toonOf({ color: 0x6a4a28, emissive: 0xffa63a, emissiveIntensity: 1.15 }),
     pavers: toonOf({ vertexColors: true, map: paverTexture(quality), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
@@ -680,7 +740,7 @@ export const GROUND_ZONES: Record<string, GroundZones> = {
   fiesta: { sol: [-21, -6.4, -15.8, 6.4], luna: [15.8, -6.4, 21, 6.4], plaza: [-15.8, -7, 15.8, 7] },
 };
 
-export function patioGround(quality: Quality, ground: { w: number; d: number } = { w: 54, d: 38 }, zones: boolean | GroundZones = true): { geometry: THREE.BufferGeometry; material: THREE.MeshToonMaterial } {
+export function patioGround(quality: Quality, ground: { w: number; d: number } = { w: 54, d: 38 }, zones: boolean | GroundZones = true, sourced: SourcedSet | null = null): { geometry: THREE.BufferGeometry; material: THREE.MeshToonMaterial | THREE.Material[] } {
   const zn = zones === true ? GROUND_ZONES.patio! : zones || null;
   const seg = GROUND_TILE_M * 2, nx = Math.max(1, Math.round(ground.w / seg)), nz = Math.max(1, Math.round(ground.d / seg));
   const geometry = new THREE.PlaneGeometry(ground.w, ground.d, nx, nz);
@@ -722,28 +782,92 @@ export function patioGround(quality: Quality, ground: { w: number; d: number } =
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const material = new THREE.MeshToonMaterial({ gradientMap: toonRamp(), map: patioGroundTexture(quality, ground), vertexColors: true });
-  const street = streetTexture(quality);
-  if (flags && street) {
-    const rect = (r: readonly number[]) => new THREE.Vector4(r[0]!, r[1]!, r[2]!, r[3]!);
-    patchShader(material, 'patio-ground-street', (sh) => {
-      sh.uniforms.gStreetMap = { value: street };
-      sh.uniforms.gZone = { value: [rect(zn.plaza), rect(zn.sol), rect(zn.luna)] };
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vGXZ;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGXZ = ( modelMatrix * vec4( transformed, 1.0 ) ).xz;');
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', `#include <common>
+  const cob = flags ? sourced?.cobble ?? null : null;
+  const street = cob ? cob.map : streetTexture(quality);
+  if (!(flags && street)) return { geometry, material };
+  const rect = (r: readonly number[]) => new THREE.Vector4(r[0]!, r[1]!, r[2]!, r[3]!);
+  const zoneUniform = { value: [rect(zn.plaza), rect(zn.sol), rect(zn.luna)] };
+  // The street coordinate: world metres over the street texture's size. Sourced, it is the ground's
+  // own UV scaled (vMapUv runs one paving period per unit), so the normal map's tangent frame,
+  // which three derives from the UVs, matches it.
+  const period = GROUND_TILES * GROUND_TILE_M;
+  if (cob) for (const t of [cob.map, cob.normal, cob.rough]) t?.repeat.set(ground.w / SOURCED.cobble.metres, ground.d / SOURCED.cobble.metres);
+  const zoneVert = (sh: THREE.WebGLProgramParametersWithUniforms) => {
+    sh.uniforms.gZone = zoneUniform;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGXZ = ( modelMatrix * vec4( transformed, 1.0 ) ).xz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying vec2 vGXZ;
-uniform sampler2D gStreetMap;
 uniform vec4 gZone[3];
-float gIn( vec4 r ) { return step( r.x, vGXZ.x ) * step( vGXZ.x, r.z ) * step( r.y, vGXZ.y ) * step( vGXZ.y, r.w ); }`)
-        .replace('#include <map_fragment>', `#ifdef USE_MAP
-  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-  vec4 gStreet = texture2D( gStreetMap, vGXZ * ${(1 / STREET_M).toFixed(4)} );
-  float gS = 1.0 - max( gIn( gZone[0] ), max( gIn( gZone[1] ), gIn( gZone[2] ) ) );
-  diffuseColor *= mix( sampledDiffuseColor, gStreet, gS );
-#endif`);
+float gIn( vec4 r ) { return step( r.x, vGXZ.x ) * step( vGXZ.x, r.z ) * step( r.y, vGXZ.y ) * step( vGXZ.y, r.w ); }
+float gStreetZone() { return 1.0 - max( gIn( gZone[0] ), max( gIn( gZone[1] ), gIn( gZone[2] ) ) ); }`);
+  };
+  const streetUv = cob ? `vMapUv * ${(period / SOURCED.cobble.metres).toFixed(5)}` : `vGXZ * ${(1 / STREET_M).toFixed(4)}`;
+
+  if (sourced?.mode === 'std' && cob) {
+    // Std: the street is its own MeshStandardMaterial. The floor's triangles are split into two
+    // groups (one more draw call): the terracotta zones on the toon material, the street on the
+    // standard one; triangles across a zone edge are in both, each discarding the other's side.
+    patchShader(material, 'patio-ground-nostreet', (sh) => {
+      zoneVert(sh);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nif ( gStreetZone() > 0.5 ) discard;');
     });
+    const std = new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color(1, 1, 1).multiplyScalar(STD_GAIN), map: cob.map, normalMap: cob.normal, roughnessMap: cob.rough, roughness: 1, metalness: 0 });
+    std.normalScale.set(SOURCED_NORMAL_SCALE.cobble, SOURCED_NORMAL_SCALE.cobble);
+    std.userData.aoStd = true;
+    stdDiffuseWrap(std, STD_TUNE.floorSun);
+    patchShader(std, 'patio-ground-street-std', (sh) => {
+      zoneVert(sh);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'if ( gStreetZone() < 0.5 ) discard;\n#include <map_fragment>');
+    });
+    splitGroups(geometry, zn);
+    return { geometry, material: [material, std] };
   }
+
+  // Classic (procedural flagstones) and toon (sourced cobbles, with their normal map in the street only).
+  if (cob?.normal) { material.normalMap = cob.normal; material.normalScale.set(SOURCED_NORMAL_SCALE.cobble, SOURCED_NORMAL_SCALE.cobble); }
+  patchShader(material, cob ? `patio-ground-street-${cob.normal ? 'n' : 'c'}` : 'patio-ground-street', (sh) => {
+    zoneVert(sh);
+    sh.uniforms.gStreetMap = { value: street };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D gStreetMap;\nfloat gS;')
+      .replace('#include <map_fragment>', `gS = gStreetZone();
+#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  vec4 gStreet = texture2D( gStreetMap, ${streetUv} );
+  diffuseColor *= mix( sampledDiffuseColor, gStreet, gS );
+#endif`)
+      // The cobbles' normal map only where the street is (the terracotta stays flat).
+      .replace('#include <normal_fragment_maps>', `#ifdef USE_NORMALMAP_TANGENTSPACE
+  vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+  mapN.xy *= normalScale * gS;
+  normal = normalize( tbn * mapN );
+#endif`);
+  });
   return { geometry, material };
+}
+
+/**
+ * Splits the floor's index into two groups: 0 = triangles touching a terracotta
+ * zone (toon), 1 = triangles touching the street (standard). A triangle across
+ * a zone edge is in both.
+ */
+function splitGroups(geometry: THREE.BufferGeometry, zn: GroundZones): void {
+  const p = geometry.getAttribute('position') as THREE.BufferAttribute, idx = geometry.getIndex()!;
+  const rects = [zn.plaza, zn.sol, zn.luna];
+  const a: number[] = [], b: number[] = [];
+  for (let i = 0; i < idx.count; i += 3) {
+    const v = [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)];
+    const xs = v.map((k) => p.getX(k)), zs = v.map((k) => p.getZ(k));
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const inside = rects.some((r) => x0 >= r[0]! && x1 <= r[2]! && z0 >= r[1]! && z1 <= r[3]!);
+    const touches = rects.some((r) => x1 >= r[0]! && x0 <= r[2]! && z1 >= r[1]! && z0 <= r[3]!);
+    if (touches) a.push(...v);
+    if (!inside) b.push(...v);
+  }
+  geometry.setIndex([...a, ...b]);
+  geometry.clearGroups();
+  geometry.addGroup(0, a.length, 0);
+  geometry.addGroup(a.length, b.length, 1);
 }

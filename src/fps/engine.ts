@@ -15,6 +15,8 @@ import type { SimEvent } from '../../shared/sim';
 import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '../net/session';
 import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
+import { sourcedMode } from './render/patio-sourced';
+export { preloadSourced } from './render/patio-sourced';
 import { Avatar, type AvatarState } from './render/rosa';
 import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
 import { CombatFx } from './render/combat-fx';
@@ -152,7 +154,7 @@ export class Engine {
     this.camera = new THREE.PerspectiveCamera(s.fov, 1.6, 0.05, 260);
     this.scene.fog = new THREE.Fog(0xf3b07a, 45, 140);
 
-    this.world = buildWorld(s.quality);
+    this.world = buildWorld(s.quality, this.shooterWorld({}));
     this.scene.add(this.world.group, this.proj.group, this.ruleros.group, this.fx.group, this.contact.mesh);
     this.contact.setStrength(contactStrength(s.quality));
     this.fx.setQuality(s.quality);
@@ -275,7 +277,7 @@ export class Engine {
       this.renderer.shadowMap.enabled = s.quality !== 'low';
       this.scene.remove(this.world.group);
       disposeTree(this.world.group);
-      this.world = buildWorld(s.quality, this.worldOpts);
+      this.world = buildWorld(s.quality, this.shooterWorld(this.worldOpts));
       this.scene.add(this.world.group);
       this.lightHand();
       this.renderer.shadowMap.needsUpdate = true;
@@ -367,6 +369,16 @@ export class Engine {
   // ------------------------------------------------------------------
   // Mode switches
 
+  /**
+   * The world options this engine builds with: El Patio (not a campaign layout) takes the
+   * sourced surface textures when the page asked for them (?mat=, patio-sourced.ts) and they
+   * loaded before the engine started.
+   */
+  private shooterWorld(opts: WorldOptions): WorldOptions {
+    const patio = !opts.boxes && (opts.map ?? EL_PATIO).id === 'patio';
+    return patio && sourcedMode() !== 'classic' ? { ...opts, sourced: true } : opts;
+  }
+
   /** Rebuilds the world: a map, a campaign layout and lighting (or El Patio by default). */
   setWorld(opts: WorldOptions): void {
     this.worldOpts = opts;
@@ -374,7 +386,7 @@ export class Engine {
     this.placePickups();
     this.scene.remove(this.world.group);
     disposeTree(this.world.group);
-    this.world = buildWorld(this.quality, opts);
+    this.world = buildWorld(this.quality, this.shooterWorld(opts));
     this.scene.add(this.world.group);
     this.lightHand();
     (this.scene.fog as THREE.Fog).color.setHex(this.world.fog);

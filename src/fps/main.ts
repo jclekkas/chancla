@@ -504,6 +504,9 @@ async function boot(): Promise<void> {
     try {
       bootProgress(35, 'loading.engine');
       const mod = await import('./engine');
+      // ?mat=toon|std: El Patio's sourced textures, loaded before the engine builds its first world
+      // (at most 4 s; classic otherwise). Without the parameter this returns at once.
+      await mod.preloadSourced(store.value.quality);
       bootProgress(65, 'loading.world');
       await new Promise((r) => setTimeout(r, 0));
       input = new FpsInput($('stage'));

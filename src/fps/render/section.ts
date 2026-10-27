@@ -25,6 +25,7 @@ import { EL_PATIO, type MapBox } from '../../../shared/map';
 import type { Quality } from '../settings';
 import { COLORS, boxGeo } from './materials';
 import { ATLAS, TINTED, atlasUV, kitMaterials, type AtlasRegion, type Kind, type Mat } from './patio-materials';
+import type { SourcedSet } from './patio-sourced';
 import { archPanel, archRing, exposedSpans, faceCovered, faceOf, leafTuft, tileStrip, toAlong, SIDES, type Side } from './patio-shapes';
 
 /** The hero blocks: the café and its point-mirrored Panadería keep their milestone 2 dressing. */
@@ -229,6 +230,8 @@ export interface SectionOptions {
   heroZone?: boolean;
   /** Team banners hung on the walls (windows keep clear of them). */
   banners?: ReadonlyArray<{ x: number; z: number }>;
+  /** El Patio's sourced plaster and wood (patio-sourced.ts); classic when absent. */
+  sourced?: SourcedSet | null;
 }
 
 /** Builds the kit for the given boxes. Returns the group and its draw-call count. */
@@ -239,7 +242,7 @@ export function buildSection(boxes: readonly MapBox[], quality: Quality = 'high'
   const group = new THREE.Group();
   group.name = 'section-patio';
   const batch = new KindBatch();
-  const materials = kitMaterials(quality);
+  const materials = kitMaterials(quality, opts.sourced ?? null);
   const M = {
     trim: { k: 'plaster', c: 0xfbf1dc },
     // Small trim (caps, keystones, corbels): untextured and casting no shadow. Its shadow is

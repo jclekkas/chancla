@@ -13,6 +13,7 @@ import type { DressingModule, SceneLight } from './map-dressing';
 import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
 import { GROUND_ZONES, patioGround } from './patio-materials';
+import { sourcedSet } from './patio-sourced';
 import { kitLight, shadowSettings } from './lighting';
 import { AO_TUNE, buildAoField } from './ao-field';
 import type { Quality } from '../settings';
@@ -55,6 +56,12 @@ export interface WorldOptions {
   boxes?: readonly MapBox[]; // a campaign layout instead of the map's own boxes
   theme?: ThemeName;
   teamDecor?: boolean; // Sol/Luna banners and emblems (multiplayer only)
+  /**
+   * El Patio's sourced surface textures (patio-sourced.ts), in the variant the page asked for
+   * (?mat=). Only the shooter engine sets it, and only for El Patio; ignored on any other map
+   * or a campaign layout, and while the textures are not loaded.
+   */
+  sourced?: boolean;
 }
 
 const STUCCO: Record<string, number> = {
@@ -99,6 +106,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // objects (patio-focal.ts).
   const kit = !opts.boxes && sectionEnabled();
   const patioKit = kit && map === EL_PATIO;
+  const sourced = patioKit && opts.sourced ? sourcedSet(quality) : null;
   // A map's own props (map-dressing.ts): La Plaza's market, La Fiesta's party.
   const dressing: DressingModule | null = !kit ? null : map.id === 'plaza' ? PLAZA_DRESSING : map.id === 'fiesta' ? FIESTA_DRESSING : null;
   const dressed = (k: 'awnings' | 'trees' | 'danceFloor') => !!dressing?.decor.has(k);
@@ -159,7 +167,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // El Patio: one repeating paving texture, with production's ground zones
   // (streets, team courts) kept as vertex tints, and the fountain's path
   // rings as a flat mesh (they were painted into production's ground canvas).
-  const pg = kit ? patioGround(quality, decor.ground, GROUND_ZONES[map.id ?? 'patio'] ?? false) : null;
+  const pg = kit ? patioGround(quality, decor.ground, GROUND_ZONES[map.id ?? 'patio'] ?? false, sourced) : null;
   const ground = pg
     ? new THREE.Mesh(pg.geometry, pg.material)
     : new THREE.Mesh(new THREE.PlaneGeometry(decor.ground.w, decor.ground.d), toon(0xffffff, { map: groundTexture(quality === 'high' ? 40 : quality === 'medium' ? 28 : 18) }));
@@ -588,7 +596,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
 
   // ------------------------------------------------------ bake and finish
   let calls = batch.build(group, (gs) => mergeGeometries(gs, false)) + haloCalls;
-  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality, { heroZone: patioKit, banners: decor.banners ?? [] }); group.add(sec.group); calls += sec.calls; }
+  if (sectionBoxes.length) { const sec = buildSection(sectionBoxes, quality, { heroZone: patioKit, banners: decor.banners ?? [], sourced }); group.add(sec.group); calls += sec.calls; }
   const focal = focalBoxes.length ? buildFocal(focalBoxes, quality) : null;
   if (focal) { group.add(focal.group); calls += focal.calls; }
   const dress = dressing ? dressing.build(dressBoxes, decor, quality) : null;

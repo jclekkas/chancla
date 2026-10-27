@@ -10,8 +10,10 @@
 // plaza, north through the opening into the shaded alley, east to the bin
 // where the fight is. Tags: desktop-high (1280x720), phone-low (844x390, touch).
 //
-//   DIST=<build> OUT=<dir> [PORT=4255] [VIEWS=desktop-high,phone-low] [FRAMES=1] node --import tsx scripts/route-walk.ts
-// FRAMES=0 takes only the stills.
+//   DIST=<build> OUT=<dir> [PORT=4255] [VIEWS=desktop-high,phone-low] [FRAMES=1] [MAT=classic|toon|std] node --import tsx scripts/route-walk.ts
+// FRAMES=0 takes only the stills. MAT=<v> opens the page with ?mat=<v> (El Patio's sourced textures).
+// Each station's costs also carry swRenderMs: the scene alone rendered 8 times, synced by a pixel read,
+// timed from Node (software rendering here: compare variants, never read as device frame time).
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -54,7 +56,7 @@ async function run(browser: Browser, tag: string): Promise<void> {
   const settings = { practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: q, qualityMode: q, music: 0, lang: 'en', name: 'Rosa', killcam: true, ...(process.env.ROSA === 'candidate' ? { rosaCandidate: true } : {}) };
   await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
-  await p.goto(SITE);
+  await p.goto(SITE + (process.env.MAT ? `?mat=${encodeURIComponent(process.env.MAT)}` : ''));
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
   await sleep(300);
   await p.evaluate(() => (document.getElementById('btn-practice') as HTMLElement).click());
@@ -134,6 +136,11 @@ async function run(browser: Browser, tag: string): Promise<void> {
         r.info.autoReset = true;
         return { ...frame, geometries: r.info.memory.geometries, textures: r.info.memory.textures, programs: r.info.programs?.length ?? 0, textureMB: +(bytes / 1048576).toFixed(2) };
       });
+      const sync = () => p.evaluate(() => { const e = (window as any).__fps.engine(), r = e.renderer, gl = r.getContext(); r.render(e.scene, e.camera); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); });
+      await sync();
+      const t0 = Date.now();
+      for (let k = 0; k < 8; k++) await sync();
+      (costs[`${tag}-${st}`] as Record<string, unknown>).swRenderMs = +((Date.now() - t0) / 8).toFixed(1);
     }
   }
   if (FRAMES && spawnSync('which', ['ffmpeg']).status === 0) {

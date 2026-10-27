@@ -100,7 +100,10 @@ async function main(): Promise<void> {
         await page.waitForFunction(() => document.getElementById('spawn-banner')!.hidden, undefined, { timeout: 12000 }).catch(() => undefined);
         s = await fps(page);
         check(`practice ${map}: the team chip stays after the banner goes`, /YOUR TEAM: SOL/.test(s.chip) && s.banner === '', { chip: s.chip, banner: s.banner });
-        // Teammates (Sol) carry ALLY, opponents ENEMY, whenever they are on screen.
+        // Teammates (Sol) carry ALLY, opponents ENEMY, whenever they are on screen. The bots walk
+        // into view on their own time: give them up to 10 s (the spawn banner, which this used to
+        // wait out, now lasts its 2.8 s at any frame rate).
+        await page.waitForFunction(() => [...document.querySelectorAll('.nameplate')].some((e) => (e as HTMLElement).style.display !== 'none'), undefined, { timeout: 10000, polling: 200 }).catch(() => undefined);
         const tags = await page.evaluate(() => [...document.querySelectorAll('.nameplate')].filter((e) => (e as HTMLElement).style.display !== 'none').map((e) => e.className));
         allyTagsSeen += tags.filter((c) => c.includes('sol ally')).length;
         check(`practice ${map}: every visible name tag has the right role`, tags.every((c) => (c.includes('sol') && c.includes('ally')) || (c.includes('luna') && c.includes('enemy'))), tags);

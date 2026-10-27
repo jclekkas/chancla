@@ -73,13 +73,17 @@
 - **Unit:** 580/580. Typecheck clean.
 - **Quality switching:** 27/27.
 - **Campaign:** unchanged; mean pixel difference 0.08 of 255 against the baseline.
-- **Killcam (desktop group):** 23/25. The two failures trace to software-renderer frame times, not to
-  a defect in this code:
-  - **Replay length:** "plays to its end in real time" measured 1.96 s against 1.5 s +/- 0.4 s.
-    The replay drew 7 frames at about 280 ms each.
-  - **Repeated deaths:** the replay count differed from +5; memory and the buffer did not grow.
-    The test's 3 s wait for each replay to start is short at these frame times.
-  - **Still to confirm:** the release-candidate run will show whether this repeats.
+- **Killcam (desktop group): unresolved.** It is timing-sensitive on the software renderer, and the
+  failing checks change from run to run:
+  - **Materials build, 23/25:** "plays to its end in real time" took 1.96 s against 1.5 s +/- 0.4 s
+    (7 frames), and the repeated-deaths replay count was off by one.
+  - **Release candidate, 27/29:** "chancla in flight" sampled no projectile, and "Esc holds the
+    replay" found no replay active.
+  - **Replay mechanism:** a replay is recorded once per frame and is skipped ('late') if it cannot fit
+    before respawn. At 0.2-1 s per frame that fallback is expected.
+  - **Not established:** that every failure is that fallback. On a real device it is a device check:
+    the replay plays, Esc and Skip work, and control returns on every death.
+  - **Online killcam** (`killcam-mp-e2e`) passes.
 
 ## Limits
 

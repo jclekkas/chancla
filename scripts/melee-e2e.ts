@@ -142,7 +142,13 @@ async function desktop(browser: Browser, blocked: string[], errors: string[]): P
   p.on('websocket', (w) => blocked.push(`websocket ${w.url()}`));
   await startPractice(p, { practiceMap: 'patio', practiceAllies: 1, practiceEnemies: 1, practiceDifficulty: 'easy', quality: 'low', qualityMode: 'low' });
   await instrument(p);
-  if (await p.isVisible('#btn-click-play')) await p.click('#btn-click-play', { force: true }); else await p.click('#stage', { force: true });
+  // Capture the mouse through the click-to-play button only: a click on the stage itself is a throw,
+  // which would land before the V checks. Then wait until the game takes input (captured, nothing held).
+  await p.waitForSelector('#btn-click-play', { state: 'visible', timeout: 20000 }).catch(() => undefined);
+  if (await p.isVisible('#btn-click-play')) await p.click('#btn-click-play', { force: true });
+  await p.waitForFunction(() => !!document.pointerLockElement && (window as any).__fps.input()?.enabled !== false && ((window as any).__fps.input()?.heldCount ?? 0) === 0, undefined, { timeout: 15000 });
+  const thrownAtStart = await p.evaluate(() => { const f = (window as any).__fps, s = f.session(); return [...f.host().hub.rooms.values()][0].sim.players.get(s.id).stats.throws; });
+  check('input ready before the melee checks: mouse captured, nothing thrown', thrownAtStart === 0, { throws: thrownAtStart });
   await sleep(500);
   const hint = await p.evaluate(() => document.getElementById('sub-msg')?.textContent ?? '');
   check('practice explains melee once at the first spawn (V, Chanclazo, Revés)', /V/.test(hint) && /Chanclazo/.test(hint) && /Rev/.test(hint), hint);
@@ -265,9 +271,14 @@ async function desktop(browser: Browser, blocked: string[], errors: string[]): P
   await sleep(600);
   const shown = (await foeState(p)).shownRuleros;
   check('everyone sees the same missing roller: the snapshot carries her hairstyle', shown === r1.ruleros, { shown, server: r1.ruleros });
-  await sleep(1800);
-  const f2 = await fx(p);
-  check('the flying roller expires (nothing left in flight)', f2.active === 0, f2);
+  // A roller's 1.6 s of flight is game time: the engine steps at most 0.1 s per frame, so on a
+  // slow renderer it lasts longer in wall time. Allow the same number of frames (16, plus slack),
+  // never less than the 2.4 s a normal frame rate needs: it must still expire, not linger.
+  const msPerFrame = await p.evaluate(() => new Promise<number>((r) => { let n = 0; const t0 = performance.now(); const f = () => { if (++n === 6) r((performance.now() - t0) / 5); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
+  const budget = Math.max(1800, msPerFrame * 20);
+  const end = Date.now() + budget; let f2 = await fx(p);
+  while (f2.active > 0 && Date.now() < end) { await sleep(100); f2 = await fx(p); }
+  check('the flying roller expires (nothing left in flight)', f2.active === 0, { ...f2, msPerFrame: Math.round(msPerFrame), budgetMs: Math.round(budget) });
 
   // Finish her with El Revés to the face: the rest scatter; respawn restores them.
   let fin = await foeState(p);

@@ -251,7 +251,15 @@ export class Hud {
     this.set('conn', text ?? '', () => { this.el.conn.hidden = !text; this.el.conn.textContent = text ?? ''; });
   }
 
-  update(f: HudFrame, dt: number, myYaw: number): void {
+  /**
+   * `dt` is the engine's frame step (capped at 0.1 s, as the simulation's).
+   * `shownDt` is the real time the HUD was on screen since the last frame,
+   * 0 while the practice menu pauses the match and at most 1 s per frame (a
+   * tab in the background draws no frames): presentation timers that promise
+   * a duration in seconds, like the spawn banner, count it, so they last that
+   * long at any frame rate. Defaults to `dt`.
+   */
+  update(f: HudFrame, dt: number, myYaw: number, shownDt = dt): void {
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) this.el.hitmarker.classList.remove('on');
     if (this.missT > 0 && (this.missT -= dt) <= 0) this.el.missmarker?.classList.remove('on');
     if (this.hurtT > 0 && (this.hurtT -= dt) <= 0) this.el.vigHurt.classList.remove('on');
@@ -282,7 +290,7 @@ export class Hud {
       this.el.chipIcon.textContent = teamIcon(tm);
       this.el.chipText.textContent = t('hud.yourTeam', { team: teamName(tm).toUpperCase() });
     });
-    if (this.bannerT > 0 && (this.bannerT -= dt) <= 0) this.el.banner.hidden = true;
+    if (this.bannerT > 0 && (this.bannerT -= shownDt) <= 0) this.el.banner.hidden = true;
     const hp = Math.max(0, Math.round(f.hp));
     this.set('hp', `${hp}`, () => {
       this.el.hpFill.style.width = `${(hp / MATCH.maxHealth) * 100}%`;

@@ -57,6 +57,8 @@ export class Engine {
   session: GameSession | null = null;
   practice = false;
   paused = false; // practice menu: stop ticking entirely
+  /** Real seconds since the last frame, at most 1 (frame()). */
+  private shownDt = 0;
   inputActive = false; // false while an online menu is open
   readonly stats = new Map<number, PlayerStats>();
   fps = 0;
@@ -824,6 +826,8 @@ export class Engine {
     // The menu backdrop does not need full rate: cap it at 30 fps.
     if (this.mode === 'menu' && now - this.last < 1000 / 30 - 2) return;
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
+    // Real time since the last frame for presentation timers (HUD.update), at most 1 s (a background tab draws no frames).
+    this.shownDt = Math.min(1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     this.time += dt;
     this.fpsFrames++;
@@ -1010,7 +1014,7 @@ export class Engine {
       timeLeftMs: snap?.tl ?? MATCH.durationMs, phase: s.phase, countdownMs: snap?.cd ?? 0,
       region: regionAt(this.map, s.body.x, s.body.y, s.body.z), rtt: s.rtt, quality: s.connectionQuality,
       fps: this.fps, showStats: settings.showStats, practice: this.practice, team: s.team,
-    }, dt, this.input.yaw);
+    }, dt, this.input.yaw, this.paused ? 0 : this.shownDt);
 
     // Name tags: teammates always, opponents only in plain sight.
     const w = this.stage.clientWidth || window.innerWidth, h = this.stage.clientHeight || window.innerHeight;

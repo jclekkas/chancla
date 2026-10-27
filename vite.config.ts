@@ -71,7 +71,8 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         classic: resolve(__dirname, 'classic.html'),
-        courtyard: resolve(__dirname, 'courtyard.html'),
+        // The graphics lab (a baseline renderer and a test hook) ships only in offline review builds.
+        ...(offlineOnly ? { courtyard: resolve(__dirname, 'courtyard.html') } : {}),
       },
     },
   },

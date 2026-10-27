@@ -139,7 +139,7 @@ export class Engine {
   ) {
     const s = settings();
     this.quality = s.quality;
-    this.rosaCandidate = s.rosaCandidate;
+    this.rosaCandidate = candidateAllowed(s.rosaCandidate);
     // The arena hand is built at the quality tier (fewer rings on Medium and Low, same grip and motion).
     this.vm = new ViewModel({ arena: true, quality: s.quality });
     // Anti-aliased on every tier: Low draws at pixel ratio 1, and on a 2x or 3x phone its unsmoothed
@@ -269,8 +269,8 @@ export class Engine {
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
     this.fx.setReducedMotion(s.reducedMotion);
-    const candidateChanged = s.rosaCandidate !== this.rosaCandidate;
-    this.rosaCandidate = s.rosaCandidate;
+    const candidateChanged = candidateAllowed(s.rosaCandidate) !== this.rosaCandidate;
+    this.rosaCandidate = candidateAllowed(s.rosaCandidate);
     // El Patio's sourced textures for the new tier are loaded before the rebuild (at most 4 s,
     // then classic): until then the current tier stays on screen, so nothing pops in.
     let qualityChange = s.quality !== this.quality;
@@ -309,6 +309,7 @@ export class Engine {
    * load failed and the current model stays).
    */
   setRosaCandidate(on: boolean): Promise<void> {
+    on = candidateAllowed(on);
     if (on === this.rosaCandidate) return Promise.resolve();
     this.rosaCandidate = on;
     return this.refreshAvatars('rosa');
@@ -1479,6 +1480,10 @@ function driveAvatar(av: Avatar, r: RemotePlayer, ruleros: number, dt: number, r
     msSinceMelee: r.msSinceMelee, ruleros,
   }, dt, reduced);
 }
+
+declare const __OFFLINE_ONLY__: boolean;
+/** The candidate Rosa is a review option: honoured only in offline review builds, whatever a saved setting says. */
+function candidateAllowed(v: boolean): boolean { return v && typeof __OFFLINE_ONLY__ !== 'undefined' && __OFFLINE_ONLY__; }
 
 /** shadeAvatar's probe heights (m above her feet) and scratch vector. */
 const SHADE_H = [0.4, 0.95, 1.45];

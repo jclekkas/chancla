@@ -62,6 +62,34 @@
 - **Server config:** the code under `server/` is unchanged apart from `/healthz` now reporting
   `protocol`. Only `shared/` changed. No new environment variables.
 
+## Final checks (after visual approval)
+
+- **Same-tab invite: resolved.** `scripts/sametab-invite-e2e.ts` uses one browser page on the
+  production-mode build and a protocol client as host.
+  - Three rounds, all passed: the join screen appeared with the code in 1.7-4.5 s on the software
+    renderer, and Join reached the lobby.
+  - The earlier `failure-e2e` timeout came from that test running two heavy pages at once, not from
+    the invite path. It also failed with anti-aliasing off, and the invite code is unchanged since
+    main.
+  - For devices: `docs/RC1-LAN-TEST.md` runs the candidate's client and a v6 server on your Mac.
+- **Killcam: resolved, with one visual limit.** `scripts/killcam-classify.ts` ran 12 confirmed
+  deaths (Medium and Low; Chanclazo, Revés and thrown), with Escape pressed only once the replay was
+  showing.
+  - Every death ended in a replay that played to its end, and control returned every time. No
+    fallback was needed.
+  - Escape opened the menu and held the replay, which then finished.
+  - The killcam suite's failures were its fixed 3-4 s waits running at 1-1.6 s per frame.
+  - **Limit:** in 2 of 4 thrown replays the chancla was not drawn in flight. The flight lasts about
+    0.25 s, and these replays rendered one or two frames. A device at normal frame rate renders it;
+    confirm by eye.
+
+## Rollback targets
+
+| Side | Today | How it is known |
+|---|---|---|
+| Vercel production | `main` `d27f74d`, deployment `2fL39qXDmaVfQLHC4AR1BoWmZbab` (built 23 Oct, 02:30 UTC) | GitHub's Vercel status for the tip of `main`. **Confirm** in Vercel, under Deployments then Production, that it is the current one: a manual promote or redeploy would not show on GitHub. |
+| Render server | branch `codex/online-production`, tip `8e543ee` | `render.yaml`, with auto-deploy off. **Confirm** the live commit in Render under Events: Render reports nothing to GitHub, and production was not contacted from here. |
+
 ## Cutover (needs your approval at each step)
 
 1. Pick a quiet time. Note the current Render deploy and the current Vercel production deployment

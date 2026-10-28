@@ -16,6 +16,7 @@ import type { ClientProjectile, GameSession, RemotePlayer, SnapRecord } from '..
 import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
 import { preloadSourced, sourcedReady } from './render/patio-sourced';
+import { hoodWanted } from './render/neighborhood';
 export { preloadSourced } from './render/patio-sourced';
 import { Avatar, type AvatarState } from './render/rosa';
 import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
@@ -159,6 +160,7 @@ export class Engine {
     this.scene.fog = new THREE.Fog(0xf3b07a, 45, 140);
 
     this.world = buildWorld(s.quality, this.shooterWorld({}));
+    this.applyFog();
     this.scene.add(this.world.group, this.proj.group, this.ruleros.group, this.fx.group, this.contact.mesh);
     this.contact.setStrength(contactStrength(s.quality));
     this.fx.setQuality(s.quality);
@@ -293,6 +295,7 @@ export class Engine {
       disposeTree(this.world.group);
       this.world = buildWorld(s.quality, this.shooterWorld(this.worldOpts));
       this.scene.add(this.world.group);
+      this.applyFog();
       this.lightHand();
       this.renderer.shadowMap.needsUpdate = true;
       this.warmWorld();
@@ -390,7 +393,17 @@ export class Engine {
    * loaded before the engine started.
    */
   private shooterWorld(opts: WorldOptions): WorldOptions {
-    return this.isPatio(opts) ? { ...opts, sourced: true } : opts;
+    const o = this.isPatio(opts) ? { ...opts, sourced: true } : opts;
+    // The neighbourhood beyond the walls: the arena maps only (a campaign layout passes its own boxes).
+    return !opts.boxes && hoodWanted() ? { ...o, hood: true } : o;
+  }
+
+  /** The fog's colour and distances from the world just built (a map without the neighbourhood keeps the default range). */
+  private applyFog(): void {
+    const f = this.scene.fog as THREE.Fog;
+    f.color.setHex(this.world.fog);
+    f.near = this.world.fogRange?.[0] ?? 45;
+    f.far = this.world.fogRange?.[1] ?? 140;
   }
 
   private isPatio(opts: WorldOptions): boolean {
@@ -407,7 +420,7 @@ export class Engine {
     this.world = buildWorld(this.quality, this.shooterWorld(opts));
     this.scene.add(this.world.group);
     this.lightHand();
-    (this.scene.fog as THREE.Fog).color.setHex(this.world.fog);
+    this.applyFog();
     this.renderer.shadowMap.needsUpdate = true;
     this.warmWorld();
   }

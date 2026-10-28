@@ -16,6 +16,7 @@ import { GROUND_ZONES, patioGround } from './patio-materials';
 import { sourcedSet } from './patio-sourced';
 import { kitLight, shadowSettings } from './lighting';
 import { AO_TUNE, buildAoField } from './ao-field';
+import { buildNeighborhood } from './neighborhood';
 import type { Quality } from '../settings';
 
 export interface WorldView {
@@ -23,6 +24,8 @@ export interface WorldView {
   sun: THREE.DirectionalLight;
   /** The fog colour this world uses (the engine owns the fog itself). */
   fog: number;
+  /** This map's fog distances (near, far) when the neighbourhood is on. */
+  fogRange?: [number, number];
   /** The arena maps' light (the first-person hand is lit to match); absent for campaign layouts, which keep theirs. */
   light?: SceneLight;
   update(t: number): void;
@@ -62,6 +65,12 @@ export interface WorldOptions {
    * or a campaign layout, and while the textures are not loaded.
    */
   sourced?: boolean;
+  /**
+   * The neighbourhood beyond the walls (neighborhood.ts): roof clusters, near rooflines, hillside,
+   * landmarks and a ridge in place of the plain ring of boxes. Only the shooter engine sets it, for the
+   * arena maps; campaign layouts and the Arcade keep the plain ring.
+   */
+  hood?: boolean;
 }
 
 const STUCCO: Record<string, number> = {
@@ -535,8 +544,9 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   church.add(tower, belfry, cap, cross, arch, bell);
   church.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
   if (ch) { church.position.set(ch.x, 0, ch.z + 24); group.add(church); }
-  // Distant rooftops so the horizon is not empty.
-  for (let i = 0; i < 26; i++) {
+  // Distant rooftops so the horizon is not empty (the neighbourhood replaces them when it is on).
+  const hoodOn = kit && !!opts.hood;
+  for (let i = 0; i < (hoodOn ? 0 : 26); i++) {
     const a = (i / 26) * Math.PI * 2;
     const r = Math.max(38, Math.hypot(bd.maxX, bd.maxZ) + 6) + (i % 3) * 5;
     const hgt = 6 + ((i * 7) % 5) * 1.6;
@@ -622,6 +632,10 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     group.userData.aoField = { materials: n, bytes: ao.bytes, bakeMs: ao.bakeMs };
   }
 
+  // The neighbourhood is added after the occlusion field is applied: it lies outside the field and keeps its own light.
+  const hood = hoodOn ? buildNeighborhood(map, quality, th.sky[2], th.hemi[1], decor.church ? { x: decor.church.x, z: decor.church.z } : undefined) : null;
+  if (hood) { group.add(hood.group); calls += hood.calls; }
+
   const water = group.getObjectByName('water') as THREE.Mesh | undefined;
   const statue = group.getObjectByName('statue');
   let lastT = 0;
@@ -629,6 +643,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     group,
     sun,
     fog: th.fog,
+    fogRange: hood?.fog,
     light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
     pinata: pinata?.view,

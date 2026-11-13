@@ -18,6 +18,7 @@ import type { MapBox, MapData } from '../../../shared/map';
 import type { Quality } from '../settings';
 import { COLORS } from './materials';
 import { kitMaterials } from './patio-materials';
+import type { WalkPath } from './life';
 
 export interface HoodResult {
   group: THREE.Group;
@@ -27,6 +28,10 @@ export interface HoodResult {
   tris: number;
   /** This map's fog distances (near, far). */
   fog: [number, number];
+  /** Terrace fronts where a distant person can walk (for the living layer). */
+  paths: WalkPath[];
+  /** The lit-window and candle material (flickers in the living layer). */
+  lamp: THREE.MeshToonMaterial;
 }
 
 /** Review switch: ?hood=0 in the page URL builds the arenas without the neighbourhood. */
@@ -465,7 +470,7 @@ function ring(m: Merge, spec: HoodSpec, map: MapData, r: () => number, lite: boo
   }
 }
 
-function hillside(m: Merge, spec: HoodSpec, hill: Hill, r: () => number, lite: boolean): void {
+function hillside(m: Merge, spec: HoodSpec, hill: Hill, r: () => number, lite: boolean, paths: WalkPath[]): void {
   const a0 = hill.az - hill.span / 2, rows = lite ? Math.max(4, hill.rows - 2) : hill.rows;
   for (let i = 0; i < rows; i++) {
     const rr = hill.r0 + i * hill.step * (hill.rows / rows);
@@ -477,6 +482,12 @@ function hillside(m: Merge, spec: HoodSpec, hill: Hill, r: () => number, lite: b
       const ry = Math.atan2(-x, -z), base = mx(x, 0, z, 1, 1, 1, ry);
       // The terrace: an earth column whose top is dry grass and whose front is a retaining wall.
       m.add('solid', BOX, base.clone().multiply(mx(0, (y - 3) / 2, 0, cell + 0.7, y + 3, hill.step * (hill.rows / rows) + 1.2)), 0xcbb08a, 1.0, 0.7, r() < 0.5 ? 0x9a9c5c : 0xb3a468);
+      // A walkway along the terrace front, in front of the house, for the living layer.
+      if (i < 5 && y > 3 && r() < 0.5) {
+        const ux = Math.cos(a), uz = Math.sin(a), depth = hill.step * (hill.rows / rows) + 1.2, off = depth / 2 - 0.8, half = cell * 0.35;
+        const fx = x - ux * off, fz = z - uz * off;
+        paths.push({ x0: fx - uz * half, z0: fz + ux * half, x1: fx + uz * half, z1: fz - ux * half, y });
+      }
       if (r() < 0.14) continue; // a gap: a stair, a yard
       const w = cell * (0.55 + r() * 0.35), d = hill.step * (0.45 + r() * 0.25), floors = 1 + (r() < 0.3 ? 1 : 0), h = 3.2 * floors + r() * 0.8;
       const hx = spec.palette[Math.floor(r() * spec.palette.length)]!;
@@ -540,7 +551,8 @@ export function buildNeighborhood(map: MapData, quality: Quality, horizon: numbe
   roofClusters(near, spec, map.boxes, r, lite);
   vistas(wall, spec, map, r, lite);
   ring(far, spec, map, r, lite, clear);
-  for (const h of spec.hills) hillside(far, spec, h, r, lite);
+  const paths: WalkPath[] = [];
+  for (const h of spec.hills) hillside(far, spec, h, r, lite, paths);
   landmarks(far, spec, lite);
 
   const kit = kitMaterials(quality);
@@ -587,5 +599,5 @@ export function buildNeighborhood(map: MapData, quality: Quality, horizon: numbe
     ridgeM.renderOrder = R > 140 ? -2 : -1;
     group.add(ridgeM); calls++; tris += (ridgeM.geometry.index?.count ?? 0) / 3;
   }
-  return { group, calls, tris: Math.round(tris), fog: spec.fog };
+  return { group, calls, tris: Math.round(tris), fog: spec.fog, paths, lamp: keep.lamp as THREE.MeshToonMaterial };
 }

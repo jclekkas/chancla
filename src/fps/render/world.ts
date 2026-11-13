@@ -12,7 +12,8 @@ import { FOCAL_MATS, buildFocal } from './patio-focal';
 import type { DressingModule, SceneLight } from './map-dressing';
 import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
-import { GROUND_ZONES, patioGround } from './patio-materials';
+import { GROUND_ZONES, patchShader, patioGround } from './patio-materials';
+import { buildLife, lifeWanted, type LifeView } from './life';
 import { sourcedSet } from './patio-sourced';
 import { kitLight, shadowSettings } from './lighting';
 import { AO_TUNE, buildAoField } from './ao-field';
@@ -29,6 +30,8 @@ export interface WorldView {
   /** The arena maps' light (the first-person hand is lit to match); absent for campaign layouts, which keep theirs. */
   light?: SceneLight;
   update(t: number): void;
+  /** Reduced motion: the neighbourhood's birds, walkers, dust and the swaying washing hold still. */
+  setCalm?(calm: boolean): void;
   drawCalls: number;
   // Campaign: lift the ambient light (the patio brightening as it is cleaned).
   setBrightness(k: number): void;
@@ -482,7 +485,19 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   for (const [ax, az, bx2, bz, y] of decor.papel ?? []) line(ax, az, bx2, bz, y, false);
   const wires = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3)), new THREE.LineBasicMaterial({ color: COLORS.ink }));
   lines.add(wires);
-  const clothMesh = clothes.build(new THREE.PlaneGeometry(1, 1), toon(0xffffff, { side: THREE.DoubleSide }));
+  // With the living neighbourhood on, washing and bunting sway on the wind: the lower edge swings most.
+  const lifeOn = kit && !!opts.hood && lifeWanted();
+  const swayU = { value: 0 };
+  const clothMat = toon(0xffffff, { side: THREE.DoubleSide });
+  if (lifeOn) {
+    patchShader(clothMat, 'sway', (sh) => {
+      sh.uniforms.uSway = swayU;
+      sh.vertexShader = 'uniform float uSway;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        float swPh = instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 0.9;
+        transformed.z += (sin(uSway * 1.7 + swPh) * 0.10 + sin(uSway * 3.1 + swPh * 1.7) * 0.03) * (0.5 - position.y);`);
+    });
+  }
+  const clothMesh = clothes.build(new THREE.PlaneGeometry(1, 1), clothMat);
   if (clothMesh) lines.add(clothMesh);
   group.add(lines);
 
@@ -635,6 +650,12 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // The neighbourhood is added after the occlusion field is applied: it lies outside the field and keeps its own light.
   const hood = hoodOn ? buildNeighborhood(map, quality, th.sky[2], th.hemi[1], decor.church ? { x: decor.church.x, z: decor.church.z } : undefined) : null;
   if (hood) { group.add(hood.group); calls += hood.calls; }
+  let life: LifeView | null = null;
+  if (hood && lifeOn) {
+    life = buildLife({ map, quality, paths: hood.paths, dusk: th.bulbsGlow, mote: th.bulbsGlow ? 0xff9ec0 : 0xfff1cc, lamp: hood.lamp });
+    group.add(life.group); calls += life.calls;
+  }
+  let calm = false;
 
   const water = group.getObjectByName('water') as THREE.Mesh | undefined;
   const statue = group.getObjectByName('statue');
@@ -646,6 +667,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     fogRange: hood?.fog,
     light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
+    setCalm(c: boolean) { calm = c; life?.setCalm(c); },
     pinata: pinata?.view,
     setBrightness(k: number) {
       hemi.intensity = th.hemi[2] * k;
@@ -657,6 +679,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
       if (statue) statue.rotation.y = 0.4 + Math.sin(t * 0.3) * 0.1;
       focal?.update(t);
       dress?.update?.(t);
+      if (!calm) { swayU.value = t; life?.update(t); }
       const dt = Math.min(0.1, Math.max(0, t - lastT));
       lastT = t;
       pinata?.step(dt, t);

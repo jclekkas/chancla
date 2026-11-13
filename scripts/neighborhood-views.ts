@@ -5,6 +5,7 @@
 //   DIST=<build> OUT=<dir> [PORT=4260] [MAPS=patio,plaza,fiesta] [VIEWS=desktop-high,phone-low]
 //   [ONLY=name1,name2] node --import tsx scripts/neighborhood-views.ts
 //
+// FRAMES=n STEP=ms also writes n follow-up frames per view (<view>-f00..), the scene's clock advancing STEP ms each.
 // Writes <OUT>/<tag>-<map>-<view>.png and <OUT>/costs-<tag>.json. Software rendering here: costs are
 // exact counts (calls, triangles, textures), never device frame times.
 import fs from 'node:fs';
@@ -58,6 +59,7 @@ const VIEWS: Record<string, View[]> = {
     { name: 'end-west', x: 14, z: 4.5, look: [-21, 2.4, 4.5] },
   ],
 };
+const FRAMES = Number(process.env.FRAMES || 0), STEP = Number(process.env.STEP || 150);
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;
 
 async function run(browser: Browser, tag: string, map: string, costs: Record<string, unknown>): Promise<void> {
@@ -119,6 +121,12 @@ async function run(browser: Browser, tag: string, map: string, costs: Record<str
       return { ...frame, geometries: r.info.memory.geometries, textures: r.info.memory.textures, programs: r.info.programs?.length ?? 0, textureMB: +(bytes / 1048576).toFixed(2) };
     });
     console.log('shot', file);
+    // A short sequence from the same pose on the fake clock: for a motion clip (the scene's own time advances).
+    for (let k = 0; k < FRAMES; k++) {
+      await p.evaluate((vv) => (window as any).__pose(vv.x, vv.z, vv.look), v);
+      await p.clock.runFor(STEP);
+      await p.screenshot({ path: path.join(OUT, `${tag}-${map}-${v.name}-f${String(k).padStart(2, '0')}.png`), timeout: 180000 });
+    }
   }
   await ctx.close();
 }

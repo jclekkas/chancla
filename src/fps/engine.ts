@@ -273,6 +273,7 @@ export class Engine {
     this.camera.fov = s.fov;
     this.camera.updateProjectionMatrix();
     this.fx.setReducedMotion(s.reducedMotion);
+    this.world.setCalm?.(s.reducedMotion);
     const candidateChanged = candidateAllowed(s.rosaCandidate) !== this.rosaCandidate;
     this.rosaCandidate = candidateAllowed(s.rosaCandidate);
     // El Patio's sourced textures for the new tier are loaded before the rebuild (at most 4 s,
@@ -404,6 +405,7 @@ export class Engine {
     f.color.setHex(this.world.fog);
     f.near = this.world.fogRange?.[0] ?? 45;
     f.far = this.world.fogRange?.[1] ?? 140;
+    this.world.setCalm?.(this.settings().reducedMotion);
   }
 
   private isPatio(opts: WorldOptions): boolean {

@@ -24,11 +24,18 @@ describe('neighbourhood', () => {
             expect(x < bd.minX || x > bd.maxX || z < bd.minZ || z > bd.maxZ).toBe(true);
           }
         }
-        // Roof pieces sit above head height wherever they stand inside the footprint.
+        // Everything else hangs on a tall house: roof pieces stand on top, wall dressing stays within half a
+        // metre of the wall below head height (an awning may reach further, above it).
+        const houses = map.boxes.filter((o) => o.minY <= 0.05 && o.maxY >= 5);
+        const reach = (x: number, z: number) => Math.min(...houses.map((o) => Math.hypot(Math.max(o.minX - x, 0, x - o.maxX), Math.max(o.minZ - z, 0, z - o.maxZ))));
         for (const c of a.group.children) {
-          if (!c.name.startsWith('hood-roofs')) continue;
+          if (!c.name.startsWith('hood-roofs') && !c.name.startsWith('hood-wall')) continue;
           const pos = (c as THREE.Mesh).geometry.getAttribute('position') as THREE.BufferAttribute;
-          for (let i = 0; i < pos.count; i++) expect(pos.getY(i)).toBeGreaterThanOrEqual(3.4);
+          for (let i = 0; i < pos.count; i++) {
+            const y = pos.getY(i);
+            if (y >= 5) continue; // up on a roof or a high awning
+            expect(reach(pos.getX(i), pos.getZ(i))).toBeLessThanOrEqual(y < 2.4 ? 0.5 : 1.4);
+          }
         }
       });
     }

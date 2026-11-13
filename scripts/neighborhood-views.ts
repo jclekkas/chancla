@@ -32,6 +32,8 @@ const VIEWS: Record<string, View[]> = {
     { name: 'alley-south-west', x: 12, z: 13.5, look: [-20, 4.5, 13.5] },
     { name: 'opening-north', x: -15.7, z: -7, look: [-15.7, 4.5, -19] },
     { name: 'plaza-south-west', x: 9, z: -6, look: [-10, 7.5, 14] },
+    { name: 'end-east', x: -10, z: -13, look: [26, 2.4, -13] },
+    { name: 'end-west', x: 10, z: 12, look: [-26, 2.4, 12] },
   ],
   plaza: [
     { name: 'sol-east', x: -26, z: 0, look: [26, 5, 0] },
@@ -41,6 +43,8 @@ const VIEWS: Record<string, View[]> = {
     { name: 'north-walk-east', x: -20, z: -14, look: [24, 4, -14] },
     { name: 'south-walk-west', x: 20, z: 14, look: [-24, 4, 14] },
     { name: 'plaza-diagonal', x: 14, z: -6, look: [-14, 6, 10] },
+    { name: 'end-east', x: -20, z: -7, look: [30, 2.4, -7] },
+    { name: 'end-west', x: 20, z: 5.5, look: [-30, 2.4, 5.5] },
   ],
   fiesta: [
     { name: 'sol-east', x: -16, z: 0, look: [18, 4, 0] },
@@ -50,6 +54,8 @@ const VIEWS: Record<string, View[]> = {
     { name: 'north-lane', x: -14, z: -9, look: [18, 4, -9] },
     { name: 'south-lane', x: 14, z: 9, look: [-18, 4, 9] },
     { name: 'plaza-diagonal', x: 12, z: -5, look: [-12, 6, 10] },
+    { name: 'end-east', x: -14, z: -10.5, look: [21, 2.4, -10.5] },
+    { name: 'end-west', x: 14, z: 4.5, look: [-21, 2.4, 4.5] },
   ],
 };
 const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null;

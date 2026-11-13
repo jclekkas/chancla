@@ -266,6 +266,113 @@ function roofClusters(m: Merge, spec: HoodSpec, boxes: readonly MapBox[], r: () 
   return placed;
 }
 
+// ------------------------------------------------------------------------------------ vistas
+
+type Face = 'minX' | 'maxX' | 'minZ' | 'maxZ';
+interface Terminal { box: MapBox; face: Face; at: number; weight: number }
+
+/**
+ * Where do the long sight lines of the arena end? Rays are cast at eye height from a grid of floor
+ * points in eight directions; each ends on the face of a tall house. The faces that end the most
+ * (and the longest) lines are the street ends and plaza views a player actually looks at.
+ */
+function terminals(map: MapData, count: number): Terminal[] {
+  const b = map.bounds, boxes = map.boxes, eye = 1.6;
+  const blockers = boxes.filter((o) => o.minY <= eye && o.maxY >= eye);
+  const solid = (x: number, z: number) => blockers.some((o) => x > o.minX && x < o.maxX && z > o.minZ && z < o.maxZ);
+  const tally = new Map<string, Terminal & { sum: number }>();
+  const dirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+  for (let x = b.minX + 1; x < b.maxX; x += 2.5) for (let z = b.minZ + 1; z < b.maxZ; z += 2.5) {
+    if (solid(x, z)) continue;
+    for (const [dx, dz] of dirs) {
+      let best = Infinity, hit: Terminal | null = null, hx = 0, hz = 0;
+      for (const o of blockers) {
+        // Slab test in the plane.
+        const tx1 = (o.minX - x) / (dx || 1e-9), tx2 = (o.maxX - x) / (dx || 1e-9), tz1 = (o.minZ - z) / (dz || 1e-9), tz2 = (o.maxZ - z) / (dz || 1e-9);
+        const tin = Math.max(Math.min(tx1, tx2), Math.min(tz1, tz2)), tout = Math.min(Math.max(tx1, tx2), Math.max(tz1, tz2));
+        if (tout < tin || tin <= 0.01 || tin >= best) continue;
+        best = tin;
+        const enterX = Math.min(tx1, tx2) >= Math.min(tz1, tz2);
+        const face: Face = enterX ? (dx > 0 ? 'minX' : 'maxX') : (dz > 0 ? 'minZ' : 'maxZ');
+        hit = { box: o, face, at: 0, weight: 0 };
+        hx = x + dx * tin; hz = z + dz * tin;
+      }
+      if (!hit || best < 10 || hit.box.maxY < 4.5 || hit.box.minY > 0.05) continue;
+      const along = hit.face === 'minX' || hit.face === 'maxX' ? hz : hx;
+      const key = `${boxes.indexOf(hit.box)}:${hit.face}:${Math.floor(along / 2.5)}`, w = Math.min(best, 16), got = tally.get(key);
+      if (got) { got.weight += w; got.sum += w * along; } else tally.set(key, { ...hit, weight: w, sum: w * along });
+    }
+  }
+  const ranked = [...tally.values()].map((t) => {
+    const o = t.box, lo = t.face === 'minX' || t.face === 'maxX' ? o.minZ : o.minX, hi = t.face === 'minX' || t.face === 'maxX' ? o.maxZ : o.maxX;
+    return { ...t, at: Math.min(hi - 1.1, Math.max(lo + 1.1, t.sum / t.weight)), width: hi - lo };
+  }).filter((t) => t.width >= 2.6).sort((a, c) => c.weight - a.weight);
+  // Chokepoint blocks that close an alley's centre: both sides face a lane, so both get one.
+  const forced: Array<Terminal & { sum: number; width: number }> = [];
+  for (const o of boxes) {
+    if (o.minY > 0.05 || o.maxY < 5 || o.maxX - o.minX > 6 || o.maxZ - o.minZ < 4) continue;
+    const northern = o.minZ <= b.minZ + 0.5, southern = o.maxZ >= b.maxZ - 0.5;
+    if (!northern && !southern) continue;
+    const at = northern ? o.maxZ - 1.5 : o.minZ + 1.5;
+    for (const face of ['minX', 'maxX'] as const) forced.push({ box: o, face, at, weight: 1e6, sum: 0, width: o.maxZ - o.minZ });
+  }
+  ranked.unshift(...forced);
+  const out: Terminal[] = [];
+  for (const t of ranked) {
+    const o = t.box, px = t.face === 'minX' ? o.minX : t.face === 'maxX' ? o.maxX : t.at, pz = t.face === 'minZ' ? o.minZ : t.face === 'maxZ' ? o.maxZ : t.at;
+    if (out.some((u) => u.face === t.face && Math.hypot((u.face === 'minX' ? u.box.minX : u.face === 'maxX' ? u.box.maxX : u.at) - px, (u.face === 'minZ' ? u.box.minZ : u.face === 'maxZ' ? u.box.maxZ : u.at) - pz) < 6.5)) continue;
+    out.push(t);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+/**
+ * A recognisable thing at each street end: a lit shrine, a painted mural, an awning over a painted
+ * door, with a roof cluster above it against the sky. All of it hangs on the wall (shallow, and the
+ * awning and roof above head height), so it neither blocks nor offers cover.
+ */
+function vistas(m: Merge, spec: HoodSpec, map: MapData, r: () => number, lite: boolean): number {
+  const list = terminals(map, lite ? 8 : 14);
+  list.forEach((t, i) => {
+    const o = t.box, nx = t.face === 'minX' ? -1 : t.face === 'maxX' ? 1 : 0, nz = t.face === 'minZ' ? -1 : t.face === 'maxZ' ? 1 : 0;
+    const px = t.face === 'minX' ? o.minX : t.face === 'maxX' ? o.maxX : t.at, pz = t.face === 'minZ' ? o.minZ : t.face === 'maxZ' ? o.maxZ : t.at;
+    // Local frame: +z looks away from the wall, into the arena.
+    const base = mx(px, 0, pz, 1, 1, 1, Math.atan2(nx, nz));
+    const L = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number) => base.clone().multiply(mx(lx, ly, lz, sx, sy, sz));
+    const pal = spec.palette, pick = () => pal[Math.floor(r() * pal.length)]!;
+    const kind = (i % 2) * 2; // a shrine, then an awning over a painted door; a flat mural reads crudely up close
+    if (kind === 0) { // nicho: a framed shrine with a candle, a tiled roof and flowers
+      m.add('solid', BOX, L(0, 2.1, 0.14, 2.2, 3.2, 0.28), 0xf4e6c8, 1.1, 0.7);
+      m.add('solid', BOX, L(0, 2.1, 0.3, 1.5, 2.5, 0.08), 0x2a1c3a);
+      m.add('solid', lite ? CYL8 : CYL12, L(0, 3.35, 0.3, 1.5, 0.08, 1.5), 0x2a1c3a);
+      m.add('lamp', BOX, L(0, 1.6, 0.4, 0.3, 0.55, 0.14), 0xffd070);
+      m.add('solid', BOX, L(0, 2.25, 0.36, 0.7, 1.1, 0.06), 0xe05a7a);
+      m.add('solid', BOX, L(0, 2.95, 0.36, 0.34, 0.34, 0.06), 0xf6c74a);
+      m.add('solid', BOX, L(0, 3.95, 0.34, 2.7, 0.26, 0.8), COLORS.terracotta, 1.12);
+      for (const s of [-0.75, -0.25, 0.25, 0.75]) m.add('solid', BOX, L(s, 1.0, 0.34, 0.3, 0.34, 0.2), s < 0 ? 0xe05a7a : 0xf0b45a);
+      m.add('solid', BOX, L(0, 0.8, 0.28, 2.0, 0.14, 0.4), 0x9c3d2c);
+    } else if (kind === 1) { // mural: a dark frame, a hill, a big sun, a flower stem
+      const sky = pick();
+      m.add('solid', BOX, L(0, 2.4, 0.1, 4.2, 3.2, 0.2), 0x2a1c3a, 1.1, 0.7);
+      m.add('solid', BOX, L(0, 2.4, 0.22, 3.8, 2.8, 0.06), sky);
+      m.add('solid', BOX, L(0, 1.45, 0.27, 3.8, 0.9, 0.06), 0x3f8a5a);
+      m.add('solid', lite ? CYL8 : CYL12, L(0.7, 2.75, 0.29, 1.5, 0.04, 1.5), 0xf6c74a, 1.1, 1);
+      m.add('solid', BOX, L(-1.1, 2.05, 0.3, 0.12, 1.3, 0.04), 0x1f5a3a);
+      for (const [dx, dy, c] of [[-1.1, 2.8, 0xe05a7a], [-1.5, 2.45, 0xf0b45a], [-0.7, 2.45, 0x8a6aa8]] as const) m.add('solid', BOX, L(dx, dy, 0.31, 0.45, 0.45, 0.04), c);
+    } else { // toldo: a painted door under a striped awning and a lamp
+      m.add('solid', BOX, L(0, 1.5, 0.08, 2.0, 3.0, 0.16), pick(), 1.1, 0.7);
+      m.add('solid', BOX, L(0, 1.2, 0.18, 1.3, 2.4, 0.06), 0x9a6238);
+      for (let k = 0; k < 6; k++) m.add('solid', BOX, L(-1.1 + k * 0.44, 3.1, 0.6, 0.42, 0.1, 1.2), k % 2 ? 0xf4e6c8 : 0xc8553d, 1.1, 0.7);
+      m.add('lamp', BOX, L(1.35, 2.3, 0.22, 0.24, 0.34, 0.24), 0xffd070);
+    }
+    // Something above the wall against the sky, toward the side that looks at the street end.
+    const top = o.maxY + 0.04, back = 1.6;
+    cluster(m, spec, r, (i + 2) % 4, px - nx * back, top, pz - nz * back, Math.atan2(nx, nz), lite);
+  });
+  return list.length;
+}
+
 // --------------------------------------------------------------------------------- landmarks
 
 function bellTower(m: Merge, x: number, z: number, y0: number, h: number, lite: boolean): void {
@@ -429,8 +536,9 @@ export function buildNeighborhood(map: MapData, quality: Quality, horizon: numbe
   if (!spec) return null;
   const lite = quality === 'low';
   const r = rng(spec.seed);
-  const near = new Merge(), far = new Merge();
+  const near = new Merge(), far = new Merge(), wall = new Merge();
   roofClusters(near, spec, map.boxes, r, lite);
+  vistas(wall, spec, map, r, lite);
   ring(far, spec, map, r, lite, clear);
   for (const h of spec.hills) hillside(far, spec, h, r, lite);
   landmarks(far, spec, lite);
@@ -452,11 +560,11 @@ export function buildNeighborhood(map: MapData, quality: Quality, horizon: numbe
       c.setXYZ(i, tmp.r, tmp.g, tmp.b);
     }
   };
-  const emit = (m: Merge, label: string, shadows: boolean) => {
+  const emit = (m: Merge, label: string, shadows: boolean, hazed = !shadows) => {
     for (const tone of ['solid', 'cloth', 'lamp'] as Tone[]) {
       const gs = m.sets[tone];
       if (!gs.length) continue;
-      if (!shadows && tone === 'solid') gs.forEach(haze);
+      if (hazed && tone === 'solid') gs.forEach(haze);
       const merged = mergeGeometries(gs, false);
       gs.forEach((g) => g.dispose());
       if (!merged) continue;
@@ -471,6 +579,7 @@ export function buildNeighborhood(map: MapData, quality: Quality, horizon: numbe
     }
   };
   emit(near, 'roofs', true);
+  emit(wall, 'wall', false, false); // wall dressing: unshadowed, so a shaded wall does not turn it black
   emit(far, 'far', false);
   // Two hazy layers: a pale far one and a deeper, lower one in front of it.
   for (const [R, scale, haze] of [[150, 1.6, 0.4], [132, 1.0, 0.68]] as const) {

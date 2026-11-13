@@ -17,6 +17,7 @@ import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
 import { preloadSourced, sourcedReady } from './render/patio-sourced';
 import { hoodWanted } from './render/neighborhood';
+import { PostFx, postWanted } from './render/post';
 export { preloadSourced } from './render/patio-sourced';
 import { Avatar, type AvatarState } from './render/rosa';
 import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
@@ -52,6 +53,8 @@ export class Engine {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly vmScene = new THREE.Scene();
+  private post!: PostFx;
+  private readonly postOk = postWanted();
   readonly vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 20);
   mode: 'menu' | 'match' | 'controller' = 'menu';
   controller: Controller | null = null;
@@ -154,6 +157,7 @@ export class Engine {
     this.renderer.shadowMap.enabled = s.quality !== 'low';
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.setClearColor(0xf2a36b);
+    this.post = new PostFx(this.renderer);
     this.renderer.domElement.tabIndex = -1;
     stage.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(s.fov, 1.6, 0.05, 260);
@@ -857,7 +861,10 @@ export class Engine {
     this.contact.end();
     if (!this.contextLost) {
       this.renderer.clear();
-      this.renderer.render(this.scene, this.camera);
+      // The final-image pass: High only, and only for a map that has a grade (the arenas).
+      const grade = this.postOk && this.quality === 'high' ? this.world.grade : undefined;
+      if (grade) this.post.render(this.scene, this.camera, grade);
+      else { this.post.release(); this.renderer.render(this.scene, this.camera); }
       if (this.mode !== 'menu' && this.vm.root.visible) {
         this.renderer.clearDepth();
         this.renderer.render(this.vmScene, this.vmCamera);

@@ -14,6 +14,7 @@ import { PLAZA_DRESSING } from './plaza-dressing';
 import { FIESTA_DRESSING } from './fiesta-dressing';
 import { GROUND_ZONES, patchShader, patioGround } from './patio-materials';
 import { buildLife, lifeWanted, type LifeView } from './life';
+import { gradeFor, type Grade } from './post';
 import { sourcedSet } from './patio-sourced';
 import { kitLight, shadowSettings } from './lighting';
 import { AO_TUNE, buildAoField } from './ao-field';
@@ -30,6 +31,8 @@ export interface WorldView {
   /** The arena maps' light (the first-person hand is lit to match); absent for campaign layouts, which keep theirs. */
   light?: SceneLight;
   update(t: number): void;
+  /** The final-image grade for this map (arena maps only; a campaign layout has none and is drawn plain). */
+  grade?: Grade;
   /** Reduced motion: the neighbourhood's birds, walkers, dust and the swaying washing hold still. */
   setCalm?(calm: boolean): void;
   drawCalls: number;
@@ -488,7 +491,8 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
   // With the living neighbourhood on, washing and bunting sway on the wind: the lower edge swings most.
   const lifeOn = kit && !!opts.hood && lifeWanted();
   const swayU = { value: 0 };
-  const clothMat = toon(0xffffff, { side: THREE.DoubleSide });
+  // toon() hands out a shared, cached material: the sway patch goes on this world's own copy (a rebuild must not stack patches).
+  const clothMat = lifeOn ? toon(0xffffff, { side: THREE.DoubleSide }).clone() : toon(0xffffff, { side: THREE.DoubleSide });
   if (lifeOn) {
     patchShader(clothMat, 'sway', (sh) => {
       sh.uniforms.uSway = swayU;
@@ -665,6 +669,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     sun,
     fog: th.fog,
     fogRange: hood?.fog,
+    grade: hoodOn ? gradeFor(opts.theme ?? 'afternoon') : undefined,
     light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
     setCalm(c: boolean) { calm = c; life?.setCalm(c); },

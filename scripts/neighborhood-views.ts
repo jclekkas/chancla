@@ -73,7 +73,8 @@ async function run(browser: Browser, tag: string, map: string, costs: Record<str
   const settings = { practiceMap: map, practiceAllies: 0, practiceEnemies: 1, practiceDifficulty: 'easy', quality: q, qualityMode: q, music: 0, lang: 'en', name: 'Rosa', killcam: true };
   await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
-  await p.goto(SITE);
+  p.on('console', (m) => { const t = m.text(); if (/THREE|WebGL|shader|error/i.test(t)) console.log('console', t.slice(0, 600)); });
+  await p.goto(SITE + (process.env.QUERY || ''));
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
   await sleep(300);
   await p.evaluate(() => (document.getElementById('btn-practice') as HTMLElement).click());

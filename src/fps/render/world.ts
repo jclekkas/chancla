@@ -669,7 +669,7 @@ export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView
     sun,
     fog: th.fog,
     fogRange: hood?.fog,
-    grade: hoodOn ? gradeFor(opts.theme ?? 'afternoon') : undefined,
+    grade: hoodOn ? { ...gradeFor(opts.theme ?? 'afternoon'), sunPos: th0.sunDiskPos } : undefined,
     light: kit ? { hemi: th.hemi, sun: th.sun, fog: th.fog } : undefined,
     drawCalls: calls,
     setCalm(c: boolean) { calm = c; life?.setCalm(c); },

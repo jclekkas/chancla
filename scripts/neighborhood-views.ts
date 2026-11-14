@@ -76,7 +76,8 @@ async function run(browser: Browser, tag: string, map: string, costs: Record<str
   await p.addInitScript({ content: `window.__name = (f) => f; try { localStorage.setItem('chancla.mp.settings.v1', JSON.stringify(${JSON.stringify(settings)})); } catch {}` });
   p.on('pageerror', (e) => console.log('pageerror', e.message));
   p.on('console', (m) => { const t = m.text(); if (/THREE|WebGL|shader|error/i.test(t)) console.log('console', t.slice(0, 600)); });
-  await p.goto(SITE + (process.env.QUERY || ''));
+  // post=force: the software renderer is far below any real frame rate, so the safety valve must not trip in a capture.
+  await p.goto(SITE + (process.env.QUERY || '?post=force'));
   await p.waitForFunction(() => (window as any).__fps?.screen === 'title', undefined, { polling: 100 });
   await sleep(300);
   await p.evaluate(() => (document.getElementById('btn-practice') as HTMLElement).click());
@@ -111,6 +112,15 @@ async function run(browser: Browser, tag: string, map: string, costs: Record<str
   for (const v of VIEWS[map] ?? []) {
     if (ONLY && !ONLY.has(v.name)) continue;
     for (let i = 0; i < 6; i++) { await p.evaluate((vv) => (window as any).__pose(vv.x, vv.z, vv.look), v); await p.clock.runFor(60); }
+    // TRIP=1: make the safety valve trip, then check that the pass goes off and the game still draws.
+    if (process.env.TRIP) {
+      console.log('post before', await p.evaluate(() => (window as any).__fps.engine().diag().post));
+      await p.evaluate(() => { const e = (window as any).__fps.engine(); e.postGuard.step = () => true; e.postForce = false; });
+      console.log('state', await p.evaluate(() => { const e = (window as any).__fps.engine(); return JSON.stringify({ mode: e.mode, paused: e.paused, vis: document.visibilityState, force: e.postForce, tripped: e.postTripped, q: e.quality, grade: !!e.world.grade }); }));
+      await p.clock.runFor(300);
+      console.log('frames', await p.evaluate(() => { const e = (window as any).__fps.engine(); const a = e.fpsFrames, t = e.time; e.frame(e.last + 20); e.frame(e.last + 20); return JSON.stringify({ before: a, timeBefore: +t.toFixed(2), timeAfter: +e.time.toFixed(2), tripped: e.postTripped }); }));
+      console.log('post after', await p.evaluate(() => (window as any).__fps.engine().diag().post));
+    }
     const file = `${tag}-${map}-${v.name}.png`;
     await p.screenshot({ path: path.join(OUT, file), timeout: 180000 });
     costs[`${tag}-${map}-${v.name}`] = await p.evaluate(() => {

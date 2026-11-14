@@ -17,7 +17,7 @@ import { audio } from '../audio/audio';
 import { buildWorld, type WorldOptions, type WorldView } from './render/world';
 import { preloadSourced, sourcedReady } from './render/patio-sourced';
 import { hoodWanted } from './render/neighborhood';
-import { PostFx, postWanted } from './render/post';
+import { PostFx, PostGuard, postForced, postWanted } from './render/post';
 export { preloadSourced } from './render/patio-sourced';
 import { Avatar, type AvatarState } from './render/rosa';
 import { candidateReady, loadRosaCandidate } from './render/rosa-candidate';
@@ -55,6 +55,10 @@ export class Engine {
   readonly vmScene = new THREE.Scene();
   private post!: PostFx;
   private readonly postOk = postWanted();
+  private readonly postForce = postForced();
+  private readonly postGuard = new PostGuard();
+  /** The pass was switched off for this session because the frame rate stayed low (until the quality setting changes). */
+  private postTripped = false;
   readonly vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 20);
   mode: 'menu' | 'match' | 'controller' = 'menu';
   controller: Controller | null = null;
@@ -195,7 +199,7 @@ export class Engine {
     const m = this.renderer.info.memory;
     return {
       mode: this.mode, map: this.map.id, msSinceFrame: this.lastGoodFrameAt ? Math.round(now - this.lastGoodFrameAt) : null, frameErrors: this.frameErrors,
-      fps: Math.round(this.fps), contextLost: this.contextLost, quality: this.quality, drawCalls: this.drawCalls, geometries: m.geometries, textures: m.textures, paused: this.paused,
+      fps: Math.round(this.fps), post: this.postTripped ? 'off (slow)' : this.post.bytes() > 0 ? 'on' : 'off', contextLost: this.contextLost, quality: this.quality, drawCalls: this.drawCalls, geometries: m.geometries, textures: m.textures, paused: this.paused,
     };
   }
 
@@ -292,6 +296,8 @@ export class Engine {
     }
     if (qualityChange) {
       this.quality = s.quality;
+      this.postTripped = false; // a new quality choice gets a fresh try of the pass
+      this.postGuard.reset();
       this.fx.setQuality(s.quality);
       this.vm.setQuality(s.quality);
       this.contact.setStrength(contactStrength(s.quality));
@@ -862,9 +868,16 @@ export class Engine {
     if (!this.contextLost) {
       this.renderer.clear();
       // The final-image pass: High only, and only for a map that has a grade (the arenas).
-      const grade = this.postOk && this.quality === 'high' ? this.world.grade : undefined;
-      if (grade) this.post.render(this.scene, this.camera, grade);
-      else { this.post.release(); this.renderer.render(this.scene, this.camera); }
+      const grade = this.postOk && !this.postTripped && this.quality === 'high' ? this.world.grade : undefined;
+      if (grade) {
+        this.post.render(this.scene, this.camera, grade);
+        // Safety valve: a device that cannot hold the frame rate with the pass on loses the pass, not the game.
+        if (!this.postForce && this.mode === 'match' && !this.paused && document.visibilityState === 'visible' && this.postGuard.step(this.shownDt, this.fps)) {
+          this.postTripped = true;
+          this.post.release();
+          diagLog('gfx', `final-image pass switched off: ${Math.round(this.fps)} fps`);
+        }
+      } else { this.postGuard.reset(); this.post.release(); this.renderer.render(this.scene, this.camera); }
       if (this.mode !== 'menu' && this.vm.root.visible) {
         this.renderer.clearDepth();
         this.renderer.render(this.vmScene, this.vmCamera);

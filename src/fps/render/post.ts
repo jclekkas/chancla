@@ -19,6 +19,33 @@ export function postWanted(): boolean {
   try { return typeof location === 'undefined' || new URLSearchParams(location.search).get('post') !== '0'; } catch { return true; }
 }
 
+/** ?post=force keeps the pass on whatever the frame rate (screenshots and review on a slow, software-rendered machine). */
+export function postForced(): boolean {
+  try { return typeof location !== 'undefined' && new URLSearchParams(location.search).get('post') === 'force'; } catch { return false; }
+}
+
+/**
+ * The safety valve: watches the frame rate while the pass is drawing and says when to switch it off.
+ * The first few seconds are ignored (shader compiles, the target being allocated), a single hitch does
+ * not count, and a frame gap of half a second or more (a tab switch, a pause) is not a slow frame.
+ * Sustained low frame rate adds up; recovery takes it away twice as fast. Once it trips, the pass stays
+ * off until the player changes the quality setting.
+ */
+export class PostGuard {
+  private slow = 0;
+  private live = 0;
+  constructor(private readonly minFps = 38, private readonly after = 4, private readonly warm = 3) {}
+  /** realDt: seconds since the last frame; fps: the smoothed frame rate. True once the pass should go off. */
+  step(realDt: number, fps: number): boolean {
+    if (realDt >= 0.5) return false;
+    this.live += realDt;
+    if (this.live < this.warm) return false;
+    this.slow = fps < this.minFps ? this.slow + realDt : Math.max(0, this.slow - realDt * 2);
+    return this.slow >= this.after;
+  }
+  reset(): void { this.slow = 0; this.live = 0; }
+}
+
 export interface Grade {
   /** Glow strength and the brightness above which things glow. */
   bloom: number; threshold: number;

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Chancla Duty</title>
+    <meta name="description" content="Doña Rosa's tour of duty. A faster, louder chancla game in the browser." />
+    <meta name="theme-color" content="#2a1630" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect fill='%232a1630' width='64' height='64' rx='12'/%3E%3Cellipse cx='32' cy='36' rx='22' ry='12' fill='%234b2a6b'/%3E%3Crect x='28' y='26' width='8' height='20' rx='3' fill='%234fb3a9'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="bunting" aria-hidden="true"></div>
+    <div id="hurt" aria-hidden="true"></div>
+    <div id="lowhp" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+
+    <div id="hud" hidden>
+      <div class="top">
+        <div id="obj"></div>
+        <div class="scorebox"><b id="score">0</b><span id="mult"></span></div>
+        <div id="fps" hidden></div>
+      </div>
+      <div id="banner" aria-live="polite"></div>
+      <div id="bossbar" hidden><span id="bossname"></span><i id="bosshp"></i></div>
+      <div id="stallbar" hidden><span id="stallname"></span><i id="stallhp"></i></div>
+      <div id="toasts"></div>
+      <p id="tip" hidden></p>
+      <div class="bottom">
+        <div class="hp" id="hp" role="meter" aria-valuemin="0" aria-valuemax="100">
+          <i id="hpfill"></i>
+          <b id="hpnum">100</b>
+        </div>
+        <div id="buffs"></div>
+        <div id="weapons"></div>
+        <div class="meters">
+          <div class="meter"><span id="dashlabel"></span><i id="dashfill"></i></div>
+          <div class="meter legend"><span id="legendlbl"></span><i id="legendfill"></i></div>
+          <div class="shoes" id="shoes" aria-hidden="true"><i></i><i></i></div>
+        </div>
+      </div>
+      <button type="button" id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
+      <div id="touch" hidden>
+        <div id="stick" class="stick"><div id="knob"></div></div>
+        <div id="look"></div>
+        <button type="button" id="btn-throw" class="big-btn">Chancla</button>
+        <button type="button" id="btn-dash" class="side-btn">Dash</button>
+        <button type="button" id="btn-legend" class="side-btn">★</button>
+        <button type="button" id="btn-recall" class="side-btn">↩</button>
+        <button type="button" id="btn-cycle" class="side-btn">⇄</button>
+      </div>
+    </div>
+
+    <div id="rotate" hidden role="dialog" aria-modal="true">
+      <div class="card">
+        <h2 data-k="rotate.title"></h2>
+        <p data-k="rotate.body"></p>
+        <button type="button" class="btn primary" id="btn-rotate-go" data-k="rotate.go"></button>
+      </div>
+    </div>
+
+    <section id="scr-title" class="screen title">
+      <div class="title-col">
+        <p class="kicker" data-k="title.kicker"></p>
+        <h1><span>CHANCLA</span><em>DUTY</em></h1>
+        <p class="sub" data-k="title.sub"></p>
+        <p class="tag" data-k="title.tag"></p>
+        <p class="pitch" data-k="title.pitch"></p>
+        <div class="stack">
+          <button type="button" class="btn primary" id="btn-campaign" data-k="ui.campaign"></button>
+          <button type="button" class="btn alt" id="btn-endless" data-k="ui.endless"></button>
+          <button type="button" class="btn" id="btn-armory" data-k="ui.armory"></button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn ghost" id="btn-how" data-k="ui.how"></button>
+          <button type="button" class="btn ghost" id="btn-settings" data-k="ui.settings"></button>
+          <button type="button" class="btn ghost" id="btn-lang" data-k="ui.lang"></button>
+        </div>
+        <p class="rank" id="rankline"></p>
+        <a class="origin" id="lnk-original" href="../" data-k="ui.original"></a>
+      </div>
+      <aside class="rosa-card">
+        <div class="portrait" role="img" aria-label="Doña Rosa">
+          <svg viewBox="0 0 220 260" xmlns="http://www.w3.org/2000/svg">
+            <rect width="220" height="260" fill="#4fb3a9"/>
+            <circle cx="110" cy="118" r="96" fill="#f2a33a"/>
+            <path d="M28 260c4-48 32-70 82-72s78 24 82 72z" fill="#4b2a6b"/>
+            <circle cx="70" cy="214" r="4" fill="#f4e6c8"/><circle cx="110" cy="206" r="4" fill="#f4e6c8"/><circle cx="150" cy="214" r="4" fill="#f4e6c8"/>
+            <circle cx="110" cy="118" r="48" fill="#c68a5e"/>
+            <circle cx="110" cy="62" r="28" fill="#2a1630"/>
+            <path d="M68 100c8-28 28-40 48-38 22 2 40 16 44 34-16-16-32-20-48-18-16 2-30 10-44 22z" fill="#2a1630"/>
+            <g fill="#f2a33a" transform="translate(150 78)"><circle r="6"/><circle cx="8" cy="3" r="5"/><circle cx="-7" cy="4" r="5"/><circle cx="2" cy="-8" r="5"/></g>
+            <path d="M74 112h28v10h-28zM118 112h28v10h-28z" fill="#241626"/>
+            <path d="M100 116h20" stroke="#4fb3a9" stroke-width="4"/>
+            <path d="M86 150c10 10 28 8 40-4" stroke="#9b2438" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <circle cx="78" cy="150" r="10" fill="none" stroke="#f5c542" stroke-width="4"/>
+            <circle cx="146" cy="148" r="10" fill="none" stroke="#f5c542" stroke-width="4"/>
+          </svg>
+        </div>
+        <figcaption><strong>Doña Rosa</strong><span>Out of patience. Fully armed.</span></figcaption>
+      </aside>
+    </section>
+
+    <section id="scr-missions" class="screen overlay" hidden>
+      <div class="card wide">
+        <h2 data-k="ui.campaign"></h2>
+        <div id="mission-list" class="missions"></div>
+        <button type="button" class="btn ghost" id="btn-mis-back" data-k="ui.back"></button>
+      </div>
+    </section>
+
+    <section id="scr-brief" class="screen overlay" hidden>
+      <div class="card wide">
+        <p class="kicker" id="brief-kicker"></p>
+        <h2 id="brief-title"></h2>
+        <p id="brief-blurb"></p>
+        <p><b data-k="mission.objective"></b> <span id="brief-obj"></span></p>
+        <p class="note"><b data-k="mission.tip"></b> <span id="brief-tip"></span></p>
+        <p class="note" id="brief-dossier"></p>
+        <div id="endless-maps" class="seg" hidden></div>
+        <div class="field"><span data-k="mission.diff"></span>
+          <div class="seg" id="diff-seg">
+            <button type="button" data-diff="easy" data-k="ui.easy"></button>
+            <button type="button" data-diff="normal" data-k="ui.normal"></button>
+            <button type="button" data-diff="andale" data-k="ui.andale"></button>
+          </div>
+        </div>
+        <div class="row">
+          <button type="button" class="btn primary" id="btn-start" data-k="ui.start"></button>
+          <button type="button" class="btn ghost" id="btn-brief-back" data-k="ui.back"></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="scr-armory" class="screen overlay" hidden>
+      <div class="card wide">
+        <h2 data-k="ui.armory"></h2>
+        <p class="note" data-k="armory.blurb"></p>
+        <p class="rank" id="armory-have"></p>
+        <div id="armory-list"></div>
+        <button type="button" class="btn ghost" id="btn-arm-back" data-k="ui.back"></button>
+      </div>
+    </section>
+
+    <section id="scr-help" class="screen overlay" hidden>
+      <div class="card">
+        <h2 data-k="ui.how"></h2>
+        <p data-k="help.lead"></p>
+        <dl class="help">
+          <dt data-k="help.move"></dt><dd data-k="help.move.k"></dd>
+          <dt data-k="help.aim"></dt><dd data-k="help.aim.k"></dd>
+          <dt data-k="help.throw"></dt><dd data-k="help.throw.k"></dd>
+          <dt data-k="help.charge"></dt><dd data-k="help.charge.k"></dd>
+          <dt data-k="help.dash"></dt><dd data-k="help.dash.k"></dd>
+          <dt data-k="help.switch"></dt><dd data-k="help.switch.k"></dd>
+          <dt data-k="help.recall"></dt><dd data-k="help.recall.k"></dd>
+          <dt data-k="help.legend"></dt><dd data-k="help.legend.k"></dd>
+          <dt data-k="help.pause"></dt><dd data-k="help.pause.k"></dd>
+        </dl>
+        <p class="note" data-k="help.weapons"></p>
+        <p class="note" data-k="help.touch"></p>
+        <button type="button" class="btn primary" id="btn-help-close" data-k="ui.close"></button>
+      </div>
+    </section>
+
+    <section id="scr-settings" class="screen overlay" hidden>
+      <div class="card">
+        <h2 data-k="ui.settings"></h2>
+        <label class="field"><span data-k="ui.music"></span><input id="set-music" type="range" min="0" max="100" /></label>
+        <label class="field"><span data-k="ui.sfx"></span><input id="set-sfx" type="range" min="0" max="100" /></label>
+        <div class="field"><span data-k="ui.quality"></span>
+          <div class="seg" id="qual-seg">
+            <button type="button" data-q="auto" data-k="ui.auto"></button>
+            <button type="button" data-q="low" data-k="ui.low"></button>
+            <button type="button" data-q="med" data-k="ui.med"></button>
+            <button type="button" data-q="high" data-k="ui.high"></button>
+          </div>
+        </div>
+        <label class="check"><input id="set-shake" type="checkbox" /><span data-k="ui.shake"></span></label>
+        <label class="check"><input id="set-assist" type="checkbox" /><span data-k="ui.assist"></span></label>
+        <label class="check"><input id="set-reduce" type="checkbox" /><span data-k="ui.reduce"></span></label>
+        <label class="check"><input id="set-fps" type="checkbox" /><span data-k="ui.fps"></span></label>
+        <button type="button" class="btn primary" id="btn-set-close" data-k="ui.close"></button>
+      </div>
+    </section>
+
+    <section id="scr-pause" class="screen overlay" hidden>
+      <div class="card">
+        <h2 data-k="pause.title"></h2>
+        <p class="note" data-k="pause.note"></p>
+        <button type="button" class="btn primary" id="btn-resume" data-k="ui.resume"></button>
+        <button type="button" class="btn" id="btn-pause-settings" data-k="ui.settings"></button>
+        <button type="button" class="btn" id="btn-restart" data-k="ui.restart"></button>
+        <button type="button" class="btn ghost" id="btn-quit" data-k="ui.quit"></button>
+      </div>
+    </section>
+
+    <section id="scr-results" class="screen overlay" hidden>
+      <div class="card wide">
+        <p class="grade" id="res-grade">A</p>
+        <h2 id="res-title"></h2>
+        <dl class="help" id="res-stats"></dl>
+        <div class="row">
+          <button type="button" class="btn primary" id="btn-next" data-k="ui.next"></button>
+          <button type="button" class="btn" id="btn-retry" data-k="ui.retry"></button>
+          <button type="button" class="btn" id="btn-res-arm" data-k="ui.armory"></button>
+          <button type="button" class="btn ghost" id="btn-res-mis" data-k="ui.missions"></button>
+        </div>
+      </div>
+    </section>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

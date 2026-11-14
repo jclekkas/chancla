@@ -36,7 +36,7 @@ function socialMeta(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   base,
   // True only for Vercel preview deployments: enables tester conveniences
   // (?unlock=all) that never exist in production builds.
@@ -49,13 +49,17 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       // index.html is the online shooter; classic.html keeps the original
-      // single-player arcade game.
-      input: {
-        main: resolve(__dirname, 'index.html'),
-        classic: resolve(__dirname, 'classic.html'),
-      },
+      // single-player arcade game. chancla-duty/ is the separate solo game.
+      // The server bundle must not pick up those HTML entries.
+      input: isSsrBuild
+        ? resolve(__dirname, 'server/index.ts')
+        : {
+            main: resolve(__dirname, 'index.html'),
+            classic: resolve(__dirname, 'classic.html'),
+            duty: resolve(__dirname, 'chancla-duty/index.html'),
+          },
     },
   },
   server: { host: true },
   preview: { host: true },
-});
+}));

@@ -25,6 +25,8 @@ canvas.aiming { cursor: none; }
   clip-path: polygon(0 0, 100% 0, 100% 55%, 98% 100%, 94% 55%, 90% 100%, 86% 55%, 82% 100%, 78% 55%, 74% 100%, 70% 55%, 66% 100%, 62% 55%, 58% 100%, 54% 55%, 50% 100%, 46% 55%, 42% 100%, 38% 55%, 34% 100%, 30% 55%, 26% 100%, 22% 55%, 18% 100%, 14% 55%, 10% 100%, 6% 55%, 2% 100%, 0 55%);
 }
 body.playing #bunting { display: none; }
+body.war-touch #hud > :not(#touch) { visibility: hidden; }
+body.war-touch #touch { visibility: visible; }
 #hurt, #lowhp, #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
 #hurt { background: rgba(200, 40, 40, 0.45); opacity: 0; transition: opacity 0.25s linear; }
 #lowhp { background: radial-gradient(circle at center, transparent 40%, rgba(120, 10, 20, 0.55) 100%); opacity: 0; }
@@ -77,6 +79,9 @@ h2 { margin: 0 0 8px; font-size: 32px; color: var(--marigold); }
 .btn.ghost { background: transparent; border-color: rgba(244, 230, 200, 0.45); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .origin { color: var(--cream); }
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.teams ul { margin: 0; padding-left: 18px; min-height: 48px; }
+.err { color: #ffb4a8; min-height: 1.2em; }
 .missions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
 .mission {
   text-align: left; border-radius: 16px; padding: 12px; border: 2px solid rgba(244,230,200,0.25);

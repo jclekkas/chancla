@@ -650,6 +650,84 @@ export function missionById(id: string): MissionDef | undefined {
   return MISSIONS.find((m) => m.id === id);
 }
 
+/** The original four-mission story, playable here with the Duty combat rules. */
+export const STORY: MissionDef[] = [
+  {
+    id: 'ruleros',
+    map: 'patio',
+    name: { en: 'Operación Ruleros', es: 'Operación Ruleros' },
+    blurb: { en: 'The rollers are gone and the block is loud. Clear the patio.', es: 'Se perdieron los ruleros y la cuadra está alta. Limpia el patio.' },
+    objective: { en: 'Clear the patio. Bank a shot off the fountain when they hide.', es: 'Limpia el patio. Rebota en la fuente cuando se escondan.' },
+    tip: { en: 'The original recovered six roller sets. Here the same cast has to be sent home, and a bank shot still pays.', es: 'El original recuperaba seis juegos de ruleros. Aquí hay que mandar al mismo elenco a su casa, y el rebote sigue pagando.' },
+    dossier: { en: 'Bocinas, an influencer, and a blower. Interrupt the cone. Punish the pose.', es: 'Bocinas, una influencer y un soplador. Interrumpe el cono. Castiga la pose.' },
+    par: 6000, stall: false, finale: false,
+    waves: [
+      { kinds: ['bocinas', 'bocinas', 'bocinas', 'bocinas'], max: 2, gap: 1.6 },
+      { kinds: ['influencer', 'bocinas', 'influencer', 'bocinas'], max: 3, gap: 1.3 },
+      { kinds: ['soplador', 'influencer', 'bocinas', 'soplador'], max: 3, gap: 1.1 },
+    ],
+  },
+  {
+    id: 'cocina-story',
+    map: 'cocina',
+    name: { en: 'Kitchen Under Control', es: 'Aquí se cocina' },
+    blurb: { en: 'Keep the stove lane clear until the comal is done.', es: 'Mantén libre la estufa hasta que el comal termine.' },
+    objective: { en: 'Defend the kitchen. The puesto bar is the comal.', es: 'Defiende la cocina. La barra del puesto es el comal.' },
+    tip: { en: 'La Pesada shoves people onto the burners.', es: 'La Pesada empuja gente a las lumbres.' },
+    dossier: { en: 'Sopladores push. Do not stand on the stove.', es: 'Los sopladores empujan. No te pares en la estufa.' },
+    par: 7000, stall: true, finale: false,
+    waves: [
+      { kinds: ['bocinas', 'soplador', 'bocinas', 'soplador'], max: 3, gap: 1.3 },
+      { kinds: ['soplador', 'influencer', 'bocinas', 'soplador', 'bocinas'], max: 4, gap: 1.05 },
+    ],
+  },
+  {
+    id: 'patio-story',
+    map: 'plaza',
+    name: { en: 'Patio Panic', es: 'Este patio no se limpia solo' },
+    blurb: { en: 'The east courtyard will not sweep itself.', es: 'El patio de atrás no se barre solo.' },
+    objective: { en: 'Clear three waves.', es: 'Limpia tres oleadas.' },
+    tip: { en: 'Dash through a gust.', es: 'Esquiva a través de la ráfaga.' },
+    dossier: { en: 'Blowers, speakers, and one influencer who will not stop posing.', es: 'Sopladores, bocinas y una influencer que no deja de posar.' },
+    par: 7500, stall: false, finale: false,
+    waves: [
+      { kinds: ['bocinas', 'soplador', 'bocinas'], max: 3, gap: 1.2 },
+      { kinds: ['influencer', 'soplador', 'bocinas', 'influencer'], max: 4, gap: 1 },
+      { kinds: ['soplador', 'soplador', 'influencer', 'bocinas', 'repartidor'], max: 4, gap: 0.9 },
+    ],
+  },
+  {
+    id: 'pinata-story',
+    map: 'fiesta',
+    name: { en: 'The Piñata Strikes Back', es: 'La Piñata Contraataca' },
+    blurb: { en: 'Dusk, colored lights, and a crown that should not be here.', es: 'Anochecer, luces de colores, y una corona que no debería estar.' },
+    objective: { en: 'Drop El Rey. His shield holds until he gasps.', es: 'Tumba al Rey. El escudo aguanta hasta que se ahogue.' },
+    tip: { en: 'Bank chanclas into his friends, then throw when he is gold.', es: 'Rebotar las chanclas contra sus amigos, y lanza cuando esté dorado.' },
+    dossier: { en: 'Three-phase party: rings, vinyl, then the gasp.', es: 'Fiesta en tres tiempos: anillos, vinilos, y el ahogo.' },
+    par: 9000, stall: false, finale: true,
+    waves: [
+      { kinds: ['rey', 'bocinas', 'influencer', 'soplador', 'bocinas'], max: 4, gap: 3.6, boss: true },
+    ],
+  },
+];
+
+export const CLASSIC: MissionDef = {
+  id: 'classic',
+  map: 'patio',
+  name: { en: 'Classic arcade', es: 'Arcade clásico' },
+  blurb: { en: 'Three waves and the speaker king. The original Sunday, remastered.', es: 'Tres oleadas y el rey de las bocinas. El domingo original, remasterizado.' },
+  objective: { en: 'Clear three waves, then El Rey.', es: 'Limpia tres oleadas y luego al Rey.' },
+  tip: { en: 'Hold to charge. R calls the chanclas home. F is La Legendaria.', es: 'Mantén para cargar. R llama las chanclas. F es La Legendaria.' },
+  dossier: { en: 'Bocinas, influencers, blowers, then the boss.', es: 'Bocinas, influencers, sopladores, y el jefe.' },
+  par: 8000, stall: false, finale: true,
+  waves: [
+    { kinds: ['bocinas', 'bocinas', 'bocinas', 'bocinas', 'bocinas', 'bocinas'], max: 2, gap: 1.8 },
+    { kinds: ['influencer', 'bocinas', 'influencer', 'influencer', 'bocinas', 'influencer'], max: 3, gap: 1.4 },
+    { kinds: ['soplador', 'influencer', 'bocinas', 'soplador', 'influencer', 'bocinas'], max: 4, gap: 1.1 },
+    { kinds: ['rey'], max: 1, gap: 0.4, boss: true },
+  ],
+};
+
 export const PICKUPS: Record<PickupKind, LangText> = {
   cafe: { en: 'Cafecito', es: 'Cafecito' },
   chile: { en: 'Chile', es: 'Chile' },

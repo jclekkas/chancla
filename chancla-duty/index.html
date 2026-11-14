@@ -67,8 +67,12 @@
         <p class="tag" data-k="title.tag"></p>
         <p class="pitch" data-k="title.pitch"></p>
         <div class="stack">
-          <button type="button" class="btn primary" id="btn-campaign" data-k="ui.campaign"></button>
-          <button type="button" class="btn alt" id="btn-endless" data-k="ui.endless"></button>
+          <button type="button" class="btn primary" id="btn-online">Play online</button>
+          <button type="button" class="btn alt" id="btn-practice-war">Practice with bots</button>
+          <button type="button" class="btn" id="btn-campaign" data-k="ui.campaign"></button>
+          <button type="button" class="btn" id="btn-story">Story</button>
+          <button type="button" class="btn" id="btn-classic">Classic arcade</button>
+          <button type="button" class="btn" id="btn-endless" data-k="ui.endless"></button>
           <button type="button" class="btn" id="btn-armory" data-k="ui.armory"></button>
         </div>
         <div class="row">
@@ -100,6 +104,80 @@
         <figcaption><strong>Doña Rosa</strong><span>Out of patience. Fully armed.</span></figcaption>
       </aside>
     </section>
+
+    <section id="scr-war" class="screen overlay" hidden>
+      <div class="card">
+        <h2 id="war-title">Warfare</h2>
+        <p class="note" id="war-note"></p>
+        <label class="field"><span>Name</span><input id="war-name" maxlength="16" value="Rosa" /></label>
+        <div id="war-online" hidden>
+          <button type="button" class="btn primary" id="btn-war-create">Create private room</button>
+          <div class="row">
+            <input id="war-code" maxlength="10" placeholder="Room code" />
+            <button type="button" class="btn" id="btn-war-join">Join</button>
+          </div>
+        </div>
+        <div id="war-practice">
+          <div class="field"><span>Map</span>
+            <div class="seg" id="war-maps">
+              <button type="button" data-wmap="patio">Patio</button>
+              <button type="button" data-wmap="plaza">Plaza</button>
+              <button type="button" data-wmap="fiesta">Fiesta</button>
+            </div>
+          </div>
+          <div class="field"><span>Bots</span>
+            <div class="seg" id="war-diff">
+              <button type="button" data-wd="easy">Suave</button>
+              <button type="button" data-wd="normal" class="on">Normal</button>
+              <button type="button" data-wd="hard">Ándale</button>
+            </div>
+          </div>
+          <button type="button" class="btn primary" id="btn-war-practice">Start practice</button>
+        </div>
+        <p class="err" id="war-err"></p>
+        <button type="button" class="btn ghost" id="btn-war-back">Back</button>
+      </div>
+    </section>
+
+    <section id="scr-lobby" class="screen overlay" hidden>
+      <div class="card wide">
+        <h2>Lobby</h2>
+        <p class="rank" id="lobby-code"></p>
+        <div class="row">
+          <button type="button" class="btn" id="btn-copy-code">Copy invite</button>
+          <button type="button" class="btn" id="btn-team">Switch team</button>
+        </div>
+        <div class="teams"><ul id="team-sol"></ul><ul id="team-luna"></ul></div>
+        <div class="seg" id="lobby-maps">
+          <button type="button" data-lmap="patio">Patio</button>
+          <button type="button" data-lmap="plaza">Plaza</button>
+          <button type="button" data-lmap="fiesta">Fiesta</button>
+        </div>
+        <label class="check"><input type="checkbox" id="chk-bots" /><span>Fill empty seats with bots</span></label>
+        <p id="lobby-status"></p>
+        <div class="row">
+          <button type="button" class="btn primary" id="btn-ready">I'm ready</button>
+          <button type="button" class="btn primary" id="btn-start-match" hidden>Start match</button>
+          <button type="button" class="btn ghost" id="btn-leave-room">Leave</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="scr-wresults" class="screen overlay" hidden>
+      <div class="card wide">
+        <h2 id="wres-title"></h2>
+        <div id="wres-body"></div>
+        <div class="row">
+          <button type="button" class="btn primary" id="btn-rematch">Rematch</button>
+          <button type="button" class="btn" id="btn-back-lobby">Back to lobby</button>
+          <button type="button" class="btn ghost" id="btn-wres-home">Home</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="war-hud" hidden>
+      <button type="button" id="btn-war-menu" class="icon-btn">☰</button>
+    </div>
 
     <section id="scr-missions" class="screen overlay" hidden>
       <div class="card wide">

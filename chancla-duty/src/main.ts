@@ -1,9 +1,11 @@
 import './style.css';
 import { AudioBus } from './audio';
 import {
+  CLASSIC,
   ENDLESS_MAPS,
   MAPS,
   MISSIONS,
+  STORY,
   UPGRADES,
   UPGRADE_IDS,
   WEAPONS,
@@ -12,6 +14,7 @@ import {
   missionById,
   upgradeCost,
   type Diff,
+  type MissionDef,
   type UpgradeId,
   type WeaponId,
 } from './content';
@@ -20,6 +23,8 @@ import { t, tf, type Lang } from './i18n';
 import { Controls } from './input';
 import { loadSave, writeSave, type Save } from './persist';
 import { RANK_NAME, rankFor } from './rules';
+import { Warfare, warfareServerUrl } from './warfare';
+import type { MapId } from '../../shared/maps/index';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -33,7 +38,7 @@ let lastRun: RunResult | null = null;
 let rotateOk = false;
 const toasts: { text: string; life: number }[] = [];
 
-type Screen = 'title' | 'missions' | 'brief' | 'armory' | 'help' | 'settings' | 'pause' | 'results' | 'play';
+type Screen = 'title' | 'missions' | 'brief' | 'armory' | 'help' | 'settings' | 'pause' | 'results' | 'play' | 'war' | 'lobby' | 'wresults' | 'wplay';
 
 const audio = new AudioBus();
 audio.musicVol = save.music;
@@ -49,7 +54,7 @@ controls.bindTouch($('stick'), $('look'), {
   cycle: $('btn-cycle'),
 });
 
-const game = new Game(canvas, controls, audio, {
+let game = new Game(canvas, controls, audio, {
   hud: (h) => paintHud(h),
   over: (r) => onOver(r),
   toast: (text) => pushToast(text),
@@ -109,14 +114,17 @@ function applySettings(): void {
 
 function show(next: Screen): void {
   screen = next;
-  const ids: Screen[] = ['title', 'missions', 'brief', 'armory', 'help', 'settings', 'pause', 'results'];
+  const ids: Screen[] = ['title', 'missions', 'brief', 'armory', 'help', 'settings', 'pause', 'results', 'war', 'lobby', 'wresults'];
   for (const id of ids) {
     const el = document.getElementById('scr-' + id);
     if (el) el.hidden = id !== next;
   }
-  const playing = next === 'play';
-  $('hud').hidden = !playing;
+  const playing = next === 'play' || next === 'wplay';
+  $('hud').hidden = next !== 'play';
+  $('war-hud').hidden = next !== 'wplay';
   document.body.classList.toggle('playing', playing);
+  document.body.classList.toggle('war-touch', next === 'wplay' && wantTouch());
+  if (next === 'wplay' && wantTouch()) $('hud').hidden = false;
   canvas.classList.toggle('aiming', playing && !wantTouch());
   if (playing) (document.activeElement as HTMLElement | null)?.blur?.();
 }
@@ -126,6 +134,127 @@ function wantTouch(): boolean {
 }
 
 function unlockAudio(): void { audio.start(); }
+
+let war: Warfare | null = null;
+let warMap: MapId = 'patio';
+let warDiff: 'easy' | 'normal' | 'hard' = 'normal';
+let crouchOn = false;
+
+function findMission(id: string): MissionDef | undefined {
+  return missionById(id) ?? STORY.find((m) => m.id === id) ?? (id === CLASSIC.id ? CLASSIC : undefined);
+}
+
+function bootWar(): Warfare {
+  war?.stop();
+  game.stop();
+  war = new Warfare(canvas, controls, audio, {
+    room: (room, me) => {
+      const code = $('lobby-code');
+      code.textContent = room.practice ? 'Practice' : room.code;
+      const sol = $('team-sol');
+      const luna = $('team-luna');
+      sol.innerHTML = '';
+      luna.innerHTML = '';
+      for (const m of room.members) {
+        const li = document.createElement('li');
+        li.textContent = `${m.name}${m.bot ? ' · BOT' : ''}${m.ready ? ' · ready' : ''}${m.id === me ? ' · you' : ''}`;
+        (m.team === 0 ? sol : luna).append(li);
+      }
+      const mine = room.members.find((m) => m.id === me);
+      const owner = room.owner === me;
+      $('btn-start-match').hidden = !owner;
+      $('btn-ready').hidden = owner;
+      $('btn-ready').textContent = mine?.ready ? 'Not ready' : "I'm ready";
+      $('lobby-status').textContent = owner ? 'You are the host.' : 'Waiting for the host.';
+      document.querySelectorAll<HTMLButtonElement>('#lobby-maps button').forEach((b) => b.classList.toggle('on', b.dataset['lmap'] === room.map));
+      if (room.phase === 'results' && room.results) {
+        $('wres-title').textContent = room.results.winner < 0 ? 'Tie' : room.results.winner === (mine?.team ?? 0) ? 'Your team won' : 'Your team lost';
+        const body = $('wres-body');
+        body.innerHTML = '';
+        for (const row of room.results.rows) {
+          const p = document.createElement('p');
+          p.textContent = `${row.name}${row.bot ? ' · BOT' : ''} · ${row.kills} sent home · ${row.deaths} times`;
+          body.append(p);
+        }
+      }
+    },
+    phase: (phase) => {
+      if (phase === 'playing' || phase === 'countdown') show('wplay');
+      else if (phase === 'results') show('wresults');
+      else show('lobby');
+    },
+    error: (code) => { $('war-err').textContent = code === 'no_server' ? 'Online server is not set up on this host. Practice still works.' : code; },
+    left: () => leaveWar(),
+  });
+  return war;
+}
+
+function leaveWar(): void {
+  war?.stop();
+  war = null;
+  game = new Game(canvas, controls, audio, { hud: (h) => paintHud(h), over: (r) => onOver(r), toast: (text) => pushToast(text) });
+  applySettings();
+  show('title');
+}
+
+$('btn-online').onclick = () => {
+  unlockAudio();
+  $('war-title').textContent = 'Play online';
+  $('war-note').textContent = warfareServerUrl() ? 'Private rooms, 2 to 4 Rosas, Sol versus Luna.' : 'This host has no game server. Practice still works.';
+  $('war-online').hidden = false;
+  $('war-practice').hidden = true;
+  show('war');
+};
+$('btn-practice-war').onclick = () => {
+  unlockAudio();
+  $('war-title').textContent = 'Practice';
+  $('war-note').textContent = 'Same match as online, against labeled bots. The clock stops while this menu is open.';
+  $('war-online').hidden = true;
+  $('war-practice').hidden = false;
+  show('war');
+};
+$('btn-war-back').onclick = () => show('title');
+document.querySelectorAll<HTMLButtonElement>('#war-maps button').forEach((b) => {
+  b.onclick = () => { warMap = (b.dataset['wmap'] as MapId) || 'patio'; document.querySelectorAll('#war-maps button').forEach((x) => x.classList.toggle('on', x === b)); };
+});
+document.querySelectorAll<HTMLButtonElement>('#war-diff button').forEach((b) => {
+  b.onclick = () => { warDiff = (b.dataset['wd'] as typeof warDiff) || 'normal'; document.querySelectorAll('#war-diff button').forEach((x) => x.classList.toggle('on', x === b)); };
+});
+$('btn-war-practice').onclick = () => {
+  const name = $<HTMLInputElement>('war-name').value || 'Rosa';
+  bootWar().practice({ difficulty: warDiff, allies: 1, enemies: 2, map: warMap, name });
+};
+$('btn-war-create').onclick = () => {
+  const name = $<HTMLInputElement>('war-name').value || 'Rosa';
+  bootWar().online({ name, create: true, map: warMap });
+};
+$('btn-war-join').onclick = () => {
+  const name = $<HTMLInputElement>('war-name').value || 'Rosa';
+  const code = $<HTMLInputElement>('war-code').value;
+  bootWar().online({ name, create: false, code, map: warMap });
+};
+$('btn-ready').onclick = () => {
+  const ready = $('btn-ready').textContent !== 'Not ready';
+  war?.act({ t: 'ready', ready });
+};
+$('btn-start-match').onclick = () => war?.act({ t: 'start' });
+let myTeam: 0 | 1 = 0;
+$('btn-team').onclick = () => { myTeam = myTeam === 0 ? 1 : 0; war?.act({ t: 'team', team: myTeam }); };
+$('btn-leave-room').onclick = () => { war?.act({ t: 'leave' }); leaveWar(); };
+$('btn-copy-code').onclick = () => { const code = $('lobby-code').textContent ?? ''; if (code && code !== 'Practice') void navigator.clipboard?.writeText(`${location.origin}${location.pathname}#room=${code}`); };
+$('btn-rematch').onclick = () => war?.act({ t: 'rematch' });
+$('btn-back-lobby').onclick = () => war?.act({ t: 'lobby' });
+$('btn-wres-home').onclick = () => leaveWar();
+$('btn-war-menu').onclick = () => { war?.act({ t: 'lobby' }); };
+document.querySelectorAll<HTMLButtonElement>('#lobby-maps button').forEach((b) => {
+  b.onclick = () => { const id = b.dataset['lmap'] as MapId; if (id) war?.act({ t: 'map', map: id }); };
+});
+$<HTMLInputElement>('chk-bots').onchange = (e) => {
+  war?.act({ t: 'bots', enabled: (e.target as HTMLInputElement).checked, difficulty: warDiff });
+};
+canvas.addEventListener('pointermove', (e) => { if (screen === 'wplay') war?.pointer(e.clientX, e.clientY); });
+$('btn-story').onclick = () => { unlockAudio(); renderMissionList(STORY, () => false); show('missions'); };
+$('btn-classic').onclick = () => { unlockAudio(); pending = { id: CLASSIC.id, endless: false }; openBrief(CLASSIC.id, false); };
 
 $('btn-campaign').onclick = () => { unlockAudio(); renderMissions(); show('missions'); };
 $('btn-endless').onclick = () => { unlockAudio(); openBrief('endless', true); };
@@ -184,9 +313,12 @@ $<HTMLInputElement>('set-fps').onchange = (e) => { save.fps = (e.target as HTMLI
 window.addEventListener('pointerdown', unlockAudio, { passive: true });
 window.addEventListener('keydown', (e) => {
   unlockAudio();
+  if (e.code === 'KeyC' && screen === 'wplay') { crouchOn = !crouchOn; war?.setCrouch(crouchOn); }
   if (e.key === 'Escape') {
     if (screen === 'play') openPause();
     else if (screen === 'pause') resume();
+    else if (screen === 'wplay') war?.act({ t: 'lobby' });
+    else if (screen === 'lobby' || screen === 'wresults' || screen === 'war') leaveWar();
     else if (screen !== 'title') show('title');
   } else if ((e.key === 'p' || e.key === 'P') && screen === 'play') openPause();
 });
@@ -200,10 +332,14 @@ function markDiff(): void {
 }
 
 function renderMissions(): void {
+  renderMissionList(MISSIONS, (i) => i > save.unlocked);
+}
+
+function renderMissionList(list: MissionDef[], lockedAt: (i: number) => boolean): void {
   const root = $('mission-list');
   root.innerHTML = '';
-  MISSIONS.forEach((m, i) => {
-    const locked = i > save.unlocked;
+  list.forEach((m, i) => {
+    const locked = lockedAt(i);
     const best = save.best[m.id];
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -247,7 +383,7 @@ function openBrief(id: string, endless: boolean): void {
     }
     game.preview(endlessMap);
   } else {
-    const m = missionById(id);
+    const m = findMission(id);
     if (!m) return;
     $('brief-kicker').textContent = MAPS[m.map]?.name[lang()] ?? '';
     $('brief-title').textContent = m.name[lang()];
@@ -280,7 +416,7 @@ function begin(start: { id: string; endless: boolean }): void {
       par: 0,
     });
   } else {
-    const m = missionById(start.id);
+    const m = findMission(start.id);
     if (!m) return;
     const map = MAPS[m.map];
     if (!map) return;

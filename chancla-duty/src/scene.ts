@@ -512,7 +512,7 @@ export class DutyScene {
         p.lods.forEach((mesh, k) => { mesh.visible = k === lod; });
         const clip = !alive ? 'Death' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : 'Idle';
         playFilm(p, clip);
-        p.mixer.update(dt);
+        for (const mixer of p.mixers) mixer.update(dt);
       }
       used = this.actors.length;
     } else if (this.women.length) {

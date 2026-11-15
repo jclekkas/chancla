@@ -4,7 +4,7 @@ Chancla Duty's new look uses public-domain (CC0) assets. The original Warfare ar
 
 ## Characters
 
-The high tier does not use the Grab3D soldier. Doña Rosa's two team looks and the abuela are modeled in this repo (`chancla-duty/src/film.ts`): smooth stylized meshes, embroidered dresses in the original Sol marigold and Luna teal, curly hair, a straw hat, a rebozo, and the abuela's curlers, glasses, blue blouse, white apron, and shawl. Walk, run, throw, and hit are posed from the match timers. A capsule casts the shadow. Quaternius glTF files remain in `public/chancla-duty/cc0/characters/` as unused fallbacks and are not loaded.
+The high tier does not use the Grab3D soldier. Doña Rosa (Sol and Luna) and the abuela are Blender meshes in `public/chancla-duty/cc0/characters/film-sol.glb`, `film-luna.glb`, and `film-abuela.glb`, skinned to the Quaternius skeleton. Idle, walk, run, throw (SwordSlash), hit, and death are the Quaternius clips (CC0). The faces, embroidered dresses, hat, and shawl are modeled in this repo. A capsule casts the shadow.
 
 ## Surfaces and sky
 

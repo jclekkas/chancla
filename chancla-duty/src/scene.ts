@@ -9,7 +9,7 @@ import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
 import { applyCc0Look, forearmGeometry } from './cc0';
 import { chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
-import { addFilmTown, buildFilmWoman, poseFilm, styleViewmodels, type FilmWoman } from './film';
+import { addFilmTown, buildFilmWoman, loadFilmCast, playFilm, poseFilm, styleViewmodels, type FilmPuppet, type FilmWoman } from './film';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -170,6 +170,8 @@ export class DutyScene {
   private gpuTier = false;
   private tier: 'fast' | 'medium' | 'high' = 'fast';
   private women: FilmWoman[] = [];
+  private cast: FilmPuppet[] = [];
+  private lastAnim = 0;
   private gl: THREE.WebGLRenderer | null = null;
   private worldScene: THREE.Scene | null = null;
   private worldOpts: WorldOptions = {};
@@ -319,7 +321,10 @@ export class DutyScene {
       return;
     }
     const jobs: Promise<unknown>[] = [applyCc0Look(renderer, scene, this.root, true)];
-    if (this.tier === 'high') jobs.push(loadKit());
+    if (this.tier === 'high') {
+      jobs.push(loadKit());
+      jobs.push(loadFilmCast(this.root).then((cast) => { this.cast = cast; }));
+    }
     void Promise.all(jobs).then(async () => {
       this.rebuild(this.worldOpts);
       this.upgradeHands();
@@ -398,7 +403,36 @@ export class DutyScene {
     const mode = engine.mode;
     const session = (engine as unknown as { session: { remotes: Map<number, Remote>; body: { x: number; y: number; z: number }; alive: boolean; team: 0 | 1 | null; weapon: WeaponId; cooldownMs: number; projectiles: Map<string, Shot> } | null }).session;
     let used = 0;
-    if (this.women.length) {
+    const dt = this.lastAnim ? Math.min(0.05, (now - this.lastAnim) / 1000) : 0;
+    this.lastAnim = now;
+    if (this.cast.length) {
+      for (const actor of this.actors) actor.root.visible = false;
+      for (const w of this.women) w.root.visible = false;
+      const spots: Array<[number, number, number, number, number, boolean, number, number]> = [];
+      if (mode === 'menu') {
+        const face = (x: number, z: number) => Math.atan2(5.2 - x, 8.6 - z);
+        spots.push([-2.2, 0, 1.8, face(-2.2, 1.8), 0.8, true, 9, 9]);
+        spots.push([0.6, 0, 2.4, face(0.6, 2.4), 0, true, (now * 0.001) % 3.2, 9]);
+        spots.push([2.4, 0, 0.6, face(2.4, 0.6), 0, true, 9, 9]);
+      } else if (mode === 'match' && session) {
+        for (const remote of session.remotes.values()) {
+          spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
+        }
+      }
+      for (let i = 0; i < this.cast.length; i++) {
+        const p = this.cast[i]!;
+        const spot = spots[i];
+        if (!spot) { p.root.visible = false; continue; }
+        const [x, y, z, yaw, speed, alive, throwAge, hitAge] = spot;
+        p.root.visible = true;
+        p.root.position.set(x, y + (Number(p.root.userData['foot']) || 0), z);
+        p.root.rotation.y = yaw;
+        const clip = !alive ? 'Death' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : 'Idle';
+        playFilm(p, clip);
+        p.mixer.update(dt);
+      }
+      used = this.actors.length;
+    } else if (this.women.length) {
       for (const actor of this.actors) actor.root.visible = false;
       const spots: Array<[number, number, number, number, number, boolean, number, number]> = [];
       if (mode === 'menu') {

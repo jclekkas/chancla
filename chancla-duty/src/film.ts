@@ -352,6 +352,79 @@ function merge(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return geos.length === 1 ? geos[0]! : (mergeGeometries(geos, false) ?? geos[0]!);
 }
 
+export interface FilmPuppet {
+  root: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+  actions: Map<string, THREE.AnimationAction>;
+  current: string;
+}
+
+function clipKey(raw: string): string {
+  const n = raw.toLowerCase();
+  if (n.startsWith('run')) return 'Run';
+  if (n.startsWith('walk')) return 'Walk';
+  if (n.startsWith('idle')) return 'Idle';
+  if (n.includes('sword') || n.includes('punch')) return 'SwordSlash';
+  if (n.includes('hit') || n.includes('recieve')) return 'RecieveHit';
+  if (n.startsWith('death') || n.startsWith('defeat')) return 'Death';
+  if (n.startsWith('jump')) return 'Jump';
+  return '';
+}
+
+/** Blender women on the Quaternius skeleton: Idle, Walk, Run, throw, hit, down. */
+export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]> {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { clone } = await import('three/examples/jsm/utils/SkeletonUtils.js');
+  const loader = new GLTFLoader();
+  const files = ['film-sol.glb', 'film-luna.glb', 'film-abuela.glb', 'film-sol.glb'];
+  const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}?v=4`)));
+  const out: FilmPuppet[] = [];
+  for (const gltf of gltfs) {
+    const root = clone(gltf.scene) as THREE.Object3D;
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const h = Math.max(0.001, box.max.y - box.min.y);
+    const s = 1.68 / h;
+    root.scale.setScalar(s);
+    root.userData['foot'] = -box.min.y * s;
+    root.position.y = root.userData['foot'] as number;
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = true;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (mat && 'roughness' in mat) { mat.roughness = Math.min(0.85, Math.max(mat.roughness ?? 0.6, 0.5)); mat.metalness = 0; }
+    });
+    const proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.75, 2, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+    proxy.position.y = 0.85;
+    proxy.castShadow = true;
+    root.add(proxy);
+    root.visible = false;
+    root.userData['keep'] = true;
+    parent.add(root);
+    const mixer = new THREE.AnimationMixer(root);
+    const actions = new Map<string, THREE.AnimationAction>();
+    for (const clip of gltf.animations) {
+      const key = clipKey(clip.name);
+      if (!key || actions.has(key)) continue;
+      actions.set(key, mixer.clipAction(clip));
+    }
+    out.push({ root, mixer, actions, current: '' });
+  }
+  return out;
+}
+
+export function playFilm(p: FilmPuppet, name: string): void {
+  if (p.current === name) return;
+  const next = p.actions.get(name) ?? p.actions.get('Idle');
+  if (!next) return;
+  p.actions.get(p.current)?.fadeOut(0.15);
+  next.reset().fadeIn(0.15).play();
+  p.current = name;
+}
+
 const floralMat = cloth(0xf29a2e);
 
 function floralSleeve(): THREE.CanvasTexture {

@@ -17,21 +17,24 @@ interface Slot {
 export class ProjectileView {
   readonly group = new THREE.Group();
   readonly particles = new Particles(360);
-  private pools: Record<WeaponId, Slot[]> = { 0: [], 1: [] };
+  private pools: Record<WeaponId, Slot[]> = { 0: [], 1: [], 2: [], 3: [], 4: [] };
   private rings: Array<{ mesh: THREE.Mesh; t: number }> = [];
 
   constructor() {
-    const mat = [trailMaterial(false), trailMaterial(false)];
-    for (const w of [0, 1] as const) {
-      for (let i = 0; i < (w === 0 ? 16 : 8); i++) {
-        const mesh = w === 0 ? buildSandal() : buildPesada();
-        mesh.scale.setScalar(w === 0 ? 1.7 : 1.6);
-        mesh.visible = false;
-        const trail = new Trail(mat[w]!, w === 0 ? 0.06 : 0.09);
-        trail.setColor(w === 0 ? 0xfff2d8 : 0xb98ad8);
-        this.group.add(mesh, trail.mesh);
-        this.pools[w].push({ mesh, trail, key: null, spin: Math.random() * 6 });
-      }
+    this.fillPool(0, 16);
+    this.fillPool(1, 8);
+  }
+
+  private fillPool(w: WeaponId, n: number): void {
+    const sandal = w !== 1 && w !== 4;
+    for (let i = 0; i < n; i++) {
+      const mesh = sandal ? buildSandal() : buildPesada();
+      mesh.scale.setScalar(sandal ? 1.7 : 1.6);
+      mesh.visible = false;
+      const trail = new Trail(trailMaterial(false), sandal ? 0.06 : 0.09);
+      trail.setColor(sandal ? 0xfff2d8 : 0xb98ad8);
+      this.group.add(mesh, trail.mesh);
+      this.pools[w].push({ mesh, trail, key: null, spin: Math.random() * 6 });
     }
     this.group.add(this.particles.mesh);
     for (let i = 0; i < 4; i++) {
@@ -44,7 +47,7 @@ export class ProjectileView {
   }
 
   clear(): void {
-    for (const w of [0, 1] as const) for (const s of this.pools[w]) { s.key = null; s.mesh.visible = false; s.trail.hide(); }
+    for (const w of [0, 1, 2, 3, 4] as const) for (const s of this.pools[w]) { s.key = null; s.mesh.visible = false; s.trail.hide(); }
     this.particles.clear();
   }
 
@@ -65,6 +68,7 @@ export class ProjectileView {
       if (cp.done) continue;
       if (!cp.predicted && renderTime < cp.startAt) continue;
       live.add(cp.id);
+      if (this.pools[cp.weapon].length === 0) this.fillPool(cp.weapon, cp.weapon === 4 ? 6 : 12);
       const pool = this.pools[cp.weapon];
       let slot = pool.find((s) => s.key === cp.id);
       if (!slot) {
@@ -86,7 +90,7 @@ export class ProjectileView {
       slot.trail.push(slot.mesh.position, dt);
       slot.trail.update(camera);
     }
-    for (const w of [0, 1] as const) {
+    for (const w of [0, 1, 2, 3, 4] as const) {
       for (const s of this.pools[w]) {
         if (s.key && !live.has(s.key)) { s.key = null; s.mesh.visible = false; s.trail.hide(); }
       }

@@ -18,7 +18,7 @@ import { DEFAULT_MAP, mapData, type MapId } from '../../shared/maps';
 import { World, newBody, stepMove, type Body } from '../../shared/physics';
 import { BTN, hitboxOf, launch, stepProjectileWorld, type Hitbox, type Projectile, type SimEvent } from '../../shared/sim';
 import { segmentCapsule } from '../../shared/collision';
-import type { ClientMsg, ErrorCode, InputTuple, RoomView, ServerMsg, Snapshot } from '../../shared/protocol';
+import { weaponOf, type ClientMsg, type ErrorCode, type InputTuple, type RoomView, type ServerMsg, type Snapshot } from '../../shared/protocol';
 
 export interface Transport {
   send(msg: ClientMsg): void;
@@ -64,6 +64,10 @@ export interface LocalInput {
   jump: boolean;
   crouch: boolean;
   weapon: WeaponId;
+  dash?: boolean;
+  recall?: boolean;
+  legend?: boolean;
+  charge?: number;
 }
 
 export interface SessionEvents {
@@ -385,7 +389,7 @@ export class GameSession {
       players.set(t[0], {
         id: t[0], x: t[1], y: t[2], z: t[3], yaw: t[4], pitch: t[5], vx: t[6], vz: t[7],
         alive: (t[8] & 1) !== 0, crouched: (t[8] & 2) !== 0, onGround: (t[8] & 4) !== 0, protected: (t[8] & 8) !== 0, connected: (t[8] & 16) !== 0,
-        hp: t[9], weapon: t[10] === 1 ? 1 : 0, msSinceThrow: t[11], msSinceHit: t[12],
+        hp: t[9], weapon: weaponOf(t[10]), msSinceThrow: t[11], msSinceHit: t[12],
       });
     }
     this.history.push({ st: s.st, players });
@@ -412,7 +416,7 @@ export class GameSession {
     // Cooldowns: trust the server, minus the time our pending inputs represent.
     this.cooldownMs = me[8];
     this.switchMs = me[9];
-    this.weapon = me[10] === 1 ? 1 : 0;
+    this.weapon = weaponOf(me[10]);
     this.pending = this.pending.filter((p) => p.seq > s.ack);
     const frozen = s.ph !== 'playing';
     for (const p of this.pending) this.simulate(p.inp, frozen, false);
@@ -438,10 +442,14 @@ export class GameSession {
     if (this.cooldownMs > 0) this.cooldownMs = Math.max(0, this.cooldownMs - DT_MS);
     if (this.switchMs > 0) this.switchMs = Math.max(0, this.switchMs - DT_MS);
     if (!this.alive) return false;
-    if (inp.weapon !== this.weapon) { this.weapon = inp.weapon; this.switchMs = WEAPON_SWITCH_MS; }
+    if (inp.weapon !== this.weapon && inp.weapon >= 0 && inp.weapon <= 4) { this.weapon = inp.weapon; this.switchMs = WEAPON_SWITCH_MS; }
     stepMove(this.world, this.body, {
       mx: frozen ? 0 : inp.mx, mz: frozen ? 0 : inp.mz, yaw: inp.yaw, jump: !frozen && inp.jump, crouch: inp.crouch,
     }, DT);
+    if (!frozen && inp.dash) {
+      this.body.vx += -Math.sin(inp.yaw) * 16;
+      this.body.vz += -Math.cos(inp.yaw) * 16;
+    }
     if (!frozen && inp.fire && this.cooldownMs <= 0 && this.switchMs <= 0) {
       this.cooldownMs = WEAPONS[this.weapon]!.cooldownMs;
       fired = true;
@@ -463,8 +471,10 @@ export class GameSession {
     this.simulate(q, frozen, true);
     this.pending.push({ seq, inp: q });
     if (this.pending.length > 240) this.pending.shift();
-    const buttons = (q.fire ? BTN.fire : 0) | (q.jump ? BTN.jump : 0) | (q.crouch ? BTN.crouch : 0);
-    this.outbox.push([seq, q.mx, q.mz, q.yaw, q.pitch, buttons, q.weapon]);
+    const buttons = (q.fire ? BTN.fire : 0) | (q.jump ? BTN.jump : 0) | (q.crouch ? BTN.crouch : 0)
+      | (q.dash ? BTN.dash : 0) | (q.recall ? BTN.recall : 0) | (q.legend ? BTN.legend : 0);
+    const tuple: InputTuple = q.charge ? [seq, q.mx, q.mz, q.yaw, q.pitch, buttons, q.weapon, Math.max(0, Math.min(1, q.charge))] : [seq, q.mx, q.mz, q.yaw, q.pitch, buttons, q.weapon];
+    this.outbox.push(tuple);
     // Blend out reconciliation corrections over about 100 ms.
     const k = Math.exp(-DT * 18);
     this.correction.x *= k; this.correction.y *= k; this.correction.z *= k;
@@ -542,9 +552,10 @@ export class GameSession {
   }
 
   private predictThrow(inp: LocalInput): void {
-    const { p, v } = launch(this.world, this.body, inp.yaw, inp.pitch, this.weapon, this.displayedEnemyHitboxes());
+    const { p, v } = launch(this.world, this.body, inp.yaw + (this.weapon === 3 ? -0.1 : 0), inp.pitch, this.weapon, this.displayedEnemyHitboxes());
     const id = `local-${++this.localShot}`;
-    const pr: Projectile = { id: -1, owner: this.id, team: this.team ?? 0, weapon: this.weapon, x: p[0], y: p[1], z: p[2], vx: v[0], vy: v[1], vz: v[2], ageMs: 0, traveled: 0, bounces: 0, fireSeq: this.seq };
+    const boost = 1 + Math.max(0, Math.min(1, inp.charge ?? 0)) * 0.45;
+    const pr: Projectile = { id: -1, owner: this.id, team: this.team ?? 0, weapon: this.weapon, x: p[0], y: p[1], z: p[2], vx: v[0] * boost, vy: v[1] * boost, vz: v[2] * boost, ageMs: 0, traveled: 0, bounces: 0, fireSeq: this.seq };
     this.projectiles.set(id, { id, weapon: this.weapon, pr, owner: this.id, predicted: true, startAt: this.serverNow(), endAt: Infinity, endPos: null, done: false, trail: [] });
     this.handlers.localThrow?.(this.weapon);
   }
@@ -568,6 +579,8 @@ export class GameSession {
         if (cp) { cp.endAt = e.tm; cp.endPos = e.p; }
         break;
       }
+      case 'wave':
+        break;
     }
     this.handlers.event?.(e, mine);
   }

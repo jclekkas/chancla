@@ -89,6 +89,7 @@ export class Hub {
         while (this.rooms.has(code)) code = randomCode();
         const room = new Room(code, now, { ...this.opts.roomOptions, practice: !!msg.practice });
         if (msg.map) room.map = msg.map;
+        room.endless = msg.endless === true;
         this.rooms.set(code, room);
         this.attach(s, room, now);
         if (msg.practice) {

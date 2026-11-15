@@ -65,8 +65,8 @@ No hardware GPU is attached. `/dev/dri` is empty, and Chrome's unmasked renderer
 
 | Map | Original draw calls | Duty draws, high | Original triangles | Duty triangles, high | Duty triangles, medium | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 36 | 34,910 | 44,582 | 18,220 | 0.30 ms |
-| Plaza | 71 | 39 | 27,094 | 46,004 | 16,728 | 0.30 ms |
-| Fiesta | 70 | 28 | 22,352 | 36,768 | 18,920 | 0.20 ms |
+| Patio | 75 | 27 | 34,910 | 282,276 | 18,220 | 0.30 ms |
+| Plaza | 71 | 23 | 27,094 | 277,842 | 16,728 | 0.20 ms |
+| Fiesta | 70 | 19 | 22,352 | 274,462 | 18,920 | 0.20 ms |
 
-High tier batches the Kenney pieces into one mesh per material, so it draws fewer times than the original on every map, and stays under 50k triangles. Medium tier is the textured courtyard without that kit, and its triangle counts sit under the original. The JavaScript before `gl.draw*` stays under 0.4 ms. SwiftShader still presents both games at about 10–13 fps.
+High tier draws fewer times than the original on every map. The two plaza figures are the Grab3D soldier (the same CC0 rig dilf-war uses), so the triangle count is higher than the old low-poly crowd. Medium tier does not load that soldier, and its triangle counts stay under the original. The JavaScript before `gl.draw*` stays under 0.4 ms.

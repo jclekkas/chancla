@@ -171,7 +171,7 @@ function pileOf(name: string, mat: THREE.Material): string {
   return 'town';
 }
 
-const markMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+const markMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0, side: THREE.DoubleSide, emissive: 0x2a1810, emissiveIntensity: 0.12 });
 
 function marker(x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw: number, hex: number): void {
   const g = new THREE.BoxGeometry(sx, sy, sz);

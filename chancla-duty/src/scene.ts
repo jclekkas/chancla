@@ -272,9 +272,9 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xffe0c0, 0x6a4030, this.tier === 'high' ? 0.42 : 0.72);
-    this.root.add(new THREE.AmbientLight(0xffd0a4, this.tier === 'high' ? 0.1 : 0.22));
-    const sun = new THREE.DirectionalLight(0xff6a18, this.tier === 'high' ? 3.6 : 2.2);
+    this.hemi = new THREE.HemisphereLight(0xfff0d8, 0x8d6a48, this.tier === 'high' ? 0.95 : 0.8);
+    this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.22 : 0.28));
+    const sun = new THREE.DirectionalLight(0xfff3d8, this.tier === 'high' ? 2.7 : 2.2);
     sun.position.set(...theme.sunPos);
     if (this.gpuTier) {
       sun.castShadow = true;
@@ -313,7 +313,7 @@ export class DutyScene {
       this.rebuild(this.worldOpts);
       this.upgradeHands();
       for (const puppet of this.puppets) {
-        const fist = puppet.root.getObjectByName('Fist.R');
+        const fist = puppet.root.getObjectByName('Fist.R') ?? puppet.root.getObjectByName('RightHand');
         if (!fist) continue;
         for (const child of [...fist.children]) fist.remove(child);
         const shoe = chanclaObject(0x2bb5b0, false);
@@ -349,12 +349,12 @@ export class DutyScene {
         else { hand.scale.setScalar(1.25); hand.position.set(0.02, -0.02, 0); hand.rotation.set(0, 0.15, 0); }
       }
       for (const child of [...g.children]) if (child !== hand) g.remove(child);
-      hand.position.set(0.1, -0.1, 0.06);
-      hand.scale.setScalar(baked ? hand.scale.x : 0.85);
+      hand.position.set(0.14, -0.14, 0.08);
+      hand.scale.setScalar(1.45);
       const shoe = viewChancla(hex, heel);
       // Sole faces the camera; the Y-strap stands up off the tread.
-      shoe.scale.setScalar(1.55);
-      shoe.position.set(0.02, -0.02, -0.18);
+      shoe.scale.setScalar(0.72);
+      shoe.position.set(0.0, 0.03, -0.1);
       shoe.rotation.order = 'YXZ';
       shoe.rotation.set(0.95, 0.45, 0.1);
       g.add(shoe);
@@ -489,7 +489,7 @@ export class DutyScene {
       const cock = Math.max(held, wind * 0.7);
       const bob = Math.sin(now * 0.0032) * 0.016;
       const sway = Math.sin(now * 0.0021) * 0.05;
-      vm.position.set(0.22, -0.18 + bob + cock * 0.07, -0.34 + cock * 0.1);
+      vm.position.set(0.3, -0.22 + bob + cock * 0.07, -0.38 + cock * 0.1);
       vm.rotation.set(0.42 - cock * 0.95, -0.2 - sway, 0.18 + cock * 0.4);
     }
     this.stats.syncMs = performance.now() - t0;
@@ -544,9 +544,9 @@ export class DutyScene {
       composer.addPass(new RenderPass(scene, camera));
       const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
       gtao.output = GTAOPass.OUTPUT.Default;
-      gtao.blendIntensity = 1.05;
+      gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.32, 0.5, 0.94));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.28, 0.42, 0.82));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

@@ -107,10 +107,9 @@ function paint(geo: THREE.BufferGeometry, hex: number): void {
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
     const ny = nrm.getY(i);
-    let ao = 0.7 + ny * 0.3;
-    if (y < 0.4) ao *= 0.55;
-    else if (y < 1.1) ao *= 0.82;
-    const sat = 1.28;
+    let ao = 0.88 + ny * 0.12;
+    if (y < 0.35) ao *= 0.9;
+    const sat = 1.05;
     cols[i * 3] = Math.min(1, (0.5 + (_c.r - 0.5) * sat) * ao);
     cols[i * 3 + 1] = Math.min(1, (0.5 + (_c.g - 0.5) * sat) * ao);
     cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao * 0.92);
@@ -592,7 +591,7 @@ function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
       y,
       f.fz + f.uz * along - f.nz * inset,
     );
-    const bands = [0xd24b78, 0xe08a32, 0x1f9a90];
+    const bands = [0xf6e7d4, 0xe7b48a, 0x7eb8ae];
     for (let band = 0; band < 3; band++) {
       const s0 = a0 + (a1 - a0) * (band / 3);
       const s1 = a0 + (a1 - a0) * ((band + 1) / 3);

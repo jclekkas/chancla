@@ -68,7 +68,12 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     if (!mesh.isMesh) return;
     if (mesh.name === 'duty-walls') { mesh.material = plaster; mesh.castShadow = shadows; mesh.receiveShadow = true; }
     if (mesh.name === 'duty-skin') {
-      mesh.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      const warm = (plaster as THREE.MeshStandardMaterial).clone();
+      warm.color.set(0xfff4e8);
+      warm.emissive.set(0x000000);
+      warm.emissiveIntensity = 0;
+      warm.side = THREE.DoubleSide;
+      mesh.material = warm;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
     }
@@ -82,32 +87,32 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromEquirectangular(hdr).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.5;
+    scene.environmentIntensity = 0.85;
     scene.background = hdr;
-    scene.backgroundBlurriness = 0;
-    renderer.toneMappingExposure = 1.02;
+    scene.backgroundBlurriness = 0.04;
+    renderer.toneMappingExposure = 1.05;
     pmrem.dispose();
     root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
   } catch { /* keep the gradient sky */ }
   const fog = scene.fog as THREE.Fog | null;
-  if (fog) { fog.color.set(0xe4c4a0); fog.near = 18; fog.far = 72; }
+  if (fog) { fog.color.set(0xf3ddc4); fog.near = 36; fog.far = 140; }
 }
 
 let armGeo: THREE.BufferGeometry | null = null;
 export function forearmGeometry(): THREE.BufferGeometry | null { return armGeo; }
 
-const ARM = new Set(['Shoulder.R', 'UpperArm.R', 'LowerArm.R', 'Fist.R']);
+const ARM = new Set(['Shoulder.R', 'UpperArm.R', 'LowerArm.R', 'Fist.R', 'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand']);
 
 function sculptArm(root: THREE.Object3D): THREE.BufferGeometry | null {
   const meshes: THREE.SkinnedMesh[] = [];
   root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh); });
   if (!meshes.length) return null;
-  root.getObjectByName('UpperArm.R')?.rotateX(-1.2);
-  root.getObjectByName('LowerArm.R')?.rotateX(-0.45);
+  (root.getObjectByName('UpperArm.R') ?? root.getObjectByName('RightArm'))?.rotateX(-1.1);
+  (root.getObjectByName('LowerArm.R') ?? root.getObjectByName('RightForeArm'))?.rotateX(-0.45);
   root.updateMatrixWorld(true);
   for (const mesh of meshes) mesh.skeleton.update();
   const fist = new THREE.Vector3();
-  root.getObjectByName('Fist.R')?.getWorldPosition(fist);
+  (root.getObjectByName('Fist.R') ?? root.getObjectByName('RightHand'))?.getWorldPosition(fist);
   const arr: number[] = [];
   const indices: number[] = [];
   const v = new THREE.Vector3();
@@ -159,34 +164,51 @@ export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
   const { clone } = await import('three/examples/jsm/utils/SkeletonUtils.js');
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const files = ['rosa.glb', 'luna.glb', 'kid.glb', 'npc.glb'];
-  const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
+  const soldier = await loader.loadAsync('/chancla-duty/cc0/characters/soldier.glb').catch(() => null);
+  const gltfs = soldier ? [soldier] : await Promise.all(['rosa.glb', 'luna.glb'].map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
   try {
     if (gltfs[0]) armGeo = sculptArm(clone(gltfs[0].scene) as Object3D);
   } catch { armGeo = null; }
+  const copies = soldier ? 2 : gltfs.length;
   const out: Puppet[] = [];
-  for (const gltf of gltfs) {
+  for (let i = 0; i < copies; i++) {
+    const gltf = gltfs[Math.min(i, gltfs.length - 1)]!;
     const root = clone(gltf.scene) as Object3D;
-    fit(root);
+    if (soldier) fitSoldier(root);
+    else fit(root);
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) { mesh.castShadow = false; mesh.receiveShadow = true; mesh.frustumCulled = true; }
-      if (o.name === 'Fist.R') {
-        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.16), new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.6 }));
-        shoe.position.set(0, 0.04, 0.06);
-        shoe.castShadow = true;
-        o.add(shoe);
-      }
+      if (mesh.isMesh) { mesh.castShadow = i === 0; mesh.receiveShadow = true; mesh.frustumCulled = true; }
     });
     root.visible = false;
     root.userData['keep'] = true;
     parent.add(root);
     const mixer = new THREE.AnimationMixer(root);
     const actions = new Map<string, AnimationAction>();
-    for (const clip of gltf.animations as AnimationClip[]) actions.set(clip.name, mixer.clipAction(clip));
+    for (const clip of gltf.animations as AnimationClip[]) {
+      const n = clip.name.toLowerCase();
+      const name = n.includes('run') ? 'Run' : n.includes('walk') ? 'Walk' : clip.name;
+      actions.set(name, mixer.clipAction(clip));
+    }
+    if (!actions.has('Idle') && actions.has('Walk')) actions.set('Idle', actions.get('Walk')!);
     out.push({ root, mixer, actions, current: '' });
   }
   return out;
+}
+
+function fitSoldier(root: THREE.Object3D): void {
+  root.updateMatrixWorld(true);
+  const head = root.getObjectByName('Head');
+  const hips = root.getObjectByName('Hips');
+  if (!head || !hips) { fit(root); return; }
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  head.getWorldPosition(a);
+  hips.getWorldPosition(b);
+  const est = Math.max(0.4, a.distanceTo(b) / 0.42);
+  const s = 1.78 / est;
+  root.scale.setScalar(s);
+  root.position.y = -b.y * s;
 }
 
 function fit(root: THREE.Object3D): void {

@@ -7,7 +7,7 @@ import { EL_PATIO, type MapData } from '../../shared/map';
 import type { WorldOptions } from '../../src/fps/render/world';
 import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
-import { applyCc0Look, loadPuppets, playClip, type Puppet } from './cc0';
+import { applyCc0Look, forearmGeometry, loadPuppets, playClip, type Puppet } from './cc0';
 import { chanclaObject, chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
@@ -183,7 +183,7 @@ export class DutyScene {
     const map: MapData = opts.map ?? EL_PATIO;
     const boxes = opts.boxes ?? map.boxes;
     const theme = THEMES[opts.theme ?? 'afternoon'];
-    const detailed = this.tier !== 'fast' && kitReady();
+    const detailed = this.tier === 'high' && kitReady();
     for (const child of [...this.root.children]) {
       if (child.userData['keep']) continue;
       this.root.remove(child);
@@ -194,9 +194,9 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xb9dcff, 0xc56a3a, 0.72);
-    this.root.add(new THREE.AmbientLight(0xffe2c0, 0.22));
-    const sun = new THREE.DirectionalLight(0xffb15a, this.tier === 'high' ? 1.35 : 2.4);
+    this.hemi = new THREE.HemisphereLight(0xffd2a8, 0x5c3024, this.tier === 'high' ? 0.32 : 0.72);
+    this.root.add(new THREE.AmbientLight(0xffc898, this.tier === 'high' ? 0.08 : 0.22));
+    const sun = new THREE.DirectionalLight(0xff7a24, this.tier === 'high' ? 3.1 : 2.2);
     sun.position.set(...theme.sunPos);
     if (this.gpuTier) {
       sun.castShadow = true;
@@ -224,11 +224,11 @@ export class DutyScene {
       (window as unknown as { __duty?: { assets?: boolean } }).__duty && ((window as unknown as { __duty: { assets?: boolean } }).__duty.assets = true);
       return;
     }
-    void Promise.all([
-      applyCc0Look(renderer, scene, this.root, true),
-      loadPuppets(this.root).then((puppets) => { this.puppets = puppets; }),
-      loadKit(),
-    ]).then(async () => {
+    const jobs: Promise<unknown>[] = [applyCc0Look(renderer, scene, this.root, true)];
+    if (this.tier === 'high') {
+      jobs.push(loadPuppets(this.root).then((puppets) => { this.puppets = puppets; }), loadKit());
+    }
+    void Promise.all(jobs).then(async () => {
       this.rebuild(this.worldOpts);
       this.upgradeHands();
       for (const puppet of this.puppets) {
@@ -257,7 +257,15 @@ export class DutyScene {
     const specs: Array<[number, boolean, boolean]> = [[0x2bb5b0, false, false], [0x6a3d86, true, false], [0xc48a52, false, false], [0xf2c14e, false, true], [0x2a160f, true, false]];
     this.viewmodels.forEach((g, i) => {
       const [hex, heel, twin] = specs[i] ?? [0x2bb5b0, false, false];
-      const hand = g.children[0];
+      const hand = g.children[0] as THREE.Mesh;
+      const arm = forearmGeometry();
+      if (arm && hand.isMesh) {
+        hand.geometry = arm;
+        hand.material = new THREE.MeshStandardMaterial({ color: 0xd08a5c, roughness: 0.55, metalness: 0 });
+        hand.scale.setScalar(1.85);
+        hand.position.set(0.08, 0.1, -0.06);
+        hand.rotation.set(0.75, -0.35, 0.15);
+      }
       for (const child of [...g.children]) if (child !== hand) g.remove(child);
       const shoe = chanclaObject(hex, heel);
       shoe.scale.setScalar(1.7);
@@ -443,6 +451,7 @@ export class DutyScene {
       composer.addPass(new RenderPass(scene, camera));
       const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
       gtao.output = GTAOPass.OUTPUT.Default;
+      gtao.blendIntensity = 1.45;
       composer.addPass(gtao);
       composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.06, 0.3, 0.92));
       composer.addPass(new FXAAPass());

@@ -13,7 +13,7 @@ Rigged, animated people are from the [Ultimate Animated Character Pack](https://
 - `painted_plaster_wall` — wall color, normal, roughness (1K)
 - `terracotta_floor_tiles` — floor color, normal, roughness (1K)
 - `wood_table_001` — wood color, normal, roughness (1K). Photography by Dimitrios Savva, processing by Rico Cilliers
-- `kiara_8_sunset` — 1K HDRI for image-based lighting and the sky
+- `kloofendal_48d_partly_cloudy` — 1K HDRI for image-based lighting and the cloudy sky
 
 Albedo maps are stored as KTX2/ETC1S (`diff.ktx2`). Normal maps are KTX2/UASTC (`nor.ktx2`) and roughness maps are KTX2/ETC1S (`rough.ktx2`), encoded with the Basis Universal encoder shipped in `@loaders.gl/textures` (BinomialLLC basis_universal). If a GPU cannot transcode KTX2, the JPEG is used. The Basis transcoder in `public/basis/` comes with Three.js.
 
@@ -30,8 +30,8 @@ The copies in `public/chancla-duty/cc0/kit/` are those glTF files with textures 
 
 ## The chancla
 
-No CC0 sandal was found. `chancla.glb` and `chancla-heel.glb` are modeled in this repo: an extruded sole with a tread texture, a thong strap, and a heel on La Pesada and El Tacón. They are meshopt-compressed glTF. The first-person hand is still the hand built in code; it holds that glTF.
+No CC0 sandal was found. `chancla.glb` and `chancla-heel.glb` are modeled in this repo: an extruded sole with a tread texture, a thong strap, and a heel on La Pesada and El Tacón. They are meshopt-compressed glTF. The first-person forearm and hand are the right arm of the Quaternius character, posed and baked to a static mesh.
 
 ## Still made here
 
-Papel picado, string-light bulbs, the fountain water card, the viewmodel hand, and the collision courtyards are original to this project.
+Papel picado, string-light bulbs, the fountain water card, and the collision courtyards are original to this project.

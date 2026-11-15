@@ -3,11 +3,13 @@
 import * as THREE from 'three';
 import type { MapBox, MapData } from '../../shared/map';
 
+interface Piece { geo: THREE.BufferGeometry; mat: THREE.Material }
 interface Model {
   size: THREE.Vector3;
   geo?: THREE.BufferGeometry;
   mat?: THREE.Material;
   template?: THREE.Object3D;
+  pieces?: Piece[];
 }
 
 const models = new Map<string, Model>();
@@ -18,8 +20,6 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
-const _c = new THREE.Color();
-
 const FACADE = ['window', 'door', 'balcony', 'roof', 'lantern'] as const;
 const CLONE = ['fountain', 'spout', 'stall', 'bench', 'barrel', 'crate', 'tree-oak', 'tree-palm', 'tree-round', 'bush', 'flower', 'house-a', 'house-b', 'house-c', 'house-d', 'chancla', 'chancla-heel'] as const;
 
@@ -84,16 +84,16 @@ function bakeTemplate(root: THREE.Object3D): Model {
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const m of mats) prepMat(m);
   });
-  let geo: THREE.BufferGeometry | undefined;
-  let mat: THREE.Material | undefined;
-  const only = meshes.length === 1 ? meshes[0] : undefined;
-  if (only && !Array.isArray(only.material)) {
-    geo = only.geometry.clone();
-    geo.applyMatrix4(only.matrixWorld);
-    geo.translate(ox, oy, oz);
-    mat = only.material;
+  const pieces: Piece[] = [];
+  for (const mesh of meshes) {
+    const g = mesh.geometry.clone();
+    g.applyMatrix4(mesh.matrixWorld);
+    g.translate(ox, oy, oz);
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (mats[0]) pieces.push({ geo: g, mat: mats[0] });
   }
-  return { template: root, size, ...(geo && mat ? { geo, mat } : {}) };
+  const first = pieces[0];
+  return { template: root, size, pieces, ...(pieces.length === 1 && first ? { geo: first.geo, mat: first.mat } : {}) };
 }
 
 function prepMat(mat: THREE.Material | null): void {
@@ -111,39 +111,6 @@ function prepMat(mat: THREE.Material | null): void {
 }
 
 let mergeFn: typeof import('three/examples/jsm/utils/BufferGeometryUtils.js').mergeGeometries | null = null;
-
-class Bucket {
-  readonly mesh: THREE.InstancedMesh;
-  private n = 0;
-  constructor(model: Model, cap: number) {
-    this.mesh = new THREE.InstancedMesh(model.geo!, model.mat!, cap);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-    this.mesh.count = 0;
-    this.mesh.frustumCulled = false;
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    this.mesh.userData['keepGeo'] = true;
-  }
-  add(x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw: number, tilt: number, hex: number): void {
-    const cap = this.mesh.instanceColor!.count;
-    if (this.n >= cap) return;
-    _p.set(x, y, z);
-    _e.set(tilt, yaw, 0, 'YXZ');
-    _q.setFromEuler(_e);
-    _s.set(sx, sy, sz);
-    this.mesh.setMatrixAt(this.n, _m.compose(_p, _q, _s));
-    _c.setHex(hex);
-    this.mesh.instanceColor!.setXYZ(this.n, _c.r, _c.g, _c.b);
-    this.n++;
-  }
-  finish(parent: THREE.Object3D): void {
-    if (!this.n) return;
-    this.mesh.count = this.n;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.instanceColor!.needsUpdate = true;
-    parent.add(this.mesh);
-  }
-}
 
 function yawOf(nx: number, nz: number): number {
   return Math.atan2(-nz, nx);
@@ -169,74 +136,106 @@ function onFacade(b: MapBox, f: Face): boolean {
   return f.len >= 4;
 }
 
-function put(bucket: Bucket, name: string, x: number, y: number, z: number, yaw: number, depth: number, height: number, width: number, tilt = 0, hex = 0xffffff): void {
-  const model = models.get(name);
-  if (!model?.size) return;
-  bucket.add(x, y, z, depth / model.size.x, height / model.size.y, width / model.size.z, yaw, tilt, hex);
+const piles = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
+
+function pushGeo(key: string, mat: THREE.Material, geo: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw: number, tilt = 0): void {
+  let pile = piles.get(key);
+  if (!pile) { pile = { mat, geos: [] }; piles.set(key, pile); }
+  const g = geo.clone();
+  _p.set(x, y, z);
+  _e.set(tilt, yaw, 0, 'YXZ');
+  _q.setFromEuler(_e);
+  _s.set(sx, sy, sz);
+  g.applyMatrix4(_m.compose(_p, _q, _s));
+  pile.geos.push(g);
 }
 
-function dressBuilding(b: MapBox, windows: Bucket, doors: Bucket, balconies: Bucket | null, roofs: Bucket | null, lanterns: Bucket | null): void {
+function pileOf(name: string, mat: THREE.Material): string {
+  const n = (mat.name || '').toLowerCase();
+  if (name.startsWith('house')) return 'house';
+  if (name === 'crate' || name === 'barrel') return 'pirate';
+  if (name === 'flower') return 'flower';
+  if (n.includes('leaf') || n.includes('grass') || name === 'bush') return 'leaf';
+  if (n.includes('bark') || n.includes('wood')) return 'bark';
+  return 'town';
+}
+
+function flushPiles(parent: THREE.Object3D): void {
+  for (const [key, pile] of piles) {
+    const merged = mergeFn ? mergeFn(pile.geos, false) : pile.geos[0];
+    for (const g of pile.geos) if (g !== merged) g.dispose();
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, pile.mat);
+    mesh.name = `kit-${key}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+  }
+  piles.clear();
+}
+
+function put(name: string, x: number, y: number, z: number, yaw: number, depth: number, height: number, width: number, tilt = 0): void {
+  const model = models.get(name);
+  if (!model?.geo || !model.mat || !model.size) return;
+  pushGeo('town', model.mat, model.geo, x, y, z, depth / model.size.x, height / model.size.y, width / model.size.z, yaw, tilt);
+}
+
+function dressBuilding(b: MapBox): void {
   const h = b.maxY - b.minY;
   for (const f of faces(b)) {
-    if (f.len < 1.4) continue;
-    const facade = onFacade(b, f);
-    const cols = Math.max(1, Math.round(f.len / (facade ? 2.3 : 3.2)));
+    if (!onFacade(b, f) || f.len < 2 || h < 3.2) continue;
+    const cols = Math.min(3, Math.max(1, Math.round(f.len / 4.2)));
     const bay = f.len / cols;
     const yaw = yawOf(f.nx, f.nz);
-    const signs = facade ? [1, -1] : [1];
+    const doorAt = Math.floor(cols / 2);
     for (let k = 0; k < cols; k++) {
       const along = bay * (k + 0.5);
-      for (const sign of signs) {
-        const dist = sign > 0 ? 0.025 : -0.09;
-        const x = f.fx + f.ux * along + f.nx * dist;
-        const z = f.fz + f.uz * along + f.nz * dist;
-        const door = facade && k === Math.floor(cols / 2) && h >= 3.6;
-        if (door) {
-          put(doors, 'door', x, 0, z, yaw, 0.16, Math.min(2.25, h - 0.4), Math.min(1.2, bay * 0.7));
-          if (lanterns && sign > 0) put(lanterns, 'lantern', x + f.ux * 0.7 + f.nx * 0.28, 2.15, z + f.uz * 0.7 + f.nz * 0.28, yaw, 0.28, 0.7, 0.28);
-        } else if (facade || h >= 4) {
-          put(windows, 'window', x, 0.72, z, yaw, 0.14, 1.28, Math.min(1.15, bay * 0.72));
-        }
-        if (h >= 5.2 && (facade || k % 2 === 0)) {
-          const kind = facade && k % 2 === 0 ? 'balcony' : 'window';
-          const bucket = kind === 'balcony' ? balconies : windows;
-          if (bucket) put(bucket, kind, x, Math.min(3.05, h - 1.7), z, yaw, kind === 'balcony' ? 0.22 : 0.14, 1.3, Math.min(1.25, bay * 0.78));
-        }
+      const x = f.fx + f.ux * along + f.nx * 0.04;
+      const z = f.fz + f.uz * along + f.nz * 0.04;
+      if (k === doorAt && h >= 4) {
+        put('door', x, 0, z, yaw, 0.14, Math.min(2.2, h - 0.5), Math.min(1.15, bay * 0.62));
+        put('lantern', x + f.ux * 0.85 + f.nx * 0.22, 2.05, z + f.uz * 0.85 + f.nz * 0.22, yaw, 0.22, 0.55, 0.22);
+      } else {
+        put('window', x, 0.85, z, yaw, 0.12, 1.35, Math.min(1.2, bay * 0.62));
       }
+      if (h >= 5.4 && k === 0) put('balcony', x, Math.min(3.15, h - 1.55), z, yaw, 0.2, 1.25, Math.min(1.3, bay * 0.7));
     }
-    if (h >= 3.4 && facade) {
-      const n = Math.max(2, Math.round(f.len / 1.15));
-      for (let i = 0; i < n; i++) {
-        const along = (i + 0.5) * (f.len / n);
-        const x = f.fx + f.ux * along + f.nx * 0.42;
-        const z = f.fz + f.uz * along + f.nz * 0.42;
-        if (roofs) put(roofs, 'roof', x, b.maxY - 0.02, z, yaw, 0.95, 0.62, f.len / n, 0.42);
-      }
+    const n = Math.min(4, Math.max(2, Math.round(f.len / 2.4)));
+    for (let i = 0; i < n; i++) {
+      const along = (i + 0.5) * (f.len / n);
+      put('roof', f.fx + f.ux * along + f.nx * 0.35, b.maxY - 0.02, f.fz + f.uz * along + f.nz * 0.35, yaw, 0.85, 0.55, f.len / n, 0.4);
     }
   }
 }
 
-const liveBatches = new Map<string, Bucket>();
+function frameDress(boxes: readonly MapBox[]): void {
+  const camX = 5.2, camZ = 8.6;
+  for (const b of boxes) {
+    if (!b.facade || !b.mat.startsWith('stucco') || b.maxY < 2.4) continue;
+    if (!(b.minX <= camX && camX <= b.maxX && b.minZ <= camZ && camZ <= b.maxZ)) continue;
+    const f = faces(b).find((face) => onFacade(b, face));
+    if (!f) continue;
+    const alongCam = (camX - f.fx) * f.ux + (camZ - f.fz) * f.uz;
+    const span = 2.3;
+    const a0 = Math.max(0, Math.min(f.len - span, alongCam - span * 0.35));
+    const yaw = yawOf(f.nx, f.nz);
+    const h = b.maxY - b.minY;
+    [0.2, 0.55, 0.82].forEach((t, i) => {
+      const along = a0 + span * t;
+      const x = f.fx + f.ux * along + f.nx * -0.1;
+      const z = f.fz + f.uz * along + f.nz * -0.1;
+      if (i === 1) put('door', x, 0, z, yaw, 0.16, Math.min(2.15, h - 0.35), 1.05);
+      else put('window', x, 1.05, z, yaw, 0.14, 1.35, 1.1);
+    });
+    const along = a0 + span * 0.2;
+    put('balcony', f.fx + f.ux * along + f.nx * -0.12, Math.min(3.2, h - 1.45), f.fz + f.uz * along + f.nz * -0.12, yaw, 0.22, 1.2, 1.25);
+  }
+}
 
 function spawnClone(parent: THREE.Object3D, name: string, x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw = 0): void {
+  void parent;
   const model = models.get(name);
-  if (!model) return;
-  if (model.geo && model.mat) {
-    let bucket = liveBatches.get(name);
-    if (!bucket) { bucket = new Bucket(model, 280); liveBatches.set(name, bucket); }
-    bucket.add(x, y, z, sx, sy, sz, yaw, 0, 0xffffff);
-    return;
-  }
-  if (!model.template) return;
-  const obj = model.template.clone(true);
-  obj.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (mesh.isMesh) mesh.userData['keepGeo'] = true;
-  });
-  obj.scale.set(sx, sy, sz);
-  obj.position.set(x, y, z);
-  obj.rotation.y = yaw;
-  parent.add(obj);
+  for (const piece of model?.pieces ?? []) pushGeo(pileOf(name, piece.mat), piece.mat, piece.geo, x, y, z, sx, sy, sz, yaw);
 }
 
 function fitBox(parent: THREE.Object3D, name: string, b: MapBox): void {
@@ -251,22 +250,12 @@ function fitBox(parent: THREE.Object3D, name: string, b: MapBox): void {
 
 export function dressKit(parent: THREE.Object3D, boxes: readonly MapBox[], map: MapData): void {
   if (!ready) return;
-  liveBatches.clear();
-  const windowModel = models.get('window');
-  const doorModel = models.get('door');
-  if (!windowModel?.geo || !doorModel?.geo) return;
-  const windows = new Bucket(windowModel, 720);
-  const doors = new Bucket(doorModel, 160);
-  const balconyModel = models.get('balcony');
-  const roofModel = models.get('roof');
-  const lanternModel = models.get('lantern');
-  const balconies = balconyModel?.geo ? new Bucket(balconyModel, 320) : null;
-  const roofs = roofModel?.geo ? new Bucket(roofModel, 280) : null;
-  const lanterns = lanternModel?.geo ? new Bucket(lanternModel, 80) : null;
+  piles.clear();
+  if (!models.get('window')?.geo || !models.get('door')?.geo) return;
   const tall = boxes.filter((b) => b.mat.startsWith('stucco') && b.maxY - b.minY >= 3 && b.minY < 0.4);
   tall.sort((a, b) => (b.maxX - b.minX) * (b.maxZ - b.minZ) - (a.maxX - a.minX) * (a.maxZ - a.minZ));
-  for (const b of tall) dressBuilding(b, windows, doors, balconies, roofs, lanterns);
-  for (const bucket of [windows, doors, balconies, roofs, lanterns]) bucket?.finish(parent);
+  for (const b of tall) dressBuilding(b);
+  frameDress(boxes);
 
   for (const b of boxes) {
     if (b.mat === 'fountain' && b.minY < 0.2 && b.maxY < 2) {
@@ -281,26 +270,29 @@ export function dressKit(parent: THREE.Object3D, boxes: readonly MapBox[], map: 
     else if (b.mat === 'bin') fitBox(parent, 'barrel', b);
     else if (b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade) fitBox(parent, 'bench', b);
     else if (b.mat === 'planter') plantsOn(parent, b, true);
-    else if (b.mat === 'hedge') plantsOn(parent, b, false);
+    else if (b.mat === 'hedge') hedgeRow(parent, b);
   }
 
   const bd = map.bounds;
   const reach = Math.max(36, Math.hypot(bd.maxX, bd.maxZ) + 4);
-  const houses = ['house-a', 'house-b', 'house-c', 'house-d'];
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const r = reach + (i % 3) * 2.5;
+  // Far skyline: four simplified houses and two trees. The mesh is the decimated
+  // house, and the batch is culled when the whole ring leaves the frustum.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.5;
+    const r = reach + 1.5;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const house = models.get(houses[i % 4]!);
+    const house = models.get('house-a');
     if (house) {
-      const s = 6.5 / house.size.y;
-      spawnClone(parent, houses[i % 4]!, x, 0, z, s, s, s, a + Math.PI);
+      const s = 5.5 / house.size.y;
+      spawnClone(parent, 'house-a', x, 0, z, s, s, s, a + Math.PI);
     }
-    const tree = i % 2 ? 'tree-palm' : 'tree-oak';
-    const t = models.get(tree);
-    if (t) {
-      const s = (i % 2 ? 6.2 : 4.8) / t.size.y;
-      spawnClone(parent, tree, x + Math.cos(a + 0.4) * 3.2, 0, z + Math.sin(a + 0.4) * 3.2, s, s, s, i);
+    if (i % 2 === 0) {
+      const tree = i === 0 ? 'tree-palm' : 'tree-oak';
+      const t = models.get(tree);
+      if (t) {
+        const s = 4.6 / t.size.y;
+        spawnClone(parent, tree, x + Math.cos(a + 0.5) * 2.4, 0, z + Math.sin(a + 0.5) * 2.4, s, s, s, i);
+      }
     }
   }
   for (const tr of map.decor?.trees ?? []) {
@@ -309,15 +301,35 @@ export function dressKit(parent: THREE.Object3D, boxes: readonly MapBox[], map: 
     const s = 4.2 / t.size.y;
     spawnClone(parent, 'tree-round', tr.x, tr.y, tr.z, s, s, s, 0.3);
   }
-  for (const bucket of liveBatches.values()) bucket.finish(parent);
-  liveBatches.clear();
+  flushPiles(parent);
+}
+
+const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x1c6a30, roughness: 0.86, metalness: 0 });
+const hedgeGeo = new THREE.IcosahedronGeometry(0.45, 0);
+hedgeGeo.scale(1.15, 0.7, 1);
+hedgeGeo.translate(0, 0.32, 0);
+
+function hedgeRow(parent: THREE.Object3D, b: MapBox): void {
+  const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
+  const alongX = w >= d;
+  const n = Math.min(4, Math.max(2, Math.round(Math.max(w, d) / 1.1)));
+  const sy = h / 0.64;
+  const sx = (Math.max(w, d) / n) / 0.9;
+  const sz = Math.min(w, d) / 0.8;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const x = alongX ? b.minX + w * t : (b.minX + b.maxX) / 2;
+    const z = alongX ? (b.minZ + b.maxZ) / 2 : b.minZ + d * t;
+    pushGeo('hedge', hedgeMat, hedgeGeo, x, 0, z, alongX ? sx : sz, sy, alongX ? sz : sx, 0);
+  }
+  void parent;
 }
 
 function plantsOn(parent: THREE.Object3D, b: MapBox, tree: boolean): void {
   const w = b.maxX - b.minX, d = b.maxZ - b.minZ;
   const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
   const alongX = w >= d;
-  const n = Math.max(tree ? 1 : 3, Math.round(Math.max(w, d) / (tree ? 1.4 : 0.55)));
+  const n = tree ? 1 : Math.min(3, Math.max(1, Math.round(Math.max(w, d) / 1.8)));
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     const x = alongX ? b.minX + w * t : cx;

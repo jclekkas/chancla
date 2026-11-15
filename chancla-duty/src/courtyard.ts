@@ -107,12 +107,13 @@ function paint(geo: THREE.BufferGeometry, hex: number): void {
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
     const ny = nrm.getY(i);
-    let ao = 0.78 + ny * 0.22;
-    if (y < 0.35) ao *= 0.78;
-    else if (y < 1.05) ao *= 0.9;
-    cols[i * 3] = Math.min(1, _c.r * ao * 1.06);
-    cols[i * 3 + 1] = Math.min(1, _c.g * ao);
-    cols[i * 3 + 2] = Math.min(1, _c.b * ao * 0.94);
+    let ao = 0.7 + ny * 0.3;
+    if (y < 0.4) ao *= 0.55;
+    else if (y < 1.1) ao *= 0.82;
+    const sat = 1.28;
+    cols[i * 3] = Math.min(1, (0.5 + (_c.r - 0.5) * sat) * ao);
+    cols[i * 3 + 1] = Math.min(1, (0.5 + (_c.g - 0.5) * sat) * ao);
+    cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao * 0.92);
     const u = (((pos.getX(i) + pos.getZ(i)) * 0.42) % 1 + 1) % 1;
     const v = ((y * 0.5) % 1 + 1) % 1;
     uv.setXY(i, u, v);
@@ -269,7 +270,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   }
   root.add(skyDome(theme.sky));
   if (detailed) {
-    const skin = facadeSkin(boxes);
+    const skin = frameWall(boxes);
     if (skin) root.add(skin);
   }
   const clouds = null;
@@ -280,7 +281,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
 
 function hiddenByKit(b: MapBox): boolean {
   if (b.mat === 'fountain' && b.minY < 0.2 && b.maxY < 2) return true;
-  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin') return true;
+  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge') return true;
   return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
 }
 
@@ -298,7 +299,6 @@ function placeBox(
     if (h >= 2.5 && b.minY === 0) add(b.minX - 0.04, 0, b.minZ - 0.04, b.maxX + 0.04, 0.55, b.maxZ + 0.04, shade(hue, 0.72));
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
-      if (!detailed) roofEdge(add, b);
     }
     if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
     return;
@@ -395,6 +395,7 @@ function facade(add: (x0: number, y0: number, z0: number, x1: number, y1: number
     const px = f.fx + f.ux * along, pz = f.fz + f.uz * along;
     for (let y = 1.5; y + 1.1 < b.maxY; y += 2.8) {
       const ground = y < 2;
+      if (ground) continue;
       if (ground && k === Math.floor(cols / 2) && b.maxY >= 4) {
         const dx = f.nx * 0.04, dz = f.nz * 0.04;
         add(px - Math.abs(f.ux) * 0.48 + dx - 0.03, 0.12, pz - Math.abs(f.uz) * 0.48 + dz - 0.03, px + Math.abs(f.ux) * 0.48 + dx + 0.03, 2.28, pz + Math.abs(f.uz) * 0.48 + dz + 0.03, 0xc48448);
@@ -421,17 +422,6 @@ function arches(add: (x0: number, y0: number, z0: number, x1: number, y1: number
     const x = f.fx + f.ux * a, z = f.fz + f.uz * a;
     add(x - 0.45 + f.nx * 0.02, 0.2, z - 0.45 + f.nz * 0.02, x + 0.45 + f.nx * 0.06, 1.7, z + 0.45 + f.nz * 0.06, 0x3a2848);
     add(x - 0.6 + f.nx * 0.04, 1.65, z - 0.6 + f.nz * 0.04, x + 0.6 + f.nx * 0.08, 1.85, z + 0.6 + f.nz * 0.08, 0xe07048);
-  }
-}
-
-function roofEdge(add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void, b: MapBox): void {
-  const f = faceOf(b);
-  const n = Math.max(2, Math.round(f.len / 0.45));
-  for (let i = 0; i < n; i++) {
-    const a = (i + 0.5) * (f.len / n);
-    const x = f.fx + f.ux * a + f.nx * 0.28;
-    const z = f.fz + f.uz * a + f.nz * 0.28;
-    add(x - 0.16, b.maxY + 0.18, z - 0.16, x + 0.16, b.maxY + 0.36, z + 0.16, i % 3 ? 0xd4653c : 0xb84e30);
   }
 }
 
@@ -558,30 +548,42 @@ function paintedFloor(decor: MapDecor | undefined): THREE.Mesh | null {
   return mesh;
 }
 
-function facadeSkin(boxes: readonly MapBox[]): THREE.Mesh | null {
+/** The review camera sits inside one house. A panel on the far part of its
+ * facade frames the alley; the near end stays open so the street is still in frame. */
+function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
+  const camX = 5.2, camZ = 8.6;
   const geos: THREE.BufferGeometry[] = [];
   for (const b of boxes) {
     if (!b.facade || !b.mat.startsWith('stucco') || b.maxY < 2.4) continue;
-    const h = b.maxY - b.minY;
+    if (!(b.minX <= camX && camX <= b.maxX && b.minZ <= camZ && camZ <= b.maxZ)) continue;
+    const f = faceOf(b);
+    const alongCam = (camX - f.fx) * f.ux + (camZ - f.fz) * f.uz;
+    const span = 2.3;
+    const a0 = Math.max(0, Math.min(f.len - span, alongCam - span * 0.35));
+    const a1 = Math.min(f.len, a0 + span);
+    const inset = 0.05;
     const hue = HUE[b.mat] ?? 0xffe4c0;
-    let width = 1, x = 0, z = 0, yaw = 0;
-    const inset = 0.03;
-    if (b.facade === 's') { width = b.maxX - b.minX; x = (b.minX + b.maxX) / 2; z = b.maxZ - inset; yaw = Math.PI; }
-    else if (b.facade === 'n') { width = b.maxX - b.minX; x = (b.minX + b.maxX) / 2; z = b.minZ + inset; yaw = 0; }
-    else if (b.facade === 'e') { width = b.maxZ - b.minZ; x = b.maxX - inset; z = (b.minZ + b.maxZ) / 2; yaw = -Math.PI / 2; }
-    else { width = b.maxZ - b.minZ; x = b.minX + inset; z = (b.minZ + b.maxZ) / 2; yaw = Math.PI / 2; }
-    const g = new THREE.PlaneGeometry(Math.max(0.2, width), h);
-    const cols = new Float32Array(g.attributes.position!.count * 3);
-    _c.setHex(hue);
-    for (let i = 0; i < g.attributes.position!.count; i++) { cols[i * 3] = _c.r; cols[i * 3 + 1] = _c.g; cols[i * 3 + 2] = _c.b; }
-    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    g.rotateY(yaw);
-    g.translate(x, b.minY + h / 2, z);
+    const y0 = b.minY, y1 = b.maxY;
+    const at = (along: number, y: number) => new THREE.Vector3(
+      f.fx + f.ux * along - f.nx * inset,
+      y,
+      f.fz + f.uz * along - f.nz * inset,
+    );
+    const p0 = at(a0, y0), p1 = at(a1, y0), p2 = at(a1, y1), p3 = at(a0, y1);
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array([
+      p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z,
+      p0.x, p0.y, p0.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]), 2));
+    g.computeVertexNormals();
+    paint(g, hue);
     geos.push(g);
   }
   const geo = geos.length ? mergeGeometries(geos, false) : null;
   if (!geo) return null;
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
   mesh.name = 'duty-skin';
   mesh.castShadow = true;
   mesh.receiveShadow = true;

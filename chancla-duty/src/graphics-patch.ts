@@ -54,7 +54,7 @@ Engine.prototype.start = function () {
   this.scene.add(duty.root);
   this.world.group.visible = false;
   this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  this.renderer.toneMappingExposure = tier === 'high' ? 0.55 : 1.05;
+  this.renderer.toneMappingExposure = tier === 'high' ? 0.82 : 1.05;
   this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   this.renderer.shadowMap.enabled = tier !== 'fast';
   this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

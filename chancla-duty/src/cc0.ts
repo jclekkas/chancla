@@ -73,6 +73,8 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
       skin.polygonOffset = true;
       skin.polygonOffsetFactor = -1;
       skin.polygonOffsetUnits = -1;
+      skin.emissive.setHex(0x4a2c18);
+      skin.emissiveIntensity = 0.45;
       mesh.material = skin;
       mesh.castShadow = shadows;
       mesh.receiveShadow = true;
@@ -82,18 +84,76 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
   });
   try {
     const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
-    const hdr = await new RGBELoader().loadAsync(`${base}/hdri/kiara_8_sunset_1k.hdr`);
+    const hdr = await new RGBELoader().loadAsync(`${base}/hdri/kloofendal_48d_partly_cloudy_1k.hdr`);
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromEquirectangular(hdr).texture;
     scene.environment = env;
+    scene.environmentIntensity = 0.38;
     scene.background = hdr;
-    renderer.toneMappingExposure = 0.55;
+    scene.backgroundBlurriness = 0;
+    renderer.toneMappingExposure = 0.9;
     pmrem.dispose();
     root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
   } catch { /* keep the gradient sky */ }
   const fog = scene.fog as THREE.Fog | null;
-  if (fog) { fog.color.set(0xf0b48a); fog.near = 22; fog.far = 78; }
+  if (fog) { fog.color.set(0xd7b08a); fog.near = 14; fog.far = 52; }
+}
+
+let armGeo: THREE.BufferGeometry | null = null;
+export function forearmGeometry(): THREE.BufferGeometry | null { return armGeo; }
+
+const ARM = new Set(['Shoulder.R', 'UpperArm.R', 'LowerArm.R', 'Fist.R']);
+
+function sculptArm(root: THREE.Object3D): THREE.BufferGeometry | null {
+  let skin: THREE.SkinnedMesh | null = null;
+  root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skin = o as THREE.SkinnedMesh; });
+  if (!skin) return null;
+  const mesh: THREE.SkinnedMesh = skin;
+  root.getObjectByName('UpperArm.R')?.rotateX(-1.25);
+  root.getObjectByName('LowerArm.R')?.rotateX(-0.55);
+  root.updateMatrixWorld(true);
+  mesh.skeleton.update();
+  const pos = mesh.geometry.attributes.position as THREE.BufferAttribute;
+  const src = mesh.geometry.index;
+  const skinI = mesh.geometry.attributes.skinIndex as THREE.BufferAttribute;
+  const skinW = mesh.geometry.attributes.skinWeight as THREE.BufferAttribute;
+  const bones = mesh.skeleton.bones;
+  const arm = new Uint8Array(pos.count);
+  const comp = (attr: THREE.BufferAttribute, i: number, k: number) => k === 0 ? attr.getX(i) : k === 1 ? attr.getY(i) : k === 2 ? attr.getZ(i) : attr.getW(i);
+  for (let i = 0; i < pos.count; i++) {
+    let best = 0, bw = -1;
+    for (let k = 0; k < 4; k++) {
+      const w = comp(skinW, i, k);
+      if (w > bw) { bw = w; best = comp(skinI, i, k); }
+    }
+    if (ARM.has(bones[best]?.name ?? '')) arm[i] = 1;
+  }
+  const fist = new THREE.Vector3();
+  root.getObjectByName('Fist.R')?.getWorldPosition(fist);
+  const v = new THREE.Vector3();
+  const map = new Int32Array(pos.count).fill(-1);
+  const arr: number[] = [];
+  const indices: number[] = [];
+  const add = (i: number) => {
+    if (map[i]! >= 0) return map[i]!;
+    v.fromBufferAttribute(pos, i);
+    mesh.applyBoneTransform(i, v);
+    v.applyMatrix4(mesh.matrixWorld).sub(fist);
+    const id = arr.length / 3;
+    arr.push(v.x, v.y, v.z);
+    map[i] = id;
+    return id;
+  };
+  const tri = (a: number, b: number, c: number) => { if (arm[a] && arm[b] && arm[c]) indices.push(add(a), add(b), add(c)); };
+  if (src) for (let t = 0; t < src.count; t += 3) tri(src.getX(t), src.getX(t + 1), src.getX(t + 2));
+  else for (let t = 0; t < pos.count; t += 3) tri(t, t + 1, t + 2);
+  if (indices.length < 12) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr), 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
 }
 
 export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
@@ -104,6 +164,7 @@ export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
   loader.setMeshoptDecoder(MeshoptDecoder);
   const files = ['rosa.glb', 'luna.glb', 'kid.glb', 'npc.glb'];
   const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
+  try { if (gltfs[0]) armGeo = sculptArm(clone(gltfs[0].scene) as Object3D); } catch { armGeo = null; }
   const out: Puppet[] = [];
   for (const gltf of gltfs) {
     const root = clone(gltf.scene) as Object3D;

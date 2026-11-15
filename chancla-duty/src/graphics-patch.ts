@@ -37,6 +37,7 @@ Engine.prototype.setWorld = function (opts: WorldOptions) {
   origSetWorld.call(this, opts);
   this.world.group.visible = false;
   duty?.rebuild(opts);
+  if (duty) void duty.useCompressedGrain(this.renderer);
   const p = opts.map?.decor?.pinata;
   if (p) this.world.pinata = { x: p.x, y: p.y, z: p.z, r: 0.6, hit: () => duty?.spinPinata() };
 };
@@ -59,6 +60,7 @@ Engine.prototype.start = function () {
   const stats = duty.stats;
   (window as unknown as { __duty?: unknown }).__duty = { engine: this, scene: duty, stats, gpu: gpu.name };
   installRender(this);
+  void duty.useCompressedGrain(this.renderer);
   if (!gpu.software) {
     void duty.enableHigh(this.renderer, this.scene, this.camera).then((render) => {
       highRender = render;

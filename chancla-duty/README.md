@@ -53,7 +53,7 @@ The shop sits on the title screen. Eliminations pay respeto and build a combo. E
 
 ## Art
 
-Every model and texture is built in `chancla-duty/src/scene.ts`. There are no downloaded character or weapon files. Rosa, the chanclas (including the heel and the pair), the brick and stone atlas, the floor tiles, the papel picado, and the impact sparks are procedural. Three.js, already used by Warfare, is the renderer. No CC0 model pack is shipped.
+Every model is built in code (`chancla-duty/src/scene.ts` and `courtyard.ts`). There is no downloaded character or weapon pack. The painted plaza floor reuses Warfare's ground painting so the inlay stays aligned with the fountain. The repeating wall grain is a KTX2/UASTC file at `public/chancla-duty/grain.ktx2`, encoded with the Basis Universal encoder from `@loaders.gl/textures` (BinomialLLC `basis_universal`). If the GPU cannot transcode it, the wall keeps the canvas grain. The Basis transcoder shipped in `public/basis/` is the one that comes with Three.js.
 
 The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term from height and face direction), uses one Lambert material on the merged courtyard, and does not run a shadow map. The high tier, used only when the GL renderer string is not a software rasterizer, switches that material to a standard PBR material and code-splits an environment map, GTAO, a small bloom, and FXAA.
 
@@ -65,8 +65,8 @@ Same camera, 1280×720, the showcase view of each map. Draw calls and triangles 
 
 | Map | Original draw calls | Duty draw calls | Original triangles | Duty triangles | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 11 | 34,910 | 6,296 | 0.10 ms |
-| Plaza | 71 | 13 | 27,094 | 7,230 | under 0.1 ms |
-| Fiesta | 70 | 12 | 22,352 | 7,126 | under 0.1 ms |
+| Patio | 75 | 27 | 34,910 | 23,696 | 0.10 ms |
+| Plaza | 71 | 26 | 27,094 | 17,148 | 0.20 ms |
+| Fiesta | 70 | 23 | 22,352 | 20,184 | under 0.1 ms |
 
 The showcase frame rate on SwiftShader is about 11 fps for the original and 12–14 fps for Duty. The present is still a software `ReadPixels` of the whole canvas, so fewer triangles do not become 60 fps on this machine. The CPU budget of 4 ms is met. The high-tier post stack is not turned on here, because the renderer is software.

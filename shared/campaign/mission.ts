@@ -163,6 +163,10 @@ export class MissionSim {
   private checkpoint: MState | null = null;
   pinata: PinataSim | null = null;
   private worldKey = '';
+  private dashCd = 0;
+  private legend = 0;
+  private legendUntil = 0;
+  private seenHits = 0;
 
   constructor(def: MissionDef, seed = 1) {
     this.def = def;
@@ -400,6 +404,10 @@ export class MissionSim {
     this.stepProjectiles();
     this.stepGoals();
     this.evaluateGoals();
+    if (st.stats.hits > this.seenHits) {
+      this.legend = Math.min(1, this.legend + 0.34 * (st.stats.hits - this.seenHits));
+      this.seenHits = st.stats.hits;
+    }
   }
 
   private stepPlayer(inp: PlayerInputM): void {
@@ -415,17 +423,35 @@ export class MissionSim {
       return;
     }
     if (p.sinceHurtMs > CAMPAIGN.regenDelayMs && p.hp < CAMPAIGN.maxHealth) p.hp = Math.min(CAMPAIGN.maxHealth, p.hp + CAMPAIGN.regenPerSec * DT);
+    if (this.dashCd > 0) this.dashCd = Math.max(0, this.dashCd - DT_MS);
     p.yaw = inp.yaw;
     p.pitch = Math.max(-MOVE.maxPitch, Math.min(MOVE.maxPitch, inp.pitch));
-    if (inp.weapon !== p.weapon) { p.weapon = inp.weapon; p.switchMs = WEAPON_SWITCH_MS; }
+    if (inp.weapon !== p.weapon && inp.weapon >= 0 && inp.weapon <= 4) { p.weapon = inp.weapon; p.switchMs = WEAPON_SWITCH_MS; }
     const k = p.carrying ? CAMPAIGN.carrySpeed : 1;
     stepMove(this.world, p, { mx: inp.mx * k, mz: inp.mz * k, yaw: p.yaw, jump: inp.jump, crouch: inp.crouch }, DT);
+    // A dash while carrying a roller would skip the kitchen beats, so it waits.
+    if (inp.dash && this.dashCd <= 0 && !p.carrying) {
+      p.vx += -Math.sin(p.yaw) * 12;
+      p.vz += -Math.cos(p.yaw) * 12;
+      this.dashCd = 1100;
+    }
+    if (inp.recall) for (const pr of st.projs) if (!pr.hostile) pr.home = true;
+    if (inp.legend && this.legend >= 1 && this.legendUntil <= st.timeMs) {
+      this.legend = 0;
+      this.legendUntil = st.timeMs + 5000;
+    }
     if (p.y < -5) { p.x = this.stageDef.respawn.at[0]; p.y = this.stageDef.respawn.at[1]; p.z = this.stageDef.respawn.at[2]; settle(this.world, p); }
     if (inp.fire && p.cooldownMs <= 0 && p.switchMs <= 0) {
       const def = WEAPONS[p.weapon]!;
-      p.cooldownMs = def.cooldownMs;
-      const { p: o, v } = launch(this.world, p, p.yaw, p.pitch, p.weapon, this.aimTargets());
-      this.spawnProj(o, v, p.weapon, false);
+      const fast = this.legendUntil > st.timeMs ? 0.45 : 1;
+      p.cooldownMs = def.cooldownMs * fast;
+      const boost = 1 + Math.max(0, Math.min(1, inp.charge ?? 0)) * 0.4;
+      const offs = p.weapon === 3 ? [-0.1, 0.1] : [0];
+      for (const off of offs) {
+        const { p: o, v } = launch(this.world, p, p.yaw + off, p.pitch, p.weapon, this.aimTargets());
+        v[0] *= boost; v[1] *= boost; v[2] *= boost;
+        this.spawnProj(o, v, p.weapon, false);
+      }
       st.stats.throws++;
       if (st.stats.cartActive) st.stats.cartThrows++;
     }
@@ -849,6 +875,13 @@ export class MissionSim {
     const keep: ProjS[] = [];
     const hit: { box: AABB | null } = { box: null };
     for (const pr of st.projs) {
+      if (pr.home && !pr.hostile) {
+        const dx = st.player.x - pr.x, dy = st.player.y + 1.1 - pr.y, dz = st.player.z - pr.z;
+        const dist = Math.hypot(dx, dy, dz) || 1;
+        const sp = 26;
+        pr.vx = (dx / dist) * sp; pr.vy = (dy / dist) * sp; pr.vz = (dz / dist) * sp;
+        if (dist < 1.15) continue;
+      }
       const bx = pr.x, by = pr.y, bz = pr.z;
       hit.box = null;
       const res = stepProjectileWorld(this.world, pr, DT, hit);

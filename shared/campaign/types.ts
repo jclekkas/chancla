@@ -194,4 +194,9 @@ export interface MissionDef {
 export interface PlayerInputM {
   mx: number; mz: number; yaw: number; pitch: number;
   fire: boolean; jump: boolean; crouch: boolean; weapon: WeaponId;
+  /** Chancla Duty. Omitted by the original client and by the mission bot. */
+  dash?: boolean;
+  recall?: boolean;
+  legend?: boolean;
+  charge?: number;
 }

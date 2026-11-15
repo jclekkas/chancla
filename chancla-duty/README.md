@@ -1,6 +1,6 @@
 # Chancla Duty
 
-First-person remaster of Chancla Warfare. This page runs the original match, practice, online rooms, story puzzles, controls, and soundtrack, then adds smooth lighting, a brick plaster, filmic tone mapping, and a new voice. Dash, charged throws, recall, La Legendaria, three extra shoes, endless waves, and a respeto shop run in practice and online. The original site at `/` and `/classic.html` still plays the way it did. Protocol version stays 4, so an original client can join a server from this branch.
+First-person remaster of Chancla Warfare. The page keeps Warfare's match, practice, online rooms, story, controls, and soundtrack, and draws them with its own scene: merged courtyard geometry, instanced papel picado, lights, trees, and awnings, new Rosa models, and new chanclas. Dash, charged throws, recall, La Legendaria, and the extra shoes work in practice, online, and story (a dash waits while Rosa is carrying a roller, and a heavy-only puzzle still wants La Pesada). The original site at `/` and `/classic.html` still plays the way it did. Protocol version stays 4.
 
 ```bash
 npm ci
@@ -45,25 +45,28 @@ The shop sits on the title screen. Eliminations pay respeto and build a combo. E
 | Full soundtrack and soundtrack panel | Matched. Same music player and tracks. |
 | Voice lines on the original timeline | Replaced. New bilingual lines, same ids and beats. Spoken with the browser’s speech synthesis. The original placeholder clips are not loaded. |
 | English and Spanish UI, subtitles | Matched. |
-| Graphics quality, volumes, banter, reduced motion, FPS readout | Matched. Duty also swaps the cel shader for smooth lighting, ACES tone mapping, a brick plaster on the walls, and a smaller shadow map. |
+| Graphics quality, volumes, banter, reduced motion, FPS readout | Matched. Duty replaces the courtyard mesh with its own merged scene. |
 | Classic solo arcade | Matched via the Classic button, which opens the original arcade page. |
-| Dash, charge throw, recall, La Legendaria | In practice and online. The shared sim and the Duty client both run them. Story keeps the original puzzle inputs so the authored spacing stays put. |
+| Dash, charge throw, recall, La Legendaria | In practice, online, and story. A dash does not run while Rosa is carrying a roller, so the kitchen beats stay reachable. |
 | La Huarache, Las Gemelas, El Tacón | In practice and online, after the respeto shop. Huarache pierces, Gemelas throws a pair, Tacón homes. |
 | Endless waves, respeto shop, combos | Shop and combo banner are on the Duty page. Endless is a room flag the server honors. An original client never sets it. |
 
+## Art
+
+Every model and texture is built in `chancla-duty/src/scene.ts`. There are no downloaded character or weapon files. Rosa, the chanclas (including the heel and the pair), the brick and stone atlas, the floor tiles, the papel picado, and the impact sparks are procedural. Three.js, already used by Warfare, is the renderer. No CC0 model pack is shipped.
+
+The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term from height and face direction), uses one Lambert material on the merged courtyard, and does not run a shadow map. The high tier, used only when the GL renderer string is not a software rasterizer, switches that material to a standard PBR material and code-splits an environment map, GTAO, a small bloom, and FXAA.
+
 ## Performance in this environment
 
-No hardware GPU is attached. Chrome’s default renderer is SwiftShader (Vulkan). `--use-gl=angle --use-angle=gl` falls back to Mesa llvmpipe, which is still a software rasterizer. Viewport 1280×720, quality High, one bot. FPS is a 5-second `requestAnimationFrame` sample after the match HUD is up. 1% low is the slowest 1% of those frames.
+No hardware GPU is attached. `/dev/dri` is empty, and Chrome's unmasked renderer is `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))`. Forcing `--use-gl=angle --use-angle=gl` falls back to Mesa llvmpipe. There is no hardware frame time to report.
 
-| | Original, SwiftShader | Duty, SwiftShader, full resolution | Duty, SwiftShader, adaptive scale | Duty, llvmpipe, full resolution |
-| --- | --- | --- | --- | --- |
-| Canvas ready | 2.2 s | 0.37 s | 0.36 s | 0.54 s |
-| Match HUD up | 7.2 s | 4.1 s | 3.1 s | 1.9 s |
-| Average FPS | 4.9 | 7.8 | 12.4 | 35.1 |
-| 1% low FPS | 4.6 | 6.7 | 10.0 | 29.9 |
-| Average frame | 203 ms | 129 ms | 81 ms | 28.5 ms |
-| Dev-server transfer | 10.1 MB | 11.5 MB | 11.5 MB | 11.5 MB |
+Same camera, 1280×720, the showcase view of each map. Draw calls and triangles are `renderer.info` after the frame. Duty's CPU time is the JavaScript before `gl.draw*`, including the scene sync.
 
-The game’s own frame timer on Duty was about 1 ms. The rest is the software GL flush, including a `ReadPixels` stall Chrome logs while presenting the canvas. Duty turns multisampling off, uses a Lambert shader on SwiftShader instead of the cel ramp, keeps the shadow map at 512 and refreshes it every other frame, and lowers the pixel ratio when frames are landing slower than 45 fps (it will not go under 0.7). That is faster to load and faster to draw than the original on this machine. It is not 60 fps here. A mid-range laptop GPU was not available to measure. Bloom, SSAO, and a real-time environment map are not enabled on the software path, because they would add fullscreen passes to a present that is already the bottleneck. On a GPU renderer, Duty keeps the standard material and an environment map.
+| Map | Original draw calls | Duty draw calls | Original triangles | Duty triangles | Duty CPU before draw |
+| --- | --- | --- | --- | --- | --- |
+| Patio | 75 | 11 | 34,910 | 6,296 | 0.10 ms |
+| Plaza | 71 | 13 | 27,094 | 7,230 | under 0.1 ms |
+| Fiesta | 70 | 12 | 22,352 | 7,126 | under 0.1 ms |
 
-A production build adds one Duty chunk of 19.0 KB (8.7 KB gzip) on top of the shared Warfare bundles. The dev-server transfer above is every unbundled module, not the shipping payload.
+The showcase frame rate on SwiftShader is about 11 fps for the original and 12–14 fps for Duty. The present is still a software `ReadPixels` of the whole canvas, so fewer triangles do not become 60 fps on this machine. The CPU budget of 4 ms is met. The high-tier post stack is not turned on here, because the renderer is software.

@@ -1,6 +1,5 @@
 // Chancla Duty boots the original first-person game, then wears a sharper light
 // and a new voice. The Warfare page at / is not imported from here.
-import './three-patch';
 import './graphics-patch';
 import './voice-patch';
 import '../../src/fps/main.ts';
@@ -92,6 +91,10 @@ function paintShop(): void {
 paintShop();
 document.body.appendChild(shop);
 document.title = 'Chancla Duty';
+const charge = document.createElement('div');
+charge.id = 'duty-charge';
+charge.style.cssText = 'position:fixed;left:50%;bottom:92px;width:140px;height:6px;margin-left:-70px;transform-origin:left center;transform:scaleX(0);background:#f5c542;border-radius:99px;z-index:25;pointer-events:none;';
+document.body.appendChild(charge);
 const hud = document.getElementById('hud');
 if (hud) {
   const syncShop = (): void => { shop.hidden = !hud.hidden; };

@@ -398,6 +398,7 @@ async function boot(): Promise<void> {
       engine.onContextLost = (lost) => graphicsLost(lost);
       engine.onFatal = () => showCrash();
       engine.start();
+      if (new URLSearchParams(location.search).has('review')) (window as unknown as { __review?: typeof engine }).__review = engine;
     } catch (err) {
       console.error(err);
       diagError('boot', err);

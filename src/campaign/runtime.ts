@@ -4,10 +4,11 @@
 // shared/campaign; this file only presents them.
 import * as THREE from 'three';
 import { MissionSim, CAMPAIGN, DT, type MEvent, type MissionResult } from '../../shared/campaign/mission';
+import type { WeaponId } from '../../shared/config';
 import { missionHints, type MHint } from '../../shared/campaign/hints';
 import { howText, rejectText } from './howto';
 import { MissionBot } from '../../shared/campaign/bot';
-import type { ActorSpec, MissionDef } from '../../shared/campaign/types';
+import type { ActorSpec, MissionDef, PlayerInputM } from '../../shared/campaign/types';
 import type { ClientProjectile } from '../net/session';
 import type { Controller, Engine } from '../fps/engine';
 import { audio } from '../audio/audio';
@@ -49,6 +50,7 @@ export class MissionRuntime implements Controller {
     engine.setWorld({ boxes: this.sim.map.boxes, theme: def.theme, teamDecor: false });
     engine.vm.setTeam(0);
     this.view = new MissionView(this.sim, engine.proj.particles);
+    this.view.group.name = 'mission-view';
     engine.scene.add(this.view.group);
     this.hud = new MissionHud(def);
     this.hud.show(true);
@@ -123,8 +125,14 @@ export class MissionRuntime implements Controller {
       while (this.acc >= DT && n++ < 6) {
         this.acc -= DT;
         this.snapPrev();
-        const c = e.inputActive ? e.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, weapon: e.input.weapon };
-        let inp = { mx: c.mx, mz: c.mz, yaw: e.input.yaw, pitch: e.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, weapon: c.weapon };
+        const c = (e.inputActive ? e.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, weapon: e.input.weapon }) as {
+          mx: number; mz: number; jump: boolean; crouch: boolean; fire: boolean; weapon: WeaponId;
+          dash?: boolean; recall?: boolean; legend?: boolean; charge?: number;
+        };
+        let inp: PlayerInputM = {
+          mx: c.mx, mz: c.mz, yaw: e.input.yaw, pitch: e.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, weapon: c.weapon,
+          dash: c.dash, recall: c.recall, legend: c.legend, charge: c.charge,
+        };
         if (this.autopilot) {
           inp = this.autopilot.think(this.sim);
           e.input.yaw = inp.yaw; e.input.pitch = inp.pitch; e.input.weapon = inp.weapon;

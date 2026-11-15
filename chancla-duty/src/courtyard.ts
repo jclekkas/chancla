@@ -130,7 +130,7 @@ function box(parts: THREE.BufferGeometry[], x0: number, y0: number, z0: number, 
   for (let i = 0; i < pos.count; i++) {
     const edge = Math.max(Math.abs(pos.getX(i)) / (w / 2), Math.abs(pos.getY(i)) / (h / 2), Math.abs(pos.getZ(i)) / (d / 2));
     if (edge > 0.86) {
-      const k = edge > 0.96 ? 0.62 : 0.8;
+      const k = edge > 0.96 ? 0.86 : 0.92;
       col.setXYZ(i, col.getX(i) * k, col.getY(i) * k, col.getZ(i) * k);
     }
   }
@@ -220,11 +220,11 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const shade = new Batch(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.33, depthWrite: false }), 48);
   const blooms = new Batch(new THREE.SphereGeometry(0.12, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), 120);
   const cloth = new Batch(pennant(), new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }), 180);
-  const bulbs = new Batch(new THREE.SphereGeometry(0.5, 7, 5), new THREE.MeshStandardMaterial({
-    color: 0xffffff, emissive: 0xfff6d0, emissiveIntensity: 3.4, roughness: 0.35, metalness: 0, toneMapped: false,
+  const bulbs = new Batch(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshStandardMaterial({
+    color: 0xfff4d2, emissive: 0xffe7a8, emissiveIntensity: 0.85, roughness: 0.4, metalness: 0,
   }), 140);
-  const glow = new Batch(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+  const glow = new Batch(new THREE.SphereGeometry(0.5, 5, 4), new THREE.MeshBasicMaterial({
+    color: 0xfff0c0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false,
   }), 140);
 
   const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
@@ -551,8 +551,8 @@ function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, n
       const sag = Math.sin(t * Math.PI) * 1.05;
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       const col = colors[i % 3]!;
-      bulbs.add(x, y - sag - 0.08, z, 0.24, 0.28, 0.24, 0, col);
-      glow.add(x, y - sag - 0.08, z, 0.85, 0.85, 0.85, 0, col);
+      bulbs.add(x, y - sag - 0.08, z, 0.1, 0.12, 0.1, 0, col);
+      glow.add(x, y - sag - 0.08, z, 0.28, 0.28, 0.28, 0, col);
     }
   }
 }
@@ -591,7 +591,7 @@ function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
       y,
       f.fz + f.uz * along - f.nz * inset,
     );
-    const bands = [0xf6e7d4, 0xe7b48a, 0x7eb8ae];
+    const bands = [0xc4a078, 0xa56b45, 0x5e8f86];
     for (let band = 0; band < 3; band++) {
       const s0 = a0 + (a1 - a0) * (band / 3);
       const s1 = a0 + (a1 - a0) * ((band + 1) / 3);

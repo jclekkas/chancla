@@ -66,10 +66,21 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    if (mesh.name === 'duty-walls') { mesh.material = plaster; mesh.castShadow = shadows; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-walls') {
+      const stucco = plaster.clone();
+      stucco.map = null;
+      stucco.normalMap = null;
+      stucco.roughnessMap = null;
+      stucco.color.set(0xffffff);
+      stucco.roughness = 0.9;
+      stucco.vertexColors = true;
+      mesh.material = stucco;
+      mesh.castShadow = shadows;
+      mesh.receiveShadow = true;
+    }
     if (mesh.name === 'duty-skin') {
       const warm = (plaster as THREE.MeshStandardMaterial).clone();
-      warm.color.set(0xfff4e8);
+      warm.color.set(0xc9b39a);
       warm.emissive.set(0x000000);
       warm.emissiveIntensity = 0;
       warm.side = THREE.DoubleSide;
@@ -178,8 +189,25 @@ export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
     else fit(root);
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) { mesh.castShadow = i === 0; mesh.receiveShadow = true; mesh.frustumCulled = true; }
+      if (mesh.isMesh) { mesh.castShadow = false; mesh.receiveShadow = true; mesh.frustumCulled = true; }
     });
+    const proxy = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.28, 0.9, 2, 6),
+      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
+    );
+    proxy.position.y = 0.95;
+    proxy.castShadow = true;
+    proxy.frustumCulled = false;
+    root.add(proxy);
+    const lod = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.22, 1.05, 3, 6),
+      new THREE.MeshStandardMaterial({ color: 0xc48a62, roughness: 0.62, metalness: 0 }),
+    );
+    lod.name = 'duty-lod';
+    lod.position.y = 0.95;
+    lod.visible = false;
+    lod.castShadow = false;
+    root.add(lod);
     root.visible = false;
     root.userData['keep'] = true;
     parent.add(root);
@@ -208,7 +236,7 @@ function fitSoldier(root: THREE.Object3D): void {
   const est = Math.max(0.4, a.distanceTo(b) / 0.42);
   const s = 1.78 / est;
   root.scale.setScalar(s);
-  root.position.y = -b.y * s;
+  root.position.y = 0;
 }
 
 function fit(root: THREE.Object3D): void {
@@ -226,7 +254,7 @@ export function playClip(p: Puppet, name: string): void {
   const prev = p.actions.get(p.current);
   next.reset().fadeIn(0.15).play();
   prev?.fadeOut(0.15);
-  p.current = next.getClip().name;
+  p.current = name;
 }
 
 void (0 as unknown as SkinnedMesh);

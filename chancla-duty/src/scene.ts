@@ -7,8 +7,9 @@ import { EL_PATIO, type MapData } from '../../shared/map';
 import type { WorldOptions } from '../../src/fps/render/world';
 import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
-import { applyCc0Look, forearmGeometry, loadPuppets, playClip, type Puppet } from './cc0';
-import { chanclaObject, chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
+import { applyCc0Look, forearmGeometry } from './cc0';
+import { chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
+import { addFilmTown, buildFilmWoman, poseFilm, styleViewmodels, type FilmWoman } from './film';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -168,8 +169,7 @@ export class DutyScene {
   private seenEnd = '';
   private gpuTier = false;
   private tier: 'fast' | 'medium' | 'high' = 'fast';
-  private puppets: Puppet[] = [];
-  private lastAnim = 0;
+  private women: FilmWoman[] = [];
   private gl: THREE.WebGLRenderer | null = null;
   private worldScene: THREE.Scene | null = null;
   private worldOpts: WorldOptions = {};
@@ -181,6 +181,14 @@ export class DutyScene {
     this.root.name = 'duty-scene';
     this.skin = new THREE.MeshLambertMaterial({ vertexColors: true });
     for (let i = 0; i < 6; i++) this.actors.push(this.makeActor(i < 3 ? 0 : 1));
+    if (tier === 'high') {
+      this.women = [buildFilmWoman('sol'), buildFilmWoman('luna'), buildFilmWoman('abuela'), buildFilmWoman('sol')];
+      for (const w of this.women) {
+        w.root.visible = false;
+        w.root.userData['keep'] = true;
+        this.root.add(w.root);
+      }
+    }
     const shot = new THREE.InstancedMesh(chanclaGeometry(0x2bb5b0, false), this.skin, 24);
     shot.count = 0;
     shot.frustumCulled = false;
@@ -192,6 +200,7 @@ export class DutyScene {
     this.sparks = spark;
     this.root.add(spark);
     this.buildViewmodels();
+    if (tier === 'high') styleViewmodels(this.viewmodels);
   }
 
   private makeActor(team: 0 | 1): Actor {
@@ -272,10 +281,11 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xfff0d8, 0x8d6a48, this.tier === 'high' ? 0.95 : 0.8);
+    this.hemi = new THREE.HemisphereLight(0xffe0b0, 0xc47a48, this.tier === 'high' ? 0.72 : 0.8);
     this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.22 : 0.28));
-    const sun = new THREE.DirectionalLight(0xfff3d8, this.tier === 'high' ? 2.7 : 2.2);
+    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc27a : 0xfff3d8, this.tier === 'high' ? 2.25 : 2.0);
     sun.position.set(...theme.sunPos);
+    if (this.tier === 'high') sun.position.y *= 0.62;
     if (this.gpuTier) {
       sun.castShadow = true;
       sun.shadow.mapSize.set(this.tier === 'high' ? 2048 : 1024, this.tier === 'high' ? 2048 : 1024);
@@ -286,11 +296,14 @@ export class DutyScene {
       // A tight shadow box keeps the map's far corners out of the shadow pass.
       sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
     }
-    const fill = new THREE.DirectionalLight(0xfff6e4, this.tier === 'high' ? 1.65 : 0.35);
+    const fill = new THREE.DirectionalLight(0xfff6e4, this.tier === 'high' ? 0.55 : 0.35);
     fill.position.set(8, 12, 18);
     this.root.add(this.hemi, sun, fill);
     const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
-    if (detailed) dressKit(yard.root, boxes, map);
+    if (detailed) {
+      dressKit(yard.root, boxes, map);
+      addFilmTown(yard.root, boxes);
+    }
     this.root.add(yard.root);
     this.pinata = yard.pinata;
     this.clouds = yard.clouds;
@@ -306,23 +319,11 @@ export class DutyScene {
       return;
     }
     const jobs: Promise<unknown>[] = [applyCc0Look(renderer, scene, this.root, true)];
-    if (this.tier === 'high') {
-      jobs.push(loadPuppets(this.root).then((puppets) => { this.puppets = puppets; }), loadKit());
-    }
+    if (this.tier === 'high') jobs.push(loadKit());
     void Promise.all(jobs).then(async () => {
       this.rebuild(this.worldOpts);
       this.upgradeHands();
-      for (const puppet of this.puppets) {
-        const fist = puppet.root.getObjectByName('Fist.R') ?? puppet.root.getObjectByName('RightHand');
-        if (!fist) continue;
-        for (const child of [...fist.children]) fist.remove(child);
-        const shoe = chanclaObject(0x2bb5b0, false);
-        shoe.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false; });
-        shoe.scale.setScalar(0.55);
-        shoe.position.set(0, 0.06, 0.05);
-        shoe.rotation.set(0.6, 0.2, 1.2);
-        fist.add(shoe);
-      }
+      styleViewmodels(this.viewmodels);
       const shot = chanclaShotGeometry();
       if (shot && this.shots) {
         this.shots.geometry = shot;
@@ -349,12 +350,13 @@ export class DutyScene {
         else { hand.scale.setScalar(1.25); hand.position.set(0.02, -0.02, 0); hand.rotation.set(0, 0.15, 0); }
       }
       for (const child of [...g.children]) if (child !== hand) g.remove(child);
-      hand.position.set(0.14, -0.14, 0.08);
-      hand.scale.setScalar(1.45);
+      hand.position.set(0.16, -0.18, 0.05);
+      hand.rotation.set(0.55, 0.15, -0.35);
+      hand.scale.setScalar(1.15);
       const shoe = viewChancla(hex, heel);
       // Sole faces the camera; the Y-strap stands up off the tread.
-      shoe.scale.setScalar(0.72);
-      shoe.position.set(0.0, 0.03, -0.1);
+      shoe.scale.setScalar(0.42);
+      shoe.position.set(0.04, 0.02, -0.05);
       shoe.rotation.order = 'YXZ';
       shoe.rotation.set(0.95, 0.45, 0.1);
       g.add(shoe);
@@ -396,33 +398,28 @@ export class DutyScene {
     const mode = engine.mode;
     const session = (engine as unknown as { session: { remotes: Map<number, Remote>; body: { x: number; y: number; z: number }; alive: boolean; team: 0 | 1 | null; weapon: WeaponId; cooldownMs: number; projectiles: Map<string, Shot> } | null }).session;
     let used = 0;
-    const dt = this.lastAnim ? Math.min(0.05, (now - this.lastAnim) / 1000) : 0;
-    this.lastAnim = now;
-    if (this.puppets.length) {
+    if (this.women.length) {
       for (const actor of this.actors) actor.root.visible = false;
-      const spots: Array<[number, number, number, number, number, boolean, boolean, boolean, number, number]> = [];
+      const spots: Array<[number, number, number, number, number, boolean, number, number]> = [];
       if (mode === 'menu') {
         const face = (x: number, z: number) => Math.atan2(5.2 - x, 8.6 - z);
-        spots.push([-2.6, 0, 2.2, face(-2.6, 2.2), 0, true, false, true, (now * 0.001) % 3.2, 9]);
-        spots.push([0.3, 0, 1.5, face(0.3, 1.5), 0, true, false, true, 9, 9]);
-        const mapId = (engine as unknown as { map?: { id?: string } }).map?.id;
-        if (mapId === 'plaza') spots.push([2.1, 0, 3.3, face(2.1, 3.3), 1.1, true, false, true, 9, 9]);
+        spots.push([-2.2, 0, 1.8, face(-2.2, 1.8), 0, true, (now * 0.001) % 3.2, 9]);
+        spots.push([0.6, 0, 2.4, face(0.6, 2.4), 0, true, 9, 9]);
+        spots.push([2.4, 0, 0.6, face(2.4, 0.6), 0, true, 9, 9]);
       } else if (mode === 'match' && session) {
         for (const remote of session.remotes.values()) {
-          spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.onGround, remote.crouched, remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
+          spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
         }
       }
-      for (let i = 0; i < this.puppets.length; i++) {
-        const p = this.puppets[i]!;
+      for (let i = 0; i < this.women.length; i++) {
+        const w = this.women[i]!;
         const spot = spots[i];
-        if (!spot) { p.root.visible = false; continue; }
-        const [x, y, z, yaw, speed, ground, crouch, alive, throwAge, hitAge] = spot;
-        p.root.visible = true;
-        p.root.position.set(x, y, z);
-        p.root.rotation.y = yaw;
-        const clip = !alive ? 'Death' : !ground ? 'Jump' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : crouch ? 'SitDown' : 'Idle';
-        playClip(p, clip);
-        p.mixer.update(dt);
+        if (!spot) { w.root.visible = false; continue; }
+        const [x, y, z, yaw, speed, alive, throwAge, hitAge] = spot;
+        w.root.visible = true;
+        w.root.position.set(x, y, z);
+        w.root.rotation.y = yaw;
+        poseFilm(w, speed, throwAge, hitAge, alive, now);
       }
       used = this.actors.length;
     } else if (mode === 'menu') {
@@ -489,8 +486,10 @@ export class DutyScene {
       const cock = Math.max(held, wind * 0.7);
       const bob = Math.sin(now * 0.0032) * 0.016;
       const sway = Math.sin(now * 0.0021) * 0.05;
-      vm.position.set(0.3, -0.22 + bob + cock * 0.07, -0.38 + cock * 0.1);
-      vm.rotation.set(0.42 - cock * 0.95, -0.2 - sway, 0.18 + cock * 0.4);
+      vm.position.set(0.32, -0.28 + bob + cock * 0.06, -0.46 + cock * 0.08);
+      vm.rotation.set(0.2 - cock * 0.7, -0.35 - sway * 0.4, 0.12 + cock * 0.25);
+      const reach = vm.getObjectByName('reach');
+      if (reach) reach.visible = cock > 0.22;
     }
     this.stats.syncMs = performance.now() - t0;
   }
@@ -546,7 +545,7 @@ export class DutyScene {
       gtao.output = GTAOPass.OUTPUT.Default;
       gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.28, 0.42, 0.82));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.12, 0.3, 0.94));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

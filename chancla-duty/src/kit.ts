@@ -41,7 +41,7 @@ export async function loadKit(): Promise<void> {
     try {
       const gltf = await loader.loadAsync(`/chancla-duty/cc0/kit/${name}.glb`);
       models.set(name, front.has(name) ? bakeFront(gltf.scene) : bakeTemplate(gltf.scene));
-    } catch (err) { console.warn('kit load', name, err); }
+    } catch (err) { console.warn('kit load', name, err instanceof Error ? err.message : err); }
   }));
   ready = models.has('window') && models.has('door');
 }
@@ -146,6 +146,7 @@ function pushGeo(key: string, mat: THREE.Material, geo: THREE.BufferGeometry, x:
   if (!pile) { pile = { mat, geos: [] }; piles.set(key, pile); }
   const g = geo.clone();
   for (const key of Object.keys(g.attributes)) {
+    if (key !== 'position' && key !== 'normal' && key !== 'uv') { g.deleteAttribute(key); continue; }
     const a = g.getAttribute(key) as THREE.BufferAttribute | undefined;
     if (!a?.count) continue;
     if (a.array instanceof Float32Array && a.gpuType === THREE.FloatType) continue;
@@ -153,6 +154,8 @@ function pushGeo(key: string, mat: THREE.Material, geo: THREE.BufferGeometry, x:
     for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) arr[i * a.itemSize + k] = a.getComponent(i, k);
     g.setAttribute(key, new THREE.BufferAttribute(arr, a.itemSize));
   }
+  if (!g.getAttribute('normal')) g.computeVertexNormals();
+  if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((g.getAttribute('position')?.count ?? 0) * 2), 2));
   _p.set(x, y, z);
   _e.set(tilt, yaw, 0, 'YXZ');
   _q.setFromEuler(_e);
@@ -370,6 +373,14 @@ function fitBox(parent: THREE.Object3D, name: string, b: MapBox): void {
 export function dressKit(parent: THREE.Object3D, boxes: readonly MapBox[], map: MapData): void {
   if (!ready) return;
   piles.clear();
+  // High tier retires the Kenney toy kit. Real plants and a stone fountain stay.
+  if (new URLSearchParams(location.search).get('kit') !== 'kenney') {
+    if (new URLSearchParams(location.search).get('plants') === '1') placeGreens(map);
+    placeStoneFountain(map);
+    placeFacades(boxes);
+    flushPiles(parent);
+    return;
+  }
   if (!models.get('window')?.geo || !models.get('door')?.geo) return;
   const tall = boxes.filter((b) => b.mat.startsWith('stucco') && b.maxY - b.minY >= 3 && b.minY < 0.4);
   tall.sort((a, b) => (b.maxX - b.minX) * (b.maxZ - b.minZ) - (a.maxX - a.minX) * (a.maxZ - a.minZ));
@@ -428,6 +439,83 @@ const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x1c6a30, roughness: 0.
 const hedgeGeo = new THREE.IcosahedronGeometry(0.45, 0);
 hedgeGeo.scale(1.15, 0.7, 1);
 hedgeGeo.translate(0, 0.32, 0);
+
+const greens = ['agave', 'bird', 'ear', 'fern'] as const;
+
+function placeGreens(map: MapData): void {
+  const spots: Array<readonly [number, number]> = [
+    ...(map.decor?.trees ?? []).map((t) => [t.x, t.z] as const),
+    [-3.2, 2.4], [3.6, -1.2],
+  ];
+  spots.slice(0, 4).forEach(([x, z], i) => {
+    const name = greens[i % greens.length]!;
+    const model = models.get(name);
+    if (!model) return;
+    const s = 1.35 / Math.max(0.2, model.size.y);
+    spawnClone(null as unknown as THREE.Object3D, name, x, 0, z, s, s, s, i * 0.7);
+  });
+}
+
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x6a4126, roughness: 0.62, metalness: 0 });
+const glassMat = new THREE.MeshStandardMaterial({ color: 0xb7d4e2, roughness: 0.08, metalness: 0.18, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+const ironMat = new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.42, metalness: 0.7 });
+const doorMat = new THREE.MeshStandardMaterial({ color: 0x4e2c18, roughness: 0.7, metalness: 0 });
+
+function placeFacades(boxes: readonly MapBox[]): void {
+  const win = new THREE.BoxGeometry(0.82, 1.1, 0.07);
+  const glass = new THREE.PlaneGeometry(0.58, 0.78);
+  const door = new THREE.BoxGeometry(0.92, 2.05, 0.08);
+  door.translate(0, 1.02, 0);
+  const slab = new THREE.BoxGeometry(1.35, 0.06, 0.42);
+  const rail = new THREE.BoxGeometry(1.25, 0.045, 0.045);
+  const post = new THREE.BoxGeometry(0.045, 0.48, 0.045);
+  let n = 0;
+  const tall = boxes.filter((b) => b.mat.startsWith('stucco') && b.maxY - b.minY >= 3.2 && b.minY < 0.4);
+  for (const b of tall) {
+    const h = b.maxY - b.minY;
+    for (const f of faces(b)) {
+      if (f.len < 2.2) continue;
+      if (f.nx * -0.47 + f.nz * -0.88 > -0.2) continue;
+      const yaw = Math.atan2(f.nx, f.nz);
+      const cols = Math.min(3, Math.max(1, Math.round(f.len / 3.4)));
+      for (let k = 0; k < cols; k++) {
+        if (n++ > 36) return;
+        const along = f.len * ((k + 0.5) / cols);
+        const x = f.fx + f.ux * along + f.nx * 0.06;
+        const z = f.fz + f.uz * along + f.nz * 0.06;
+        const doorHere = k === 0 && h > 3.6;
+        if (doorHere) pushGeo('door', doorMat, door, x, 0, z, 1, 1, 1, yaw);
+        else pushGeo('frame', frameMat, win, x, 1.7, z, 1, 1, 1, yaw);
+        if (!doorHere) pushGeo('glass', glassMat, glass, x + f.nx * 0.05, 1.7, z + f.nz * 0.05, 1, 1, 1, yaw);
+        if (h > 5 && k === cols - 1) {
+          pushGeo('iron', ironMat, slab, x, 2.55, z + f.nz * 0.22, 1, 1, 1, yaw);
+          pushGeo('iron', ironMat, rail, x, 2.95, z + f.nz * 0.38, 1, 1, 1, yaw);
+          pushGeo('iron', ironMat, post, x - f.ux * 0.55, 2.7, z + f.nz * 0.38, 1, 1, 1, 0);
+          pushGeo('iron', ironMat, post, x + f.ux * 0.55, 2.7, z + f.nz * 0.38, 1, 1, 1, 0);
+        }
+        if (h > 5.4) pushGeo('frame', frameMat, win, x, 4.05, z, 1, 1, 1, yaw);
+      }
+    }
+  }
+}
+
+const stoneMat = new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: 0.9, metalness: 0.02 });
+
+function placeStoneFountain(map: MapData): void {
+  const f = map.boxes.find((b) => b.mat === 'fountain' && b.minY < 0.2);
+  if (!f) return;
+  const x = (f.minX + f.maxX) / 2;
+  const z = (f.minZ + f.maxZ) / 2;
+  const basin = new THREE.CylinderGeometry(1.35, 1.45, 0.55, 20);
+  const lip = new THREE.TorusGeometry(1.32, 0.12, 8, 20);
+  lip.rotateX(Math.PI / 2);
+  lip.translate(0, 0.32, 0);
+  const stem = new THREE.CylinderGeometry(0.18, 0.22, 0.9, 10);
+  stem.translate(0, 0.7, 0);
+  const bowl = new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  bowl.translate(0, 1.05, 0);
+  for (const g of [basin, lip, stem, bowl]) pushGeo('stone', stoneMat, g, x, 0, z, 1, 1, 1, 0);
+}
 
 function skylineBlocks(map: MapData): void {
   if (map.id !== 'plaza') return;

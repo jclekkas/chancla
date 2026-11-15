@@ -4,7 +4,7 @@ Chancla Duty's new look uses public-domain (CC0) assets. The original Warfare ar
 
 ## Characters
 
-Rigged, animated people are from the [Ultimate Animated Character Pack](https://quaternius.com/packs/ultimatedanimatedcharacter.html) by [Quaternius](https://quaternius.com), CC0. The copies in `public/chancla-duty/cc0/characters/` are the glTF conversions published with the Ghostname Work Dashboard (`Casual_Female`, `Casual2_Female`, `Worker_Female`, `Casual_Male`). Clips used: Idle, Walk, Run, Jump, SwordSlash (throw), RecieveHit, Death, SitDown.
+The high tier does not use the Grab3D soldier. Doña Rosa's two team looks and the abuela are modeled in this repo (`chancla-duty/src/film.ts`): smooth stylized meshes, embroidered dresses in the original Sol marigold and Luna teal, curly hair, a straw hat, a rebozo, and the abuela's curlers, glasses, blue blouse, white apron, and shawl. Walk, run, throw, and hit are posed from the match timers. A capsule casts the shadow. Quaternius glTF files remain in `public/chancla-duty/cc0/characters/` as unused fallbacks and are not loaded.
 
 ## Surfaces and sky
 
@@ -18,6 +18,8 @@ Rigged, animated people are from the [Ultimate Animated Character Pack](https://
 Albedo maps are stored as KTX2/ETC1S (`diff.ktx2`). Normal maps are KTX2/UASTC (`nor.ktx2`) and roughness maps are KTX2/ETC1S (`rough.ktx2`), encoded with the Basis Universal encoder shipped in `@loaders.gl/textures` (BinomialLLC basis_universal). If a GPU cannot transcode KTX2, the JPEG is used. The Basis transcoder in `public/basis/` comes with Three.js.
 
 ## Buildings, props, and plants
+
+High tier draws the courtyards as plaster, tile, and wood PBR volumes. The plants in `public/chancla-duty/cc0/kit/` (`agave`, `bird`, `ear`, `fern`) are CC0 models from the same tevy / Poly Haven-adjacent set dilf-war ships (agave rosette, bird of paradise, elephant ear, fern). Kenney's Fantasy Town, Nature, Suburban, and Pirate kits stay in the folder and load only with `?kit=kenney`.
 
 [Kenney](https://kenney.nl) (CC0), from the packs mirrored on OpenGameArt:
 

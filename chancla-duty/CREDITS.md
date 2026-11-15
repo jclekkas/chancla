@@ -15,8 +15,23 @@ Rigged, animated people are from the [Ultimate Animated Character Pack](https://
 - `wood_table_001` — wood color, normal, roughness (1K). Photography by Dimitrios Savva, processing by Rico Cilliers
 - `kiara_8_sunset` — 1K HDRI for image-based lighting and the sky
 
-Albedo maps are also stored as KTX2/ETC1S (`diff.ktx2`), encoded with the Basis Universal encoder shipped in `@loaders.gl/textures` (BinomialLLC basis_universal). If a GPU cannot transcode KTX2, the JPEG is used. The Basis transcoder in `public/basis/` comes with Three.js.
+Albedo maps are stored as KTX2/ETC1S (`diff.ktx2`). Normal maps are KTX2/UASTC (`nor.ktx2`) and roughness maps are KTX2/ETC1S (`rough.ktx2`), encoded with the Basis Universal encoder shipped in `@loaders.gl/textures` (BinomialLLC basis_universal). If a GPU cannot transcode KTX2, the JPEG is used. The Basis transcoder in `public/basis/` comes with Three.js.
+
+## Buildings, props, and plants
+
+[Kenney](https://kenney.nl) (CC0), from the packs mirrored on OpenGameArt:
+
+- Fantasy Town Kit — walls with shutters, doors, balconies, roof tiles, the round fountain, market stalls, the stall bench, and lanterns
+- Nature Kit — oak, palm, and round trees, bushes, and flowers
+- City Kit (Suburban) — the houses on the skyline outside the playable bounds
+- Pirate Kit — barrels and crates
+
+The copies in `public/chancla-duty/cc0/kit/` are those glTF files with textures embedded and `EXT_meshopt_compression` applied. Collision stays on the map boxes; the models are scaled to those boxes.
+
+## The chancla
+
+No CC0 sandal was found. `chancla.glb` and `chancla-heel.glb` are modeled in this repo: an extruded sole with a tread texture, a thong strap, and a heel on La Pesada and El Tacón. They are meshopt-compressed glTF. The first-person hand is still the hand built in code; it holds that glTF.
 
 ## Still made here
 
-Papel picado, string-light bulbs, the fountain water card, the viewmodel hand and chancla, and the collision courtyards are original to this project. No CC0 sandal model was found, so the chancla is an extruded, textured shape.
+Papel picado, string-light bulbs, the fountain water card, the viewmodel hand, and the collision courtyards are original to this project.

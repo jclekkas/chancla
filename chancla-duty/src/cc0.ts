@@ -47,14 +47,14 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
   const base = '/chancla-duty/cc0';
   const [plasterD, plasterN, plasterR, tileD, tileN, tileR, woodD, woodN, woodR] = await Promise.all([
     map(`${base}/tex/plaster/diff.ktx2`, true, renderer),
-    map(`${base}/tex/plaster/nor.jpg`, false, renderer),
-    map(`${base}/tex/plaster/rough.jpg`, false, renderer),
+    map(`${base}/tex/plaster/nor.ktx2`, false, renderer),
+    map(`${base}/tex/plaster/rough.ktx2`, false, renderer),
     map(`${base}/tex/tiles/diff.ktx2`, true, renderer),
-    map(`${base}/tex/tiles/nor.jpg`, false, renderer),
-    map(`${base}/tex/tiles/rough.jpg`, false, renderer),
+    map(`${base}/tex/tiles/nor.ktx2`, false, renderer),
+    map(`${base}/tex/tiles/rough.ktx2`, false, renderer),
     map(`${base}/tex/wood/diff.ktx2`, true, renderer),
-    map(`${base}/tex/wood/nor.jpg`, false, renderer),
-    map(`${base}/tex/wood/rough.jpg`, false, renderer),
+    map(`${base}/tex/wood/nor.ktx2`, false, renderer),
+    map(`${base}/tex/wood/rough.ktx2`, false, renderer),
   ]);
   const plaster = standard(plasterD, plasterN, plasterR);
   plaster.vertexColors = true;
@@ -67,6 +67,16 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     if (mesh.name === 'duty-walls') { mesh.material = plaster; mesh.castShadow = shadows; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-skin') {
+      const skin = plaster.clone();
+      skin.side = THREE.DoubleSide;
+      skin.polygonOffset = true;
+      skin.polygonOffsetFactor = -1;
+      skin.polygonOffsetUnits = -1;
+      mesh.material = skin;
+      mesh.castShadow = shadows;
+      mesh.receiveShadow = true;
+    }
     if (mesh.name === 'duty-floor') { mesh.material = tiles; mesh.receiveShadow = true; }
     if (mesh.name === 'duty-wood') { mesh.material = wood; mesh.castShadow = shadows; mesh.receiveShadow = true; }
   });
@@ -88,8 +98,10 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
 
 export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
   const { clone } = await import('three/examples/jsm/utils/SkeletonUtils.js');
   const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
   const files = ['rosa.glb', 'luna.glb', 'kid.glb', 'npc.glb'];
   const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
   const out: Puppet[] = [];

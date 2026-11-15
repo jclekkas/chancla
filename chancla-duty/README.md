@@ -53,7 +53,7 @@ The shop sits on the title screen. Eliminations pay respeto and build a combo. E
 
 ## Art
 
-The high tier (`?quality=high`, also the automatic tier on a real GPU) replaces the flat courtyard with CC0 assets. People are Quaternius characters (CC0) with idle, walk, run, jump, throw, hit, and KO clips. Walls, floors, and wood are Poly Haven PBR maps (CC0), and the sky and reflections come from a Poly Haven sunset HDRI. Albedo maps are KTX2/ETC1S with a JPEG fallback. The full list is in [CREDITS.md](CREDITS.md). `?quality=medium` keeps the PBR maps and sun shadows without the post stack. The fast tier stays the procedural courtyard for software renderers.
+The high tier (`?quality=high`, also the automatic tier on a real GPU) replaces the flat courtyard with CC0 assets. People are Quaternius characters (CC0) with idle, walk, run, jump, throw, hit, and KO clips. Building faces use Kenney's Fantasy Town kit (windows with shutters, doors, balconies, roof tiles), the fountain, stalls, benches, lanterns, barrels, and crates are Kenney models fitted to the map's collision boxes, and trees and plants are Kenney's Nature Kit. Walls, floors, and wood are Poly Haven PBR maps (CC0). Normals are KTX2/UASTC and roughness is KTX2/ETC1S, with JPEG fallbacks. Every shipped glTF is meshopt-compressed. The sky and reflections come from a Poly Haven sunset HDRI. The full list is in [CREDITS.md](CREDITS.md). `?quality=medium` keeps the PBR maps and sun shadows without the post stack. The fast tier stays the procedural courtyard for software renderers.
 
 The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term from height and face direction), uses one Lambert material on the merged courtyard, and does not run a shadow map. The high tier, used only when the GL renderer string is not a software rasterizer, switches that material to a standard PBR material and code-splits an environment map, GTAO, a small bloom, and FXAA.
 
@@ -65,8 +65,8 @@ Same camera, 1280×720, the showcase view of each map. Draw calls and triangles 
 
 | Map | Original draw calls | Duty draw calls | Original triangles | Duty triangles | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 27 | 34,910 | 20,156 | 0.20 ms |
-| Plaza | 71 | 27 | 27,094 | 15,148 | under 0.1 ms |
-| Fiesta | 70 | 23 | 22,352 | 15,300 | under 0.1 ms |
+| Patio | 75 | 116 | 34,910 | 620,222 | 0.20 ms |
+| Plaza | 71 | 101 | 27,094 | 589,118 | 0.10 ms |
+| Fiesta | 70 | 180 | 22,352 | 468,744 | 0.20 ms |
 
-The showcase frame rate on SwiftShader is about 11 fps for the original and 12–14 fps for Duty. The present is still a software `ReadPixels` of the whole canvas, so fewer triangles do not become 60 fps on this machine. The CPU budget of 4 ms is met. The high-tier post stack is not turned on here, because the renderer is software.
+These Duty numbers are the high tier (`?quality=high`) after the CC0 buildings, trees, and props are in the frame. Draw calls and triangles went up because the meshes are real models rather than one merged box. The JavaScript before `gl.draw*` stays under 0.4 ms. On this machine both games sit around 10–13 fps; the present is still a software `ReadPixels` of the whole canvas. The CPU budget of 4 ms is met.

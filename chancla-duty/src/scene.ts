@@ -8,6 +8,7 @@ import type { WorldOptions } from '../../src/fps/render/world';
 import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
 import { applyCc0Look, loadPuppets, playClip, type Puppet } from './cc0';
+import { chanclaObject, chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -93,6 +94,7 @@ export class DutyScene {
   private lastAnim = 0;
   private gl: THREE.WebGLRenderer | null = null;
   private worldScene: THREE.Scene | null = null;
+  private worldOpts: WorldOptions = {};
 
   constructor(tier: 'fast' | 'medium' | 'high') {
     this.tier = tier;
@@ -177,14 +179,16 @@ export class DutyScene {
   }
 
   rebuild(opts: WorldOptions = {}): void {
+    this.worldOpts = opts;
     const map: MapData = opts.map ?? EL_PATIO;
     const boxes = opts.boxes ?? map.boxes;
     const theme = THEMES[opts.theme ?? 'afternoon'];
+    const detailed = this.tier !== 'fast' && kitReady();
     for (const child of [...this.root.children]) {
       if (child.userData['keep']) continue;
       this.root.remove(child);
       const mesh = child as THREE.Mesh;
-      if (mesh.geometry && child !== this.shots && child !== this.sparks && !this.actors.some((a) => a.root === child)) mesh.geometry.dispose();
+      if (mesh.geometry && !mesh.userData['keepGeo'] && child !== this.shots && child !== this.sparks && !this.actors.some((a) => a.root === child)) mesh.geometry.dispose();
     }
     for (const actor of this.actors) this.root.add(actor.root);
     if (this.shots) this.root.add(this.shots);
@@ -192,17 +196,20 @@ export class DutyScene {
 
     this.hemi = new THREE.HemisphereLight(0xb9dcff, 0xc56a3a, 0.72);
     this.root.add(new THREE.AmbientLight(0xffe2c0, 0.22));
-    const sun = new THREE.DirectionalLight(0xffb15a, 2.6);
+    const sun = new THREE.DirectionalLight(0xffb15a, this.tier === 'high' ? 1.35 : 2.4);
     sun.position.set(...theme.sunPos);
     if (this.gpuTier) {
       sun.castShadow = true;
       sun.shadow.mapSize.set(1024, 1024);
+      sun.shadow.bias = -0.0004;
+      sun.shadow.normalBias = 0.035;
       const bd = map.bounds;
       const sc = sun.shadow.camera;
       sc.left = bd.minX; sc.right = bd.maxX; sc.top = bd.maxZ; sc.bottom = bd.minZ; sc.near = 1; sc.far = 80;
     }
     this.root.add(this.hemi, sun);
-    const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false);
+    const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
+    if (detailed) dressKit(yard.root, boxes, map);
     this.root.add(yard.root);
     this.pinata = yard.pinata;
     this.clouds = yard.clouds;
@@ -220,9 +227,49 @@ export class DutyScene {
     void Promise.all([
       applyCc0Look(renderer, scene, this.root, true),
       loadPuppets(this.root).then((puppets) => { this.puppets = puppets; }),
-    ]).then(() => {
+      loadKit(),
+    ]).then(async () => {
+      this.rebuild(this.worldOpts);
+      this.upgradeHands();
+      for (const puppet of this.puppets) {
+        const fist = puppet.root.getObjectByName('Fist.R');
+        if (!fist) continue;
+        for (const child of [...fist.children]) fist.remove(child);
+        const shoe = chanclaObject(0x2bb5b0, false);
+        shoe.scale.setScalar(0.55);
+        shoe.position.set(0, 0.06, 0.05);
+        shoe.rotation.set(0.6, 0.2, 1.2);
+        fist.add(shoe);
+      }
+      const shot = chanclaShotGeometry();
+      if (shot && this.shots) {
+        this.shots.geometry = shot;
+        this.shots.material = new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.7, metalness: 0 });
+      }
+      if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true);
       const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
       if (box) box.assets = true;
+    });
+  }
+
+  private upgradeHands(): void {
+    if (!kitReady()) return;
+    const specs: Array<[number, boolean, boolean]> = [[0x2bb5b0, false, false], [0x6a3d86, true, false], [0xc48a52, false, false], [0xf2c14e, false, true], [0x2a160f, true, false]];
+    this.viewmodels.forEach((g, i) => {
+      const [hex, heel, twin] = specs[i] ?? [0x2bb5b0, false, false];
+      const hand = g.children[0];
+      for (const child of [...g.children]) if (child !== hand) g.remove(child);
+      const shoe = chanclaObject(hex, heel);
+      shoe.scale.setScalar(1.7);
+      shoe.position.set(0.02, 0.0, -0.1);
+      shoe.rotation.set(-0.5, 0.15, 0.05);
+      shoe.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).frustumCulled = false; });
+      g.add(shoe);
+      if (twin) {
+        const other = shoe.clone(true);
+        other.position.x = 0.18;
+        g.add(other);
+      }
     });
   }
 
@@ -400,12 +447,6 @@ export class DutyScene {
       composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.06, 0.3, 0.92));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
-      try {
-        const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js');
-        const pmrem = new THREE.PMREMGenerator(renderer);
-        scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-        pmrem.dispose();
-      } catch { /* environment is optional */ }
       return () => composer.render();
     } catch {
       return null;

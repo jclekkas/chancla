@@ -185,7 +185,7 @@ export interface Courtyard {
   wall: THREE.MeshLambertMaterial;
 }
 
-export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName: ThemeName, teamDecor: boolean): Courtyard {
+export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName: ThemeName, teamDecor: boolean, detailed = false): Courtyard {
   const theme = THEMES[themeName];
   const decor = map.decor;
   const root = new THREE.Group();
@@ -210,8 +210,8 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
 
   const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
 
-  for (const b of boxes) placeBox(leaves, blooms, b, add);
-  dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor);
+  for (const b of boxes) placeBox(leaves, blooms, b, add, detailed);
+  dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor, detailed);
 
   if (parts.length) {
     const merged = mergeGeometries(parts, false);
@@ -268,16 +268,28 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     }
   }
   root.add(skyDome(theme.sky));
+  if (detailed) {
+    const skin = facadeSkin(boxes);
+    if (skin) root.add(skin);
+  }
   const clouds = null;
   const pinata = decor?.pinata ? hangPinata(decor.pinata) : null;
   if (pinata) root.add(pinata);
   return { root, pinata, clouds, wall };
 }
 
+function hiddenByKit(b: MapBox): boolean {
+  if (b.mat === 'fountain' && b.minY < 0.2 && b.maxY < 2) return true;
+  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin') return true;
+  return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
+}
+
 function placeBox(
   leaves: Batch, blooms: Batch, b: MapBox,
   add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
+  detailed: boolean,
 ): void {
+  if (detailed && hiddenByKit(b)) return;
   const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
   const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
   const hue = HUE[b.mat] ?? 0xffe4c0;
@@ -286,9 +298,9 @@ function placeBox(
     if (h >= 2.5 && b.minY === 0) add(b.minX - 0.04, 0, b.minZ - 0.04, b.maxX + 0.04, 0.55, b.maxZ + 0.04, shade(hue, 0.72));
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
-      roofEdge(add, b);
+      if (!detailed) roofEdge(add, b);
     }
-    if (b.facade && h >= 3) facade(add, blooms, b, hue);
+    if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
     return;
   }
   switch (b.mat) {
@@ -306,7 +318,7 @@ function placeBox(
     case 'planter':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc45a38);
       add(b.minX + 0.06, b.maxY - 0.02, b.minZ + 0.06, b.maxX - 0.06, b.maxY + 0.02, b.maxZ - 0.06, 0x5b3a22);
-      plantRow(leaves, blooms, b);
+      if (!detailed) plantRow(leaves, blooms, b);
       return;
     case 'fountain':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xfff6ea);
@@ -326,6 +338,7 @@ function placeBox(
       return;
     case 'hedge': {
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
+      if (detailed) return;
       const long = Math.max(w, d), alongX = w >= d;
       const n = Math.max(2, Math.round(long / 0.55));
       for (let i = 0; i < n; i++) {
@@ -382,8 +395,6 @@ function facade(add: (x0: number, y0: number, z0: number, x1: number, y1: number
     const px = f.fx + f.ux * along, pz = f.fz + f.uz * along;
     for (let y = 1.5; y + 1.1 < b.maxY; y += 2.8) {
       const ground = y < 2;
-      // Ground-floor doors become a slab when the camera is in the alley.
-      if (ground) continue;
       if (ground && k === Math.floor(cols / 2) && b.maxY >= 4) {
         const dx = f.nx * 0.04, dz = f.nz * 0.04;
         add(px - Math.abs(f.ux) * 0.48 + dx - 0.03, 0.12, pz - Math.abs(f.uz) * 0.48 + dz - 0.03, px + Math.abs(f.ux) * 0.48 + dx + 0.03, 2.28, pz + Math.abs(f.uz) * 0.48 + dz + 0.03, 0xc48448);
@@ -440,10 +451,10 @@ function plantRow(leaves: Batch, blooms: Batch, b: MapBox): void {
 function dressMap(
   parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, cloth: Batch, bulbs: Batch, glow: Batch, shade: Batch,
   add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
-  map: MapData, decor: MapDecor | undefined, teamDecor: boolean,
+  map: MapData, decor: MapDecor | undefined, teamDecor: boolean, detailed: boolean,
 ): void {
   if (!decor) return;
-  for (const tr of decor.trees ?? []) {
+  if (!detailed) for (const tr of decor.trees ?? []) {
     add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
     leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
     leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
@@ -468,7 +479,7 @@ function dressMap(
   }
   const bd = map.bounds;
   const reach = Math.max(38, Math.hypot(bd.maxX, bd.maxZ) + 8);
-  for (let i = 0; i < 18; i++) {
+  if (!detailed) for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2;
     const r = reach + (i % 3) * 4;
     const h = 5 + (i % 5) * 1.4;
@@ -544,6 +555,36 @@ function paintedFloor(decor: MapDecor | undefined): THREE.Mesh | null {
   mesh.receiveShadow = true;
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = 0.012;
+  return mesh;
+}
+
+function facadeSkin(boxes: readonly MapBox[]): THREE.Mesh | null {
+  const geos: THREE.BufferGeometry[] = [];
+  for (const b of boxes) {
+    if (!b.facade || !b.mat.startsWith('stucco') || b.maxY < 2.4) continue;
+    const h = b.maxY - b.minY;
+    const hue = HUE[b.mat] ?? 0xffe4c0;
+    let width = 1, x = 0, z = 0, yaw = 0;
+    const inset = 0.03;
+    if (b.facade === 's') { width = b.maxX - b.minX; x = (b.minX + b.maxX) / 2; z = b.maxZ - inset; yaw = Math.PI; }
+    else if (b.facade === 'n') { width = b.maxX - b.minX; x = (b.minX + b.maxX) / 2; z = b.minZ + inset; yaw = 0; }
+    else if (b.facade === 'e') { width = b.maxZ - b.minZ; x = b.maxX - inset; z = (b.minZ + b.maxZ) / 2; yaw = -Math.PI / 2; }
+    else { width = b.maxZ - b.minZ; x = b.minX + inset; z = (b.minZ + b.maxZ) / 2; yaw = Math.PI / 2; }
+    const g = new THREE.PlaneGeometry(Math.max(0.2, width), h);
+    const cols = new Float32Array(g.attributes.position!.count * 3);
+    _c.setHex(hue);
+    for (let i = 0; i < g.attributes.position!.count; i++) { cols[i * 3] = _c.r; cols[i * 3 + 1] = _c.g; cols[i * 3 + 2] = _c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    g.rotateY(yaw);
+    g.translate(x, b.minY + h / 2, z);
+    geos.push(g);
+  }
+  const geo = geos.length ? mergeGeometries(geos, false) : null;
+  if (!geo) return null;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  mesh.name = 'duty-skin';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   return mesh;
 }
 

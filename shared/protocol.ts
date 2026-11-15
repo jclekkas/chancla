@@ -7,13 +7,17 @@ import type { Team } from './map';
 export { PROTOCOL_VERSION };
 
 // [seq, moveX, moveZ, yaw, pitch, buttons, weapon]
-export type InputTuple = [number, number, number, number, number, number, number];
+// 7 numbers: legacy clients. 8th is charge 0..1 from Chancla Duty. Old servers
+// never see the 8th because the original client does not send it.
+export type InputTuple =
+  | [number, number, number, number, number, number, number]
+  | [number, number, number, number, number, number, number, number];
 
 import { isMapId, type MapId } from './maps';
 
 export type ClientMsg =
   | { t: 'hello'; v: number; name: string; resume?: string }
-  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number }; map?: MapId }
+  | { t: 'create'; practice?: { difficulty: BotDifficulty; allies: number; enemies: number }; map?: MapId; endless?: boolean }
   | { t: 'map'; map: MapId }
   | { t: 'join'; code: string }
   | { t: 'team'; team: Team }
@@ -137,10 +141,12 @@ export function sanitizeName(raw: unknown, fallback: string): string {
 }
 
 function validInput(d: unknown): d is InputTuple {
-  if (!Array.isArray(d) || d.length !== 7) return false;
-  const [seq, mx, mz, yaw, pitch, b, w] = d as unknown[];
+  if (!Array.isArray(d) || (d.length !== 7 && d.length !== 8)) return false;
+  const [seq, mx, mz, yaw, pitch, b, w, charge] = d as unknown[];
+  const weaponOk = isNum(w) && Number.isInteger(w) && w >= 0 && w <= 4;
+  const chargeOk = d.length === 7 || (isNum(charge) && charge >= 0 && charge <= 1);
   return isNum(seq) && Number.isInteger(seq) && seq > 0 && isNum(mx) && Math.abs(mx) <= 1.001 && isNum(mz) && Math.abs(mz) <= 1.001 &&
-    isNum(yaw) && Math.abs(yaw) < 100 && isNum(pitch) && Math.abs(pitch) < 3 && isNum(b) && Number.isInteger(b) && b >= 0 && b < 8 && (w === 0 || w === 1);
+    isNum(yaw) && Math.abs(yaw) < 100 && isNum(pitch) && Math.abs(pitch) < 3 && isNum(b) && Number.isInteger(b) && b >= 0 && b < 256 && weaponOk && chargeOk;
 }
 
 export function parseClientMsg(raw: unknown): ClientMsg | null {
@@ -154,12 +160,19 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
     case 'create': {
       if (m.map !== undefined && !isMapId(m.map)) return null;
       const map = m.map as MapId | undefined;
-      if (m.practice === undefined) return map ? { t: 'create', map } : { t: 'create' };
+      if (m.practice === undefined) {
+        const endless = m.endless === true;
+        if (map && endless) return { t: 'create', map, endless: true };
+        if (map) return { t: 'create', map };
+        return endless ? { t: 'create', endless: true } : { t: 'create' };
+      }
       const p = m.practice as Record<string, unknown> | null;
       if (!p || typeof p !== 'object' || !DIFFS.includes(p.difficulty as string) || !isNum(p.allies) || !isNum(p.enemies)) return null;
       if (p.allies < 0 || p.allies > 1 || p.enemies < 1 || p.enemies > 2) return null;
       const practice = { difficulty: p.difficulty as BotDifficulty, allies: Math.floor(p.allies), enemies: Math.floor(p.enemies) };
-      return map ? { t: 'create', practice, map } : { t: 'create', practice };
+      const endless = m.endless === true;
+      const base = map ? { t: 'create' as const, practice, map } : { t: 'create' as const, practice };
+      return endless ? { ...base, endless: true } : base;
     }
     case 'map':
       return isMapId(m.map) ? { t: 'map', map: m.map } : null;
@@ -185,7 +198,8 @@ export function parseClientMsg(raw: unknown): ClientMsg | null {
 }
 
 export function weaponOf(n: number): WeaponId {
-  return n === 1 ? 1 : 0;
+  const w = Math.round(n);
+  return (w >= 0 && w <= 4 ? w : 0) as WeaponId;
 }
 
 export function randomToken(bytes: number): string {

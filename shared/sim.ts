@@ -8,7 +8,7 @@ import { World, bodyHeight, eyeHeight, newBody, settle, stepMove, type Body } fr
 import type { MapData, Team } from './map';
 import { Rng } from './rng';
 
-export const BTN = { fire: 1, jump: 2, crouch: 4 } as const;
+export const BTN = { fire: 1, jump: 2, crouch: 4, dash: 8, recall: 16, legend: 32 } as const;
 
 export interface PlayerInput {
   seq: number;
@@ -18,6 +18,8 @@ export interface PlayerInput {
   pitch: number;
   buttons: number;
   weapon: WeaponId;
+  /** 0..1 held-throw power. Omitted by the original client. */
+  charge?: number;
 }
 
 export interface PlayerStats {
@@ -50,6 +52,9 @@ export interface SimPlayer {
   lastHitAt: number;
   lastSpawnIdx: number;
   active: boolean; // false while disconnected: they stand still
+  dashCd: number;
+  legend: number;
+  legendUntil: number;
 }
 
 export interface Projectile {
@@ -63,6 +68,9 @@ export interface Projectile {
   traveled: number;
   bounces: number;
   fireSeq: number;
+  home?: boolean;
+  hits?: number;
+  dmgMul?: number;
 }
 
 export type SimEvent =
@@ -74,7 +82,8 @@ export type SimEvent =
   | { k: 'elim'; a: number; v: number; w: WeaponId }
   | { k: 'spawn'; id: number }
   | { k: 'pickup'; id: number; i: number; hp: number }
-  | { k: 'end'; winner: Team | -1; reason: 'score' | 'time' };
+  | { k: 'end'; winner: Team | -1; reason: 'score' | 'time' }
+  | { k: 'wave'; n: number };
 
 export type SimPhase = 'countdown' | 'playing' | 'ended';
 
@@ -172,6 +181,8 @@ export interface SimOptions {
   durationMs?: number;
   scoreToWin?: number;
   countdownMs?: number;
+  /** When a side would win, the scores clear and the match continues. */
+  endless?: boolean;
 }
 
 export class MatchSim {
@@ -190,6 +201,8 @@ export class MatchSim {
   events: SimEvent[] = [];
   readonly durationMs: number;
   readonly scoreToWin: number;
+  readonly endless: boolean;
+  wave = 1;
   countdownLeft: number;
   pickups: Array<{ x: number; y: number; z: number; availableAt: number }>;
   private nextProjectile = 1;
@@ -201,6 +214,7 @@ export class MatchSim {
     this.rng = new Rng(opts.seed ?? 1);
     this.durationMs = opts.durationMs ?? MATCH.durationMs;
     this.scoreToWin = opts.scoreToWin ?? MATCH.scoreToWin;
+    this.endless = opts.endless === true;
     this.countdownLeft = opts.countdownMs ?? MATCH.countdownMs;
     if (this.countdownLeft <= 0) this.phase = 'playing';
     this.pickups = map.pickups.map((p) => ({ ...p, availableAt: 0 }));
@@ -216,6 +230,7 @@ export class MatchSim {
       respawnAt: 0, protectedUntil: 0, weapon: 0, switchMs: 0, cooldownMs: 0, lastSeq: 0, queue: [],
       tokens: NET.inputBurst, stats: { kills: 0, deaths: 0, damage: 0, throws: 0, hits: 0 },
       lastThrowAt: -1e9, lastHitAt: -1e9, lastSpawnIdx: -1, active: true,
+      dashCd: 0, legend: 0, legendUntil: 0,
     };
     this.players.set(id, p);
     this.spawn(p);
@@ -263,9 +278,23 @@ export class MatchSim {
     this.stepPickups();
 
     if (this.phase === 'playing') {
-      if (this.scores[0] >= this.scoreToWin || this.scores[1] >= this.scoreToWin) this.end('score');
-      else if (this.playMs >= this.durationMs) this.end('time');
+      const scoreHit = this.scores[0] >= this.scoreToWin || this.scores[1] >= this.scoreToWin;
+      const timeHit = this.playMs >= this.durationMs;
+      if (scoreHit || timeHit) {
+        if (this.endless) this.nextWave();
+        else this.end(scoreHit ? 'score' : 'time');
+      }
     }
+  }
+
+  private nextWave(): void {
+    this.wave += 1;
+    this.scores[0] = 0;
+    this.scores[1] = 0;
+    this.playMs = 0;
+    this.projectiles = [];
+    for (const p of this.players.values()) if (p.active) this.spawn(p);
+    this.events.push({ k: 'wave', n: this.wave });
   }
 
   private end(reason: 'score' | 'time'): void {
@@ -280,6 +309,7 @@ export class MatchSim {
     // Timers run on server time, so they never freeze when inputs stall.
     if (p.cooldownMs > 0) p.cooldownMs = Math.max(0, p.cooldownMs - DT_MS);
     if (p.switchMs > 0) p.switchMs = Math.max(0, p.switchMs - DT_MS);
+    if (p.dashCd > 0) p.dashCd = Math.max(0, p.dashCd - DT_MS);
     // 2% headroom tolerates client clocks that run slightly fast.
     p.tokens = Math.min(NET.inputBurst, p.tokens + 1.02);
     let budget = p.queue.length > 4 ? 1 + NET.catchUpPerTick : 1;
@@ -295,7 +325,7 @@ export class MatchSim {
     p.pitch = Number.isFinite(inp.pitch) ? Math.max(-MOVE.maxPitch, Math.min(MOVE.maxPitch, inp.pitch)) : p.pitch;
     if (!p.alive) return;
     const frozen = this.phase !== 'playing';
-    if (inp.weapon !== p.weapon && (inp.weapon === 0 || inp.weapon === 1)) {
+    if (inp.weapon !== p.weapon && inp.weapon >= 0 && inp.weapon <= 4) {
       p.weapon = inp.weapon;
       p.switchMs = WEAPON_SWITCH_MS;
     }
@@ -303,7 +333,20 @@ export class MatchSim {
       mx: frozen ? 0 : inp.mx, mz: frozen ? 0 : inp.mz, yaw: p.yaw,
       jump: !frozen && (inp.buttons & BTN.jump) !== 0, crouch: (inp.buttons & BTN.crouch) !== 0,
     }, DT);
-    if (!frozen && (inp.buttons & BTN.fire) !== 0 && p.cooldownMs <= 0 && p.switchMs <= 0) this.fire(p, inp.seq);
+    if (!frozen && (inp.buttons & BTN.dash) !== 0 && p.dashCd <= 0) {
+      p.body.vx += -Math.sin(p.yaw) * 16;
+      p.body.vz += -Math.cos(p.yaw) * 16;
+      p.dashCd = 1100;
+      p.protectedUntil = Math.max(p.protectedUntil, this.timeMs + 160);
+    }
+    if (!frozen && (inp.buttons & BTN.recall) !== 0) {
+      for (const pr of this.projectiles) if (pr.owner === p.id) pr.home = true;
+    }
+    if (!frozen && (inp.buttons & BTN.legend) !== 0 && p.legend >= 1 && p.legendUntil <= this.timeMs) {
+      p.legend = 0;
+      p.legendUntil = this.timeMs + 5200;
+    }
+    if (!frozen && (inp.buttons & BTN.fire) !== 0 && p.cooldownMs <= 0 && p.switchMs <= 0) this.fire(p, inp.seq, inp.charge ?? 0);
   }
 
   // Targets a thrower can aim at: living enemies.
@@ -313,25 +356,64 @@ export class MatchSim {
     return out;
   }
 
-  private fire(p: SimPlayer, seq: number): void {
+  private fire(p: SimPlayer, seq: number, charge: number): void {
     const def = WEAPONS[p.weapon]!;
-    const { p: o, v } = launch(this.world, p.body, p.yaw, p.pitch, p.weapon, this.enemyHitboxes(p.team));
-    const pr: Projectile = {
-      id: this.nextProjectile++, owner: p.id, team: p.team, weapon: p.weapon,
-      x: o[0], y: o[1], z: o[2], vx: v[0], vy: v[1], vz: v[2], ageMs: 0, traveled: 0, bounces: 0, fireSeq: seq,
-    };
-    this.projectiles.push(pr);
-    p.cooldownMs = def.cooldownMs;
+    const offs = p.weapon === 3 ? [-0.1, 0.1] : [0];
+    const boost = 1 + Math.max(0, Math.min(1, charge)) * 0.45;
+    for (const off of offs) {
+      const { p: o, v } = launch(this.world, p.body, p.yaw + off, p.pitch, p.weapon, this.enemyHitboxes(p.team));
+      const pr: Projectile = {
+        id: this.nextProjectile++, owner: p.id, team: p.team, weapon: p.weapon,
+        x: o[0], y: o[1], z: o[2], vx: v[0] * boost, vy: v[1] * boost, vz: v[2] * boost,
+        ageMs: 0, traveled: 0, bounces: 0, fireSeq: seq, hits: 0, dmgMul: boost,
+      };
+      this.projectiles.push(pr);
+      this.events.push({ k: 'throw', id: pr.id, o: p.id, w: p.weapon, p: round3(o), v: round3([pr.vx, pr.vy, pr.vz]), s: seq, tm: this.timeMs });
+    }
+    const fast = p.legendUntil > this.timeMs ? 0.34 : 1;
+    p.cooldownMs = def.cooldownMs * fast;
     p.protectedUntil = 0; // attacking cancels spawn protection
     p.stats.throws++;
     p.lastThrowAt = this.timeMs;
-    this.events.push({ k: 'throw', id: pr.id, o: p.id, w: p.weapon, p: round3(o), v: round3(v), s: seq, tm: this.timeMs });
   }
 
   private stepProjectiles(): void {
     const keep: Projectile[] = [];
     for (const pr of this.projectiles) {
       const def = WEAPONS[pr.weapon]!;
+      if (pr.home) {
+        const owner = this.players.get(pr.owner);
+        if (!owner) {
+          this.events.push({ k: 'pend', id: pr.id, p: round3([pr.x, pr.y, pr.z]), r: 'expire', tm: this.timeMs });
+          continue;
+        }
+        const dx = owner.body.x - pr.x;
+        const dy = owner.body.y + 1.1 - pr.y;
+        const dz = owner.body.z - pr.z;
+        const dist = Math.hypot(dx, dy, dz) || 1;
+        const sp = 32;
+        pr.vx = (dx / dist) * sp; pr.vy = (dy / dist) * sp; pr.vz = (dz / dist) * sp;
+        pr.x += pr.vx * DT; pr.y += pr.vy * DT; pr.z += pr.vz * DT;
+        if (dist < 1.3) this.events.push({ k: 'pend', id: pr.id, p: round3([pr.x, pr.y, pr.z]), r: 'expire', tm: this.timeMs });
+        else keep.push(pr);
+        continue;
+      }
+      if (pr.weapon === 4) {
+        let best: SimPlayer | null = null;
+        let bestD = 14;
+        for (const q of this.players.values()) {
+          if (!q.alive || q.id === pr.owner || (q.team === pr.team && !MATCH.friendlyFire)) continue;
+          const d = Math.hypot(q.body.x - pr.x, q.body.z - pr.z);
+          if (d < bestD) { bestD = d; best = q; }
+        }
+        if (best) {
+          pr.vx += (best.body.x - pr.x) * 2.4;
+          pr.vz += (best.body.z - pr.z) * 2.4;
+          const h = Math.hypot(pr.vx, pr.vz) || 1;
+          pr.vx = (pr.vx / h) * def.speed;
+          pr.vz = (pr.vz / h) * def.speed;
+        }
+      }
       // Players first: find the earliest enemy hitbox along this step.
       const vyNext = pr.vy - def.gravity * DT;
       P0.x = pr.x; P0.y = pr.y; P0.z = pr.z;
@@ -349,9 +431,15 @@ export class MatchSim {
       if (victim && sweepWorld(P0, P1, def.radius, this.world.near(P0.x, P0.z, P1.x, P1.z, 1), hitTmp)) worldT = hitTmp.t;
       if (victim && bestT <= worldT) {
         const hx = P0.x + (P1.x - P0.x) * bestT, hy = P0.y + (P1.y - P0.y) * bestT, hz = P0.z + (P1.z - P0.z) * bestT;
-        const dmg = Math.round(def.damage * (head ? def.headMultiplier : 1));
+        const dmg = Math.round(def.damage * (pr.dmgMul ?? 1) * (head ? def.headMultiplier : 1));
         this.damage(pr, victim, dmg, head, false, hx, hy, hz);
         if (def.splashRadius > 0) this.splash(pr, hx, hy, hz, victim.id);
+        pr.hits = (pr.hits ?? 0) + 1;
+        if (pr.weapon === 2 && pr.hits < 3) {
+          pr.x = hx; pr.y = hy; pr.z = hz;
+          keep.push(pr);
+          continue;
+        }
         this.events.push({ k: 'pend', id: pr.id, p: round3([hx, hy, hz]), r: 'player', tm: this.timeMs });
         continue;
       }
@@ -400,6 +488,7 @@ export class MatchSim {
     if (a) {
       a.stats.damage += dmg;
       if (!splash) a.stats.hits++;
+      a.legend = Math.min(1, a.legend + 0.16);
     }
     this.events.push({ k: 'hit', a: pr.owner, v: v.id, d: dmg, hp: v.hp, head, w: pr.weapon, splash, p: round3([x, y, z]) });
     if (v.hp <= 0) {

@@ -36,6 +36,7 @@ const SNAP_EVERY = Math.round(NET.tickRate / NET.snapshotRate);
 
 export interface RoomOptions {
   practice?: boolean;
+  endless?: boolean;
   seed?: number;
   durationMs?: number;
   scoreToWin?: number;
@@ -45,6 +46,8 @@ export interface RoomOptions {
 export class Room {
   readonly code: string;
   readonly practice: boolean;
+  /** Chancla Duty: the score resets instead of ending the room. Original clients never set this. */
+  endless = false;
   readonly members = new Map<number, Member>();
   owner = -1;
   phase: RoomPhase = 'lobby';
@@ -252,7 +255,11 @@ export class Room {
         const sp = this.sim?.players.get(id);
         if (!sp) return null;
         for (const d of msg.d) {
-          this.sim!.queueInput(id, { seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4], buttons: d[5] & 7, weapon: weaponOf(d[6]) });
+          this.sim!.queueInput(id, {
+            seq: d[0], mx: d[1], mz: d[2], yaw: d[3], pitch: d[4],
+            buttons: d[5] & 255, weapon: weaponOf(d[6]),
+            charge: d.length > 7 ? d[7] : 0,
+          });
         }
         return null;
       }
@@ -285,6 +292,7 @@ export class Room {
     const sim = new MatchSim(mapData(this.map), {
       seed: this.opts.seed ?? Math.floor(Math.random() * 1e9),
       durationMs: this.opts.durationMs, scoreToWin: this.opts.scoreToWin, countdownMs: this.opts.countdownMs,
+      endless: this.endless,
     });
     this.sim = sim;
     for (const m of this.members.values()) {

@@ -79,6 +79,9 @@ const LEAF = new THREE.IcosahedronGeometry(0.5, 0);
 const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
 
 export function buildWorld(quality: Quality, opts: WorldOptions = {}): WorldView {
+  // Chancla Duty draws its own scene. The flag is set only by the Duty page,
+  // before this runs, so Warfare at / still builds the full courtyard.
+  if ((globalThis as { __DUTY_SCENE?: boolean }).__DUTY_SCENE) return dutyHostWorld();
   const th = THEMES[opts.theme ?? 'afternoon'];
   const map = opts.map ?? EL_PATIO;
   const decor = map.decor ?? EL_PATIO.decor!;
@@ -569,6 +572,15 @@ function crescentGeometry(): THREE.ShapeGeometry {
 
 // La Fiesta's piñata. Hitting it is just for fun: it spins and showers
 // confetti from a fixed pool (nothing is allocated while playing).
+function dutyHostWorld(): WorldView {
+  const group = new THREE.Group();
+  group.name = 'duty-host';
+  const sun = new THREE.DirectionalLight(0xffffff, 0);
+  sun.castShadow = false;
+  group.add(sun);
+  return { group, sun, update() {}, drawCalls: 0, setBrightness() {} };
+}
+
 function buildPinata(pp: { x: number; y: number; z: number }, group: THREE.Group): { view: NonNullable<WorldView['pinata']>; step(dt: number, t: number): void } {
   const pin = new THREE.Group();
   pin.name = 'pinata';

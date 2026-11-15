@@ -481,7 +481,7 @@ export class Engine {
       while (this.acc >= DT && n++ < 6) {
         this.acc -= DT;
         const c = this.inputActive ? this.input.sample() : { mx: 0, mz: 0, jump: false, crouch: false, fire: false, weapon: this.input.weapon };
-        s.tick({ mx: c.mx, mz: c.mz, yaw: this.input.yaw, pitch: this.input.pitch, fire: c.fire, jump: c.jump, crouch: c.crouch, weapon: c.weapon });
+        s.tick({ ...c, yaw: this.input.yaw, pitch: this.input.pitch });
       }
       if (this.acc > DT * 6) this.acc = 0;
       s.flush();

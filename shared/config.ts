@@ -53,11 +53,11 @@ export const MOVE = {
   maxPitch: 1.45,
 };
 
-export type WeaponId = 0 | 1;
+export type WeaponId = 0 | 1 | 2 | 3 | 4;
 
 export interface WeaponDef {
   id: WeaponId;
-  key: 'standard' | 'heavy';
+  key: 'standard' | 'heavy' | 'pierce' | 'twin' | 'home';
   speed: number; // m/s at launch
   gravity: number; // downward acceleration in m/s²
   radius: number; // projectile collision radius
@@ -85,6 +85,24 @@ export const WEAPONS: readonly WeaponDef[] = [
     id: 1, key: 'heavy', speed: 25, gravity: 12, radius: 0.2,
     damage: 62, headMultiplier: 1.25, cooldownMs: 1150, bounces: 0,
     splashRadius: 2.2, splashDamage: 26, knockback: 7, lifeMs: 2600, maxRange: 60,
+  },
+  {
+    // La Huarache: woven, fast, keeps going through a crowd.
+    id: 2, key: 'pierce', speed: 46, gravity: 4, radius: 0.1,
+    damage: 28, headMultiplier: 1.35, cooldownMs: 460, bounces: 0,
+    splashRadius: 0, splashDamage: 0, knockback: 1.4, lifeMs: 900, maxRange: 55,
+  },
+  {
+    // Las Gemelas: two chanclas, one opinion.
+    id: 3, key: 'twin', speed: 40, gravity: 5, radius: 0.1,
+    damage: 26, headMultiplier: 1.3, cooldownMs: 640, bounces: 0,
+    splashRadius: 0, splashDamage: 0, knockback: 1.6, lifeMs: 1100, maxRange: 50,
+  },
+  {
+    // El Tacón: it leans toward whoever is nearest.
+    id: 4, key: 'home', speed: 34, gravity: 3, radius: 0.11,
+    damage: 48, headMultiplier: 1.2, cooldownMs: 1200, bounces: 0,
+    splashRadius: 0, splashDamage: 0, knockback: 1.2, lifeMs: 1600, maxRange: 48,
   },
 ];
 

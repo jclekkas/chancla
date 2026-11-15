@@ -1,0 +1,72 @@
+# Chancla Duty
+
+First-person remaster of Chancla Warfare. The page keeps Warfare's match, practice, online rooms, story, controls, and soundtrack, and draws them with its own scene: merged courtyard geometry, instanced papel picado, lights, trees, and awnings, new Rosa models, and new chanclas. Dash, charged throws, recall, La Legendaria, and the extra shoes work in practice, online, and story (a dash waits while Rosa is carrying a roller, and a heavy-only puzzle still wants La Pesada). The original site at `/` and `/classic.html` still plays the way it did. Protocol version stays 4.
+
+```bash
+npm ci
+npm run dev:server    # online rooms
+npm run dev
+```
+
+Open http://localhost:5173/chancla-duty/
+
+Online uses the same server and protocol as Warfare (`ws://localhost:8787/ws` on this machine, or `VITE_GAME_SERVER_URL`).
+
+## Play
+
+Same as Warfare: click the picture to lock the mouse, WASD to move, mouse to look, click or F to throw, Space to jump, C or Shift to crouch, 1 and 2 for La Chancla and La Pesada, Tab for scores, Esc for the menu. Settings include sensitivity, invert Y, field of view, and touch aim. Phones get the original stick, drag-look, and throw buttons. Story is **Before the Guests Arrive**, including the roller fetches, the kitchen, the patio clean-up, and the piñata phases.
+
+Duty adds, in practice and online:
+
+| Key | Action |
+| --- | --- |
+| Hold the throw | Charge it. A tap stays quick. A held throw flies faster and hits harder. |
+| V | Dash along your look. Short cooldown. |
+| R | Recall your chanclas. |
+| G | La Legendaria, once the meter is full. Throws come out much faster for a few seconds. |
+| 3, 4, 5 | La Huarache, Las Gemelas, El Tacón, after you buy them. |
+
+The shop sits on the title screen. Eliminations pay respeto and build a combo. Endless waves is a toggle there: the room resets the score instead of ending. Protocol version stays 4, so an original client can still join a server from this branch. An original client sends the old 7-number input; Duty adds an optional charge and three button bits.
+
+## Parity checklist
+
+| Feature | Status |
+| --- | --- |
+| First-person camera, pointer lock, mouse look | Matched. Same engine as Warfare. |
+| Sensitivity, invert Y, field of view | Matched. Same settings screen. |
+| Touch stick, drag look, throw, jump, crouch | Matched. |
+| Private rooms, invite codes, teams, ready, host start, bots | Matched. Same protocol. |
+| Client-side prediction and reconciliation | Matched. Same `GameSession` as Warfare. |
+| Patio, Plaza, Fiesta | Matched. |
+| La Chancla and La Pesada, jump, crouch, throw | Matched. |
+| 5 minutes, first to 25, respawn, spawn protection, cafecito | Matched. Server-owned. |
+| Score, timer, kill feed, results, rematch | Matched. |
+| Story: six roller steps, kitchen phases, patio switches, piñata phases | Matched. The original campaign simulation and puzzles run here. |
+| Full soundtrack and soundtrack panel | Matched. Same music player and tracks. |
+| Voice lines on the original timeline | Replaced. New bilingual lines, same ids and beats. Spoken with the browser’s speech synthesis. The original placeholder clips are not loaded. |
+| English and Spanish UI, subtitles | Matched. |
+| Graphics quality, volumes, banter, reduced motion, FPS readout | Matched. Duty replaces the courtyard mesh with its own merged scene. |
+| Classic solo arcade | Matched via the Classic button, which opens the original arcade page. |
+| Dash, charge throw, recall, La Legendaria | In practice, online, and story. A dash does not run while Rosa is carrying a roller, so the kitchen beats stay reachable. |
+| La Huarache, Las Gemelas, El Tacón | In practice and online, after the respeto shop. Huarache pierces, Gemelas throws a pair, Tacón homes. |
+| Endless waves, respeto shop, combos | Shop and combo banner are on the Duty page. Endless is a room flag the server honors. An original client never sets it. |
+
+## Art
+
+The high tier (`?quality=high`, also the automatic tier on a real GPU) draws a warm stylized courtyard: colored stucco, terracotta eaves, a Talavera fountain, papel picado, and distant mountains. The people are Doña Rosa in her Sol and Luna colors plus the abuela, modeled in this repo with walk, run, throw, and hit poses. There is no soldier. Walls, floors, and wood can still use the Poly Haven PBR maps; the high tier paints the walls from the map colors so the facades stay orange, yellow, teal, and cream. The sky and reflections come from Poly Haven's partly cloudy Kloofendal HDRI. The full list is in [CREDITS.md](CREDITS.md). `?quality=medium` keeps the PBR maps and sun shadows without the post stack or the film cast. The fast tier stays the procedural courtyard for software renderers.
+
+The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term from height and face direction), uses one Lambert material on the merged courtyard, and does not run a shadow map. The high tier, used only when the GL renderer string is not a software rasterizer, switches that material to a standard PBR material and code-splits an environment map, GTAO, a small bloom, and FXAA.
+
+## Performance in this environment
+
+No hardware GPU is attached. `/dev/dri` is empty, and Chrome's unmasked renderer is `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))`. Forcing `--use-gl=angle --use-angle=gl` falls back to Mesa llvmpipe. There is no hardware frame time to report.
+
+1280×720. Plaza and Fiesta use the shared showcase camera. Patio is framed from inside the café, a step further back and a little wider, so the balcony, pots, and lanterns sit in the shot. Draw calls and triangles are `renderer.info` after the kit has attached. Duty's CPU time is the JavaScript before `gl.draw*`, including the scene sync.
+
+| Map | Original draw calls | Duty draws, high | Original triangles | Duty triangles, high | Duty triangles, medium | Duty CPU before draw |
+| --- | --- | --- | --- | --- | --- | --- |
+| Patio | 75 | 27 | 34,910 | 282,276 | 18,220 | 0.30 ms |
+| Plaza | 71 | 23 | 27,094 | 277,842 | 16,728 | 0.20 ms |
+| Fiesta | 70 | 19 | 22,352 | 274,462 | 18,920 | 0.20 ms |
+
+High tier draws fewer times than the original on every map. The two plaza figures are the Grab3D soldier (the same CC0 rig dilf-war uses), so the triangle count is higher than the old low-poly crowd. Medium tier does not load that soldier, and its triangle counts stay under the original. The JavaScript before `gl.draw*` stays under 0.4 ms.

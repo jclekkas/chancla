@@ -335,6 +335,7 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   parent.add(mountains);
 
   const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.45, 0.5, 18), new THREE.MeshStandardMaterial({ map: talavera(), roughness: 0.45, metalness: 0.05 }));
+  basin.name = 'duty-basin';
   basin.position.set(0, 0.28, 0);
   parent.add(basin);
 
@@ -354,66 +355,133 @@ function merge(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
 
 export interface FilmPuppet {
   root: THREE.Object3D;
+  lods: THREE.Object3D[];
   mixer: THREE.AnimationMixer;
   actions: Map<string, THREE.AnimationAction>;
   current: string;
 }
 
-function clipKey(raw: string): string {
-  const n = raw.toLowerCase();
-  if (n.startsWith('run')) return 'Run';
-  if (n.startsWith('walk')) return 'Walk';
-  if (n.startsWith('idle')) return 'Idle';
-  if (n.includes('sword') || n.includes('punch')) return 'SwordSlash';
-  if (n.includes('hit') || n.includes('recieve')) return 'RecieveHit';
-  if (n.startsWith('death') || n.startsWith('defeat')) return 'Death';
-  if (n.startsWith('jump')) return 'Jump';
-  return '';
+export interface HeroProps {
+  chancla: THREE.Mesh | null;
+  chanclaShot: THREE.BufferGeometry | null;
+  chanclaMat: THREE.Material | null;
+  fountain: THREE.Object3D | null;
+  door: THREE.Object3D | null;
+  arms: THREE.Object3D | null;
 }
 
-/** Blender women on the Quaternius skeleton: Idle, Walk, Run, throw, hit, down. */
+const HERO = '/chancla-duty/cc0/heroes';
+
+function prepMesh(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    if (mat && 'roughness' in mat) {
+      mat.roughness = Math.min(0.85, Math.max(mat.roughness ?? 0.55, 0.45));
+      mat.metalness = 0;
+    }
+  });
+}
+
+function fitHeight(root: THREE.Object3D, meters: number): number {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const h = Math.max(0.001, box.max.y - box.min.y);
+  const s = meters / h;
+  root.scale.setScalar(s);
+  const foot = -box.min.y * s;
+  root.position.y = foot;
+  return foot;
+}
+
+/** Textured TripoSR / Hunyuan meshes. LOD0 is the detailed mesh. */
 export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]> {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const { clone } = await import('three/examples/jsm/utils/SkeletonUtils.js');
   const loader = new GLTFLoader();
-  const files = ['film-sol.glb', 'film-luna.glb', 'film-abuela.glb', 'film-sol.glb'];
-  const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}?v=4`)));
+  const names = ['rosa', 'luna', 'abuela', 'abuela-patio'];
   const out: FilmPuppet[] = [];
-  for (const gltf of gltfs) {
-    const root = clone(gltf.scene) as THREE.Object3D;
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    const h = Math.max(0.001, box.max.y - box.min.y);
-    const s = 1.68 / h;
-    root.scale.setScalar(s);
-    root.userData['foot'] = -box.min.y * s;
-    root.position.y = root.userData['foot'] as number;
-    root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = true;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat && 'roughness' in mat) { mat.roughness = Math.min(0.85, Math.max(mat.roughness ?? 0.6, 0.5)); mat.metalness = 0; }
+  for (const name of names) {
+    const gltfs = await Promise.all([0, 1, 2].map((i) => loader.loadAsync(`${HERO}/${name}-lod${i}.glb`)));
+    const root = new THREE.Group();
+    root.name = `hero-${name}`;
+    const lods: THREE.Object3D[] = [];
+    gltfs.forEach((gltf, i) => {
+      const lod = gltf.scene;
+      prepMesh(lod);
+      if (i === 0) fitHeight(lod, 1.62);
+      else {
+        lod.scale.copy(gltfs[0].scene.scale);
+        lod.position.copy(gltfs[0].scene.position);
+      }
+      lod.visible = i === 0;
+      root.add(lod);
+      lods.push(lod);
     });
-    const proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.75, 2, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+    const proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.7, 2, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
     proxy.position.y = 0.85;
     proxy.castShadow = true;
     root.add(proxy);
     root.visible = false;
     root.userData['keep'] = true;
+    root.userData['foot'] = 0;
     parent.add(root);
-    const mixer = new THREE.AnimationMixer(root);
-    const actions = new Map<string, THREE.AnimationAction>();
-    for (const clip of gltf.animations) {
-      const key = clipKey(clip.name);
-      if (!key || actions.has(key)) continue;
-      actions.set(key, mixer.clipAction(clip));
-    }
-    out.push({ root, mixer, actions, current: '' });
+    out.push({ root, lods, mixer: new THREE.AnimationMixer(root), actions: new Map(), current: '' });
   }
   return out;
+}
+
+export async function loadHeroProps(): Promise<HeroProps> {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader();
+  const [chancla, fountain, door, arms] = await Promise.all([
+    loader.loadAsync(`${HERO}/chancla-lod0.glb`),
+    loader.loadAsync(`${HERO}/fountain.glb`),
+    loader.loadAsync(`${HERO}/door.glb`),
+    loader.loadAsync(`${HERO}/arms.glb`),
+  ]);
+  const shotGltf = await loader.loadAsync(`${HERO}/chancla-lod1.glb`);
+  prepMesh(chancla.scene);
+  prepMesh(fountain.scene);
+  prepMesh(door.scene);
+  prepMesh(arms.scene);
+  prepMesh(shotGltf.scene);
+  const mesh = firstMesh(chancla.scene);
+  const shotMesh = firstMesh(shotGltf.scene);
+  scaleLongest(mesh, 0.28);
+  scaleLongest(shotMesh, 0.22);
+  fitHeight(fountain.scene, 1.35);
+  fitHeight(door.scene, 2.15);
+  fitHeight(arms.scene, 0.55);
+  return {
+    chancla: mesh,
+    chanclaShot: shotMesh ? shotMesh.geometry : null,
+    chanclaMat: mesh ? (mesh.material as THREE.Material) : null,
+    fountain: fountain.scene,
+    door: door.scene,
+    arms: arms.scene,
+  };
+}
+
+function firstMesh(root: THREE.Object3D): THREE.Mesh | null {
+  let found: THREE.Mesh | null = null;
+  root.traverse((o) => { if (!found && (o as THREE.Mesh).isMesh) found = o as THREE.Mesh; });
+  return found;
+}
+
+function scaleLongest(mesh: THREE.Mesh | null, meters: number): void {
+  if (!mesh) return;
+  mesh.geometry.computeBoundingBox();
+  const size = mesh.geometry.boundingBox!.getSize(new THREE.Vector3());
+  const longest = Math.max(size.x, size.y, size.z, 0.001);
+  mesh.geometry.scale(meters / longest, meters / longest, meters / longest);
+  mesh.geometry.computeBoundingBox();
+  const c = mesh.geometry.boundingBox!.getCenter(new THREE.Vector3());
+  mesh.geometry.translate(-c.x, -mesh.geometry.boundingBox!.min.y, -c.z);
+  mesh.geometry.computeVertexNormals();
 }
 
 export function playFilm(p: FilmPuppet, name: string): void {

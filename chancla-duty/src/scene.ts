@@ -9,7 +9,7 @@ import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
 import { applyCc0Look, forearmGeometry } from './cc0';
 import { chanclaShotGeometry, dressKit, kitReady, loadKit } from './kit';
-import { addFilmTown, buildFilmWoman, loadFilmCast, playFilm, poseFilm, styleViewmodels, type FilmPuppet, type FilmWoman } from './film';
+import { addFilmTown, buildFilmWoman, loadFilmCast, loadHeroProps, playFilm, poseFilm, styleViewmodels, type FilmPuppet, type FilmWoman, type HeroProps } from './film';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -171,6 +171,7 @@ export class DutyScene {
   private tier: 'fast' | 'medium' | 'high' = 'fast';
   private women: FilmWoman[] = [];
   private cast: FilmPuppet[] = [];
+  private heroes: HeroProps | null = null;
   private lastAnim = 0;
   private gl: THREE.WebGLRenderer | null = null;
   private worldScene: THREE.Scene | null = null;
@@ -305,6 +306,7 @@ export class DutyScene {
     if (detailed) {
       dressKit(yard.root, boxes, map);
       addFilmTown(yard.root, boxes);
+      this.placeGenerated(yard.root);
     }
     this.root.add(yard.root);
     this.pinata = yard.pinata;
@@ -324,11 +326,13 @@ export class DutyScene {
     if (this.tier === 'high') {
       jobs.push(loadKit());
       jobs.push(loadFilmCast(this.root).then((cast) => { this.cast = cast; }));
+      jobs.push(loadHeroProps().then((heroes) => { this.heroes = heroes; }));
     }
     void Promise.all(jobs).then(async () => {
       this.rebuild(this.worldOpts);
       this.upgradeHands();
       styleViewmodels(this.viewmodels);
+      this.applyHeldChancla();
       const shot = chanclaShotGeometry();
       if (shot && this.shots) {
         this.shots.geometry = shot;
@@ -338,6 +342,56 @@ export class DutyScene {
       const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
       if (box) box.assets = true;
     }).catch((err) => { console.warn('duty bind', err); });
+  }
+
+  private placeGenerated(yard: THREE.Object3D): void {
+    const heroes = this.heroes;
+    if (!heroes) return;
+    yard.traverse((o) => { if (o.name === 'duty-basin') o.visible = false; });
+    if (heroes.fountain) {
+      const fountain = heroes.fountain.clone(true);
+      fountain.position.set(0, 0, 0);
+      fountain.name = 'hero-fountain';
+      yard.add(fountain);
+    }
+    if (heroes.door) {
+      const spots: Array<[number, number, number]> = [[-6.2, 3.2, 0], [5.4, -2.4, Math.PI], [-1.5, 6.2, Math.PI / 2], [7.2, 1.2, -Math.PI / 2]];
+      for (const [x, z, ry] of spots) {
+        const door = heroes.door.clone(true);
+        door.position.set(x, 0, z);
+        door.rotation.y = ry;
+        yard.add(door);
+      }
+    }
+  }
+
+  private applyHeldChancla(): void {
+    const heroes = this.heroes;
+    const src = heroes?.chancla;
+    if (!src) return;
+    for (const g of this.viewmodels) {
+      for (const child of [...g.children]) {
+        if (child.name === 'reach' || child === g.children[0]) continue;
+        g.remove(child);
+      }
+      const shoe = src.clone();
+      shoe.name = 'hero-chancla';
+      shoe.position.set(0.04, -0.16, -0.04);
+      shoe.rotation.set(1.05, 0.35, 0.15);
+      g.add(shoe);
+      if (heroes?.arms) {
+        const arms = heroes.arms.clone(true);
+        arms.name = 'hero-arms';
+        arms.position.set(0.02, -0.08, 0.0);
+        arms.rotation.set(0.4, Math.PI, 0.1);
+        arms.scale.multiplyScalar(0.85);
+        g.add(arms);
+      }
+    }
+    if (this.shots && heroes?.chanclaShot && heroes.chanclaMat) {
+      this.shots.geometry = heroes.chanclaShot;
+      this.shots.material = heroes.chanclaMat;
+    }
   }
 
   private upgradeHands(): void {
@@ -427,6 +481,9 @@ export class DutyScene {
         p.root.visible = true;
         p.root.position.set(x, y + (Number(p.root.userData['foot']) || 0), z);
         p.root.rotation.y = yaw;
+        const dist = Math.hypot(engine.camera.position.x - x, engine.camera.position.z - z);
+        const lod = dist > 14 ? 2 : dist > 7 ? 1 : 0;
+        p.lods.forEach((mesh, k) => { mesh.visible = k === lod; });
         const clip = !alive ? 'Death' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : 'Idle';
         playFilm(p, clip);
         p.mixer.update(dt);

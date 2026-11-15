@@ -65,8 +65,8 @@ Same camera, 1280×720, the showcase view of each map. Draw calls and triangles 
 
 | Map | Original draw calls | Duty draw calls | Original triangles | Duty triangles | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 27 | 34,910 | 23,696 | 0.10 ms |
-| Plaza | 71 | 26 | 27,094 | 17,148 | 0.20 ms |
-| Fiesta | 70 | 23 | 22,352 | 20,184 | under 0.1 ms |
+| Patio | 75 | 27 | 34,910 | 20,156 | 0.20 ms |
+| Plaza | 71 | 27 | 27,094 | 15,148 | under 0.1 ms |
+| Fiesta | 70 | 23 | 22,352 | 15,300 | under 0.1 ms |
 
 The showcase frame rate on SwiftShader is about 11 fps for the original and 12–14 fps for Duty. The present is still a software `ReadPixels` of the whole canvas, so fewer triangles do not become 60 fps on this machine. The CPU budget of 4 ms is met. The high-tier post stack is not turned on here, because the renderer is software.

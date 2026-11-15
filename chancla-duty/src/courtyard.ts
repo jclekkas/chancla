@@ -23,29 +23,79 @@ const HUE: Record<string, number> = {
   hedge: 0x2f8a3a, gift: 0xf07898, stage: 0x6a3a86, bin: 0x3d7d5a,
 };
 
-function grain(): THREE.CanvasTexture {
+function canvasTex(w: number, h: number, paint: (g: CanvasRenderingContext2D) => void, repeat = true): THREE.CanvasTexture {
   const cnv = document.createElement('canvas');
-  cnv.width = 128; cnv.height = 128;
-  const g = cnv.getContext('2d')!;
-  g.fillStyle = '#fff8f0';
-  g.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 90; i++) {
-    const k = 220 + ((i * 17) % 30);
-    g.fillStyle = `rgba(${k},${k - 8},${k - 20},0.35)`;
-    g.beginPath();
-    g.ellipse((i * 29) % 128, (i * 47) % 128, 4 + (i % 7), 3 + (i % 5), 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.strokeStyle = 'rgba(120,70,40,0.25)';
-  g.lineWidth = 1;
-  for (let y = 8; y < 128; y += 21) {
-    g.beginPath(); g.moveTo(0, y); g.lineTo(128, y + 1); g.stroke();
-  }
+  cnv.width = w; cnv.height = h;
+  paint(cnv.getContext('2d')!);
   const tex = new THREE.CanvasTexture(cnv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
+  if (repeat) tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
+}
+
+function plasterTex(): THREE.CanvasTexture {
+  return canvasTex(256, 256, (g) => {
+    g.fillStyle = '#fff4e6';
+    g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 220; i++) {
+      const k = 200 + ((i * 13) % 40);
+      g.fillStyle = `rgba(${k},${k - 18},${k - 40},0.28)`;
+      g.beginPath();
+      g.ellipse((i * 37) % 256, (i * 53) % 256, 6 + (i % 14), 4 + (i % 9), i, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.strokeStyle = 'rgba(90,48,28,0.35)';
+    g.lineWidth = 1;
+    for (let n = 0; n < 7; n++) {
+      let x = (n * 40) % 256, y = 20 + n * 30;
+      g.beginPath(); g.moveTo(x, y);
+      for (let k = 0; k < 6; k++) { x += 8 + (n * k) % 12; y += 6; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(70,32,18,0.28)';
+    g.fillRect(0, 210, 256, 46);
+    g.fillStyle = 'rgba(255,236,200,0.55)';
+    g.fillRect(0, 198, 256, 8);
+  });
+}
+
+function leafTex(): THREE.CanvasTexture {
+  return canvasTex(128, 128, (g) => {
+    g.clearRect(0, 0, 128, 128);
+    g.fillStyle = '#2f8a3a';
+    for (let i = 0; i < 14; i++) {
+      g.save();
+      g.translate(20 + (i % 4) * 28, 16 + Math.floor(i / 4) * 30);
+      g.rotate(i);
+      g.beginPath();
+      g.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    }
+  }, false);
+}
+
+function waterTex(): THREE.CanvasTexture {
+  const tex = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#7fe4ea';
+    g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = 'rgba(255,255,255,0.55)';
+    g.lineWidth = 2;
+    for (let y = 8; y < 128; y += 14) {
+      g.beginPath();
+      for (let x = 0; x <= 128; x += 8) g.lineTo(x, y + Math.sin(x * 0.2 + y) * 3);
+      g.stroke();
+    }
+  });
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+const liveWater: THREE.Texture[] = [];
+export function scrollWater(now: number): void {
+  const o = (now * 0.00004) % 1;
+  for (const tex of liveWater) tex.offset.x = o;
 }
 
 function paint(geo: THREE.BufferGeometry, hex: number): void {
@@ -74,8 +124,17 @@ function box(parts: THREE.BufferGeometry[], x0: number, y0: number, z0: number, 
   const w = x1 - x0, h = y1 - y0, d = z1 - z0;
   if (w < 0.02 || h < 0.02 || d < 0.02) return;
   const geo = new THREE.BoxGeometry(w, h, d);
-  geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
   paint(geo, hex);
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const col = geo.attributes.color as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const edge = Math.max(Math.abs(pos.getX(i)) / (w / 2), Math.abs(pos.getY(i)) / (h / 2), Math.abs(pos.getZ(i)) / (d / 2));
+    if (edge > 0.86) {
+      const k = edge > 0.96 ? 0.62 : 0.8;
+      col.setXYZ(i, col.getX(i) * k, col.getY(i) * k, col.getZ(i) * k);
+    }
+  }
+  geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
   parts.push(geo);
 }
 
@@ -132,8 +191,16 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const root = new THREE.Group();
   root.name = 'duty-courtyard';
   const parts: THREE.BufferGeometry[] = [];
-  const wall = new THREE.MeshLambertMaterial({ map: grain(), vertexColors: true });
-  const leaves = new Batch(new THREE.IcosahedronGeometry(0.5, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), 220);
+  const wall = new THREE.MeshLambertMaterial({ map: plasterTex(), vertexColors: true });
+  liveWater.length = 0;
+  const a = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+  const b = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+  b.rotateY(Math.PI / 2);
+  const c = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+  c.rotateY(Math.PI / 4);
+  const leafCard = mergeGeometries([a, b, c], false) ?? a;
+  const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 220);
+  const shade = new Batch(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.33, depthWrite: false }), 48);
   const blooms = new Batch(new THREE.SphereGeometry(0.12, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), 120);
   const cloth = new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }), 180);
   const bulbs = new Batch(new THREE.SphereGeometry(0.5, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }), 140);
@@ -144,14 +211,14 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
 
   for (const b of boxes) placeBox(leaves, blooms, b, add);
-  dressMap(parts, leaves, blooms, cloth, bulbs, glow, add, map, decor, teamDecor);
+  dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor);
 
   if (parts.length) {
     const merged = mergeGeometries(parts, false);
     if (merged) root.add(new THREE.Mesh(merged, wall));
     for (const p of parts) p.dispose();
   }
-  for (const batch of [leaves, blooms, cloth, bulbs, glow]) {
+  for (const batch of [leaves, blooms, cloth, bulbs, glow, shade]) {
     const mesh = batch.finish();
     if (mesh) root.add(mesh);
   }
@@ -159,10 +226,15 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const floor = paintedFloor(decor);
   if (floor) root.add(floor);
   for (const b of boxes) {
+    if (b.mat === 'fountain' || b.mat === 'stall') {
+      shade.add((b.minX + b.maxX) / 2, 0.03, (b.minZ + b.maxZ) / 2, (b.maxX - b.minX) * 0.55, (b.maxZ - b.minZ) * 0.55, 1, 0, 0x000000);
+    }
     if (b.mat === 'fountain') {
+      const ripples = waterTex();
+      liveWater.push(ripples);
       const water = new THREE.Mesh(
         new THREE.PlaneGeometry((b.maxX - b.minX) - 0.7, (b.maxZ - b.minZ) - 0.7),
-        new THREE.MeshBasicMaterial({ color: 0x5ad4dc, transparent: true, opacity: 0.9 }),
+        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: 0.92, color: 0xd8ffff }),
       );
       water.rotation.x = -Math.PI / 2;
       water.position.set((b.minX + b.maxX) / 2, b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
@@ -190,8 +262,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     }
   }
   root.add(skyDome(theme.sky));
-  const clouds = cloudBand(theme.sky[0]);
-  root.add(clouds);
+  const clouds = null;
   const pinata = decor?.pinata ? hangPinata(decor.pinata) : null;
   if (pinata) root.add(pinata);
   return { root, pinata, clouds, wall };
@@ -305,6 +376,8 @@ function facade(add: (x0: number, y0: number, z0: number, x1: number, y1: number
     const px = f.fx + f.ux * along, pz = f.fz + f.uz * along;
     for (let y = 1.5; y + 1.1 < b.maxY; y += 2.8) {
       const ground = y < 2;
+      // Ground-floor doors become a slab when the camera is in the alley.
+      if (ground) continue;
       if (ground && k === Math.floor(cols / 2) && b.maxY >= 4) {
         const dx = f.nx * 0.04, dz = f.nz * 0.04;
         add(px - Math.abs(f.ux) * 0.48 + dx - 0.03, 0.12, pz - Math.abs(f.uz) * 0.48 + dz - 0.03, px + Math.abs(f.ux) * 0.48 + dx + 0.03, 2.28, pz + Math.abs(f.uz) * 0.48 + dz + 0.03, 0xc48448);
@@ -312,11 +385,11 @@ function facade(add: (x0: number, y0: number, z0: number, x1: number, y1: number
         continue;
       }
       const wy = ground ? 1.55 : y + 0.15;
-      const hx = Math.abs(f.ux) * 0.26 + Math.abs(f.nx) * 0.025;
-      const hz = Math.abs(f.uz) * 0.26 + Math.abs(f.nz) * 0.025;
-      add(px - hx + f.nx * 0.02, wy - 0.42, pz - hz + f.nz * 0.02, px + hx + f.nx * 0.045, wy + 0.42, pz + hz + f.nz * 0.045, 0x7ec8e6);
-      add(px - Math.abs(f.ux) * 0.48 + f.nx * 0.05, wy - 0.48, pz - Math.abs(f.uz) * 0.48 + f.nz * 0.05, px - Math.abs(f.ux) * 0.28 + f.nx * 0.08, wy + 0.48, pz - Math.abs(f.uz) * 0.28 + f.nz * 0.08, shutter);
-      add(px + Math.abs(f.ux) * 0.28 + f.nx * 0.05, wy - 0.48, pz + Math.abs(f.uz) * 0.28 + f.nz * 0.05, px + Math.abs(f.ux) * 0.48 + f.nx * 0.08, wy + 0.48, pz + Math.abs(f.uz) * 0.48 + f.nz * 0.08, shutter);
+      const hx = Math.abs(f.ux) * 0.18 + Math.abs(f.nx) * 0.02;
+      const hz = Math.abs(f.uz) * 0.18 + Math.abs(f.nz) * 0.02;
+      add(px - hx + f.nx * 0.015, wy - 0.32, pz - hz + f.nz * 0.015, px + hx + f.nx * 0.03, wy + 0.32, pz + hz + f.nz * 0.03, 0x6eb6d8);
+      add(px - Math.abs(f.ux) * 0.34 + f.nx * 0.03, wy - 0.36, pz - Math.abs(f.uz) * 0.34 + f.nz * 0.03, px - Math.abs(f.ux) * 0.2 + f.nx * 0.05, wy + 0.36, pz - Math.abs(f.uz) * 0.2 + f.nz * 0.05, shutter);
+      add(px + Math.abs(f.ux) * 0.2 + f.nx * 0.03, wy - 0.36, pz + Math.abs(f.uz) * 0.2 + f.nz * 0.03, px + Math.abs(f.ux) * 0.34 + f.nx * 0.05, wy + 0.36, pz + Math.abs(f.uz) * 0.34 + f.nz * 0.05, shutter);
       add(px - Math.abs(f.ux) * 0.55 + f.nx * 0.06, wy - 0.64, pz - Math.abs(f.uz) * 0.55 + f.nz * 0.06, px + Math.abs(f.ux) * 0.55 + f.nx * 0.1, wy - 0.54, pz + Math.abs(f.uz) * 0.55 + f.nz * 0.1, 0xfff0d4);
       if (!ground && k % 2 === 0) blooms.add(px + f.nx * 0.18, wy - 0.5, pz + f.nz * 0.18, 1.3, 1.3, 1.3, 0, 0xf07898);
     }
@@ -359,17 +432,18 @@ function plantRow(leaves: Batch, blooms: Batch, b: MapBox): void {
 }
 
 function dressMap(
-  parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, cloth: Batch, bulbs: Batch, glow: Batch,
+  parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, cloth: Batch, bulbs: Batch, glow: Batch, shade: Batch,
   add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
   map: MapData, decor: MapDecor | undefined, teamDecor: boolean,
 ): void {
   if (!decor) return;
   for (const tr of decor.trees ?? []) {
     add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
-    leaves.add(tr.x, 4.15, tr.z, 2.4, 2.0, 2.4, 0, 0x3fa84a);
-    leaves.add(tr.x + 0.7, 3.7, tr.z + 0.25, 1.6, 1.4, 1.6, 0, 0x2f8a3a);
-    leaves.add(tr.x - 0.55, 3.85, tr.z - 0.35, 1.7, 1.45, 1.7, 0, 0x46b056);
+    leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
+    leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
+    leaves.add(tr.x - 0.7, 3.7, tr.z - 0.4, 1.8, 1.6, 1.8, 1.1, 0xd8f0d0);
     blooms.add(tr.x + 0.4, 4.3, tr.z + 0.2, 1.2, 1.2, 1.2, 0, 0xf07898);
+    shade.add(tr.x, 0.035, tr.z, 1.7, 1.7, 1, 0, 0x000000);
   }
   if (decor.church) {
     const x = decor.church.x, z = decor.church.z;
@@ -482,26 +556,6 @@ function skyDome(stops: [number, number, number]): THREE.Mesh {
   mesh.frustumCulled = false;
   mesh.renderOrder = -10;
   return mesh;
-}
-
-function cloudBand(tint: number): THREE.Group {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xfff8ee, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide, fog: false });
-  const geo = new THREE.PlaneGeometry(14, 4);
-  const mesh = new THREE.InstancedMesh(geo, mat, 10);
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    _p.set(Math.cos(a) * 40, 28 + (i % 3) * 4, Math.sin(a) * 40);
-    _e.set(0, -a + Math.PI / 2, 0);
-    _q.setFromEuler(_e);
-    _s.set(1 + (i % 3) * 0.3, 1, 1);
-    mesh.setMatrixAt(i, _m.compose(_p, _q, _s));
-  }
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.frustumCulled = false;
-  g.add(mesh);
-  g.userData['tint'] = tint;
-  return g;
 }
 
 function hangPinata(p: { x: number; y: number; z: number }): THREE.Object3D {

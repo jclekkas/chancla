@@ -6,7 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { EL_PATIO, type MapData } from '../../shared/map';
 import type { WorldOptions } from '../../src/fps/render/world';
 import { THEMES } from '../../src/fps/render/world';
-import { buildCourtyard } from './courtyard';
+import { buildCourtyard, scrollWater } from './courtyard';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -28,16 +28,24 @@ export interface DutyStats {
 }
 
 function chanclaGeometry(hex: number, heel: boolean): THREE.BufferGeometry {
-  const sole = new THREE.BoxGeometry(heel ? 0.22 : 0.3, heel ? 0.06 : 0.045, 0.12);
-  const strap = new THREE.TorusGeometry(0.065, 0.014, 5, 10);
+  const shape = new THREE.Shape();
+  shape.moveTo(0, -0.07);
+  shape.bezierCurveTo(0.075, -0.075, 0.09, 0.02, 0.04, 0.075);
+  shape.bezierCurveTo(0, 0.1, -0.04, 0.075, -0.075, 0.02);
+  shape.bezierCurveTo(-0.09, -0.03, -0.06, -0.075, 0, -0.07);
+  const sole = new THREE.ExtrudeGeometry(shape, { depth: heel ? 0.055 : 0.028, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.006, bevelSegments: 2 });
+  sole.rotateX(-Math.PI / 2);
+  const strap = new THREE.TorusGeometry(0.045, 0.008, 8, 14, Math.PI);
   strap.rotateX(Math.PI / 2);
-  strap.translate(0, 0.05, heel ? 0.01 : 0.02);
-  const flower = new THREE.SphereGeometry(0.028, 6, 5);
-  flower.translate(0, 0.08, 0.03);
-  const heelBox = heel ? new THREE.BoxGeometry(0.1, 0.1, 0.08) : null;
-  heelBox?.translate(-0.06, 0.02, 0);
+  strap.translate(0, 0.03, 0.02);
+  const flower = new THREE.SphereGeometry(0.016, 8, 6);
+  flower.translate(0, 0.045, 0.03);
   const parts: THREE.BufferGeometry[] = [sole, strap, flower];
-  if (heelBox) parts.push(heelBox);
+  if (heel) {
+    const heelGeo = new THREE.CylinderGeometry(0.028, 0.034, 0.07, 8);
+    heelGeo.translate(-0.02, 0.01, -0.03);
+    parts.push(heelGeo);
+  }
   for (const geo of parts) {
     const n = geo.attributes.position!.count;
     const cols = new Float32Array(n * 3);
@@ -45,7 +53,7 @@ function chanclaGeometry(hex: number, heel: boolean): THREE.BufferGeometry {
     for (let i = 0; i < n; i++) { cols[i * 3] = _c.r; cols[i * 3 + 1] = _c.g; cols[i * 3 + 2] = _c.b; }
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   }
-  return mergeGeometries(parts, false)!;
+  return mergeGeometries(parts.map(asPlain), false) ?? sole;
 }
 
 
@@ -130,7 +138,11 @@ export class DutyScene {
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.42, 12), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.28, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.02;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.18), new THREE.MeshBasicMaterial({ map: faceTex(), transparent: true }));
+    face.position.set(0, 0.5, 0.14);
+    torso.add(face);
     root.add(blob);
+    root.scale.setScalar(1.22);
     root.visible = false;
     this.root.add(root);
     return { root, hip, torso, head, arm, leg, team };
@@ -171,9 +183,9 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(theme.hemi[0], theme.hemi[1], theme.hemi[2] * 1.05);
-    this.root.add(new THREE.AmbientLight(0xfff1e0, 0.42));
-    const sun = new THREE.DirectionalLight(theme.sun[0], theme.sun[1]);
+    this.hemi = new THREE.HemisphereLight(0xb9dcff, 0xc56a3a, 0.72);
+    this.root.add(new THREE.AmbientLight(0xffe2c0, 0.22));
+    const sun = new THREE.DirectionalLight(0xffb15a, 2.6);
     sun.position.set(...theme.sunPos);
     if (this.gpuTier) {
       sun.castShadow = true;
@@ -269,7 +281,8 @@ export class DutyScene {
       this.pinSpin = Math.max(0, this.pinSpin - 0.02);
       this.pinata.rotation.y += 0.4;
     }
-    if (this.clouds) this.clouds.rotation.y = now * 0.00002;
+    if (this.clouds) this.clouds.rotation.y = now * 0.000015;
+    scrollWater(now);
     const weapon = session?.weapon ?? 0;
     const showHand = mode !== 'menu';
     const cd = session?.cooldownMs ?? 0;
@@ -372,6 +385,14 @@ function pose(actor: Actor, x: number, y: number, z: number, yaw: number, speed:
   actor.arm.rotation.x = -0.35 - wind * 1.7 + (moving ? -step * 0.35 : 0);
 }
 
+function asPlain(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const n = geo.index ? geo.toNonIndexed() : geo;
+  for (const key of Object.keys(n.attributes)) {
+    if (key !== 'position' && key !== 'normal' && key !== 'uv' && key !== 'color') n.deleteAttribute(key);
+  }
+  return n;
+}
+
 function tinted(geo: THREE.BufferGeometry, hex: number, x: number, y: number, z: number): THREE.BufferGeometry {
   geo.translate(x, y, z);
   const n = geo.attributes.position!.count;
@@ -383,16 +404,39 @@ function tinted(geo: THREE.BufferGeometry, hex: number, x: number, y: number, z:
 }
 
 function handMesh(hex: number): THREE.Mesh {
-  const geo = mergeGeometries([
-    tinted(new THREE.BoxGeometry(0.14, 0.045, 0.16), hex, 0, 0, 0.02),
-    tinted(new THREE.BoxGeometry(0.035, 0.035, 0.1), hex, -0.07, 0.01, -0.08),
-    tinted(new THREE.BoxGeometry(0.028, 0.03, 0.1), hex, -0.02, 0.015, -0.1),
-    tinted(new THREE.BoxGeometry(0.028, 0.03, 0.11), hex, 0.02, 0.015, -0.11),
-    tinted(new THREE.BoxGeometry(0.026, 0.028, 0.09), hex, 0.055, 0.01, -0.08),
-  ], false)!;
+  const palm = new THREE.SphereGeometry(0.055, 10, 8);
+  palm.scale(1.3, 0.55, 1.6);
+  const bits: THREE.BufferGeometry[] = [palm];
+  for (let i = 0; i < 4; i++) {
+    const finger = new THREE.CylinderGeometry(0.012, 0.01, 0.07, 6);
+    finger.rotateX(Math.PI / 2);
+    finger.translate(-0.03 + i * 0.02, 0.01, -0.07);
+    bits.push(finger);
+  }
+  const thumb = new THREE.CylinderGeometry(0.013, 0.011, 0.05, 6);
+  thumb.rotateZ(0.8);
+  thumb.translate(-0.06, 0.01, -0.01);
+  bits.push(thumb);
+  const geo = mergeGeometries(bits.map((g) => asPlain(tinted(g, hex, 0, 0, 0))), false) ?? bits[0]!;
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
-  mesh.rotation.x = 0.45;
-  mesh.position.set(-0.02, -0.01, 0.04);
+  mesh.rotation.x = 0.35;
+  mesh.position.set(0, -0.02, 0.05);
   return mesh;
+}
+
+function faceTex(): THREE.CanvasTexture {
+  const cnv = document.createElement('canvas');
+  cnv.width = 64; cnv.height = 64;
+  const g = cnv.getContext('2d')!;
+  g.clearRect(0, 0, 64, 64);
+  g.fillStyle = '#1a120c';
+  g.beginPath(); g.ellipse(22, 28, 4, 5, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(42, 28, 4, 5, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#1a120c';
+  g.lineWidth = 2;
+  g.beginPath(); g.arc(32, 40, 8, 0.2, Math.PI - 0.2); g.stroke();
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 

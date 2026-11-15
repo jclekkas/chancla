@@ -285,7 +285,7 @@ export class DutyScene {
     if (this.sparks) this.root.add(this.sparks);
 
     this.hemi = new THREE.HemisphereLight(0xffe0b0, 0xc47a48, this.tier === 'high' ? 0.72 : 0.8);
-    this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.22 : 0.28));
+    this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.38 : 0.28));
     const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc27a : 0xfff3d8, this.tier === 'high' ? 2.25 : 2.0);
     sun.position.set(...theme.sunPos);
     if (this.tier === 'high') sun.position.y *= 0.62;
@@ -299,8 +299,8 @@ export class DutyScene {
       // A tight shadow box keeps the map's far corners out of the shadow pass.
       sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
     }
-    const fill = new THREE.DirectionalLight(0xfff6e4, this.tier === 'high' ? 0.55 : 0.35);
-    fill.position.set(8, 12, 18);
+    const fill = new THREE.DirectionalLight(0xfff3e2, this.tier === 'high' ? 1.15 : 0.35);
+    fill.position.set(0, 6, 10);
     this.root.add(this.hemi, sun, fill);
     const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
     if (detailed) {
@@ -362,6 +362,31 @@ export class DutyScene {
         door.rotation.y = ry;
         yard.add(door);
       }
+    }
+    // Concept 2 and 3 dressing: shrine, tiled steps, laundry, and a Cafecito.
+    const tile = new THREE.MeshStandardMaterial({ color: 0x1f6f9a, roughness: 0.4, metalness: 0.05 });
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0xf4efe4, roughness: 0.55 });
+    for (let i = 0; i < 5; i++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 0.7), i % 2 ? tile : stepMat);
+      step.position.set(-8.5, 0.1 + i * 0.18, -6 + i * 0.55);
+      yard.add(step);
+    }
+    const shrine = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.05), new THREE.MeshStandardMaterial({ color: 0xf7f1e4, roughness: 0.5 }));
+    shrine.position.set(-8.2, 1.35, -3.2);
+    yard.add(shrine);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.12, 12), new THREE.MeshStandardMaterial({ color: 0xf4efe8, roughness: 0.4 }));
+    cup.position.set(2.4, 0.86, 1.5);
+    const table = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.5), new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.7 }));
+    table.position.set(2.4, 0.35, 1.5);
+    yard.add(table, cup);
+    const rosa = this.cast[0];
+    if (rosa?.lods[2]) {
+      const kid = rosa.lods[2].clone(true);
+      kid.scale.multiplyScalar(0.62);
+      kid.position.set(3.6, 0, -1.1);
+      kid.rotation.y = 0.6;
+      kid.visible = true;
+      yard.add(kid);
     }
   }
 
@@ -468,6 +493,7 @@ export class DutyScene {
         spots.push([-2.2, 0, 1.8, face(-2.2, 1.8), 0.8, true, 9, 9]);
         spots.push([0.6, 0, 2.4, face(0.6, 2.4), 0, true, (now * 0.001) % 3.2, 9]);
         spots.push([2.4, 0, 0.6, face(2.4, 0.6), 0, true, 9, 9]);
+        spots.push([-4.4, 0, 0.2, face(-4.4, 0.2), 0, true, 9, 9]);
       } else if (mode === 'match' && session) {
         for (const remote of session.remotes.values()) {
           spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
@@ -482,7 +508,7 @@ export class DutyScene {
         p.root.position.set(x, y + (Number(p.root.userData['foot']) || 0), z);
         p.root.rotation.y = yaw;
         const dist = Math.hypot(engine.camera.position.x - x, engine.camera.position.z - z);
-        const lod = dist > 14 ? 2 : dist > 7 ? 1 : 0;
+        const lod = dist > 20 ? 2 : dist > 8 ? 1 : 0;
         p.lods.forEach((mesh, k) => { mesh.visible = k === lod; });
         const clip = !alive ? 'Death' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : 'Idle';
         playFilm(p, clip);

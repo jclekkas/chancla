@@ -53,7 +53,7 @@ The shop sits on the title screen. Eliminations pay respeto and build a combo. E
 
 ## Art
 
-Every model is built in code (`chancla-duty/src/scene.ts` and `courtyard.ts`). There is no downloaded character or weapon pack. The painted plaza floor reuses Warfare's ground painting so the inlay stays aligned with the fountain. The repeating wall grain is a KTX2/UASTC file at `public/chancla-duty/grain.ktx2`, encoded with the Basis Universal encoder from `@loaders.gl/textures` (BinomialLLC `basis_universal`). If the GPU cannot transcode it, the wall keeps the canvas grain. The Basis transcoder shipped in `public/basis/` is the one that comes with Three.js.
+The high tier (`?quality=high`, also the automatic tier on a real GPU) replaces the flat courtyard with CC0 assets. People are Quaternius characters (CC0) with idle, walk, run, jump, throw, hit, and KO clips. Walls, floors, and wood are Poly Haven PBR maps (CC0), and the sky and reflections come from a Poly Haven sunset HDRI. Albedo maps are KTX2/ETC1S with a JPEG fallback. The full list is in [CREDITS.md](CREDITS.md). `?quality=medium` keeps the PBR maps and sun shadows without the post stack. The fast tier stays the procedural courtyard for software renderers.
 
 The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term from height and face direction), uses one Lambert material on the merged courtyard, and does not run a shadow map. The high tier, used only when the GL renderer string is not a software rasterizer, switches that material to a standard PBR material and code-splits an environment map, GTAO, a small bloom, and FXAA.
 

@@ -215,7 +215,13 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
 
   if (parts.length) {
     const merged = mergeGeometries(parts, false);
-    if (merged) root.add(new THREE.Mesh(merged, wall));
+    if (merged) {
+      const mesh = new THREE.Mesh(merged, wall);
+      mesh.name = 'duty-walls';
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      root.add(mesh);
+    }
     for (const p of parts) p.dispose();
   }
   for (const batch of [leaves, blooms, cloth, bulbs, glow, shade]) {
@@ -534,6 +540,8 @@ function paintedFloor(decor: MapDecor | undefined): THREE.Mesh | null {
     new THREE.PlaneGeometry(decor?.ground.w ?? 54, decor?.ground.d ?? 38),
     new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 }),
   );
+  mesh.name = 'duty-floor';
+  mesh.receiveShadow = true;
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = 0.012;
   return mesh;
@@ -553,6 +561,7 @@ function skyDome(stops: [number, number, number]): THREE.Mesh {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  mesh.name = 'duty-sky';
   mesh.frustumCulled = false;
   mesh.renderOrder = -10;
   return mesh;

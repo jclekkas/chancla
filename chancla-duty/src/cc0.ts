@@ -1,0 +1,138 @@
+// CC0 look: Poly Haven PBR maps and HDRI, Quaternius characters.
+// Loaded after the courtyard exists so a missing file falls back to the procedural scene.
+import * as THREE from 'three';
+import type { AnimationAction, AnimationClip, Object3D, SkinnedMesh } from 'three';
+
+export interface Puppet {
+  root: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+  actions: Map<string, AnimationAction>;
+  current: string;
+}
+
+const REPEAT = 4;
+
+function prep(tex: THREE.Texture, color: boolean): THREE.Texture {
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(REPEAT, REPEAT);
+  tex.anisotropy = 8;
+  tex.colorSpace = color ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+  return tex;
+}
+
+async function map(url: string, color: boolean, renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
+  if (url.endsWith('.ktx2')) {
+    try {
+      const { KTX2Loader } = await import('three/examples/jsm/loaders/KTX2Loader.js');
+      const loader = new KTX2Loader();
+      loader.setTranscoderPath('/basis/');
+      loader.detectSupport(renderer);
+      const tex = await loader.loadAsync(url);
+      loader.dispose();
+      return prep(tex, color);
+    } catch { /* jpg below */ }
+  }
+  const tex = await new THREE.TextureLoader().loadAsync(url.replace('.ktx2', '.jpg'));
+  return prep(tex, color);
+}
+
+function standard(diff: THREE.Texture, nor: THREE.Texture, rough: THREE.Texture, tint = 0xffffff): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    map: diff, normalMap: nor, roughnessMap: rough, color: tint,
+    roughness: 1, metalness: 0.02,
+  });
+}
+
+export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.Scene, root: THREE.Object3D, shadows: boolean): Promise<void> {
+  const base = '/chancla-duty/cc0';
+  const [plasterD, plasterN, plasterR, tileD, tileN, tileR, woodD, woodN, woodR] = await Promise.all([
+    map(`${base}/tex/plaster/diff.ktx2`, true, renderer),
+    map(`${base}/tex/plaster/nor.jpg`, false, renderer),
+    map(`${base}/tex/plaster/rough.jpg`, false, renderer),
+    map(`${base}/tex/tiles/diff.ktx2`, true, renderer),
+    map(`${base}/tex/tiles/nor.jpg`, false, renderer),
+    map(`${base}/tex/tiles/rough.jpg`, false, renderer),
+    map(`${base}/tex/wood/diff.ktx2`, true, renderer),
+    map(`${base}/tex/wood/nor.jpg`, false, renderer),
+    map(`${base}/tex/wood/rough.jpg`, false, renderer),
+  ]);
+  const plaster = standard(plasterD, plasterN, plasterR);
+  plaster.vertexColors = true;
+  const tiles = standard(tileD, tileN, tileR);
+  tiles.map!.repeat.set(10, 8);
+  tiles.normalMap!.repeat.set(10, 8);
+  tiles.roughnessMap!.repeat.set(10, 8);
+  const wood = standard(woodD, woodN, woodR);
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (mesh.name === 'duty-walls') { mesh.material = plaster; mesh.castShadow = shadows; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-floor') { mesh.material = tiles; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-wood') { mesh.material = wood; mesh.castShadow = shadows; mesh.receiveShadow = true; }
+  });
+  try {
+    const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
+    const hdr = await new RGBELoader().loadAsync(`${base}/hdri/kiara_8_sunset_1k.hdr`);
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromEquirectangular(hdr).texture;
+    scene.environment = env;
+    scene.background = hdr;
+    renderer.toneMappingExposure = 0.55;
+    pmrem.dispose();
+    root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
+  } catch { /* keep the gradient sky */ }
+  const fog = scene.fog as THREE.Fog | null;
+  if (fog) { fog.color.set(0xf0b48a); fog.near = 22; fog.far = 78; }
+}
+
+export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { clone } = await import('three/examples/jsm/utils/SkeletonUtils.js');
+  const loader = new GLTFLoader();
+  const files = ['rosa.glb', 'luna.glb', 'kid.glb', 'npc.glb'];
+  const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
+  const out: Puppet[] = [];
+  for (const gltf of gltfs) {
+    const root = clone(gltf.scene) as Object3D;
+    fit(root);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = true; }
+      if (o.name === 'Fist.R') {
+        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.16), new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.6 }));
+        shoe.position.set(0, 0.04, 0.06);
+        shoe.castShadow = true;
+        o.add(shoe);
+      }
+    });
+    root.visible = false;
+    root.userData['keep'] = true;
+    parent.add(root);
+    const mixer = new THREE.AnimationMixer(root);
+    const actions = new Map<string, AnimationAction>();
+    for (const clip of gltf.animations as AnimationClip[]) actions.set(clip.name, mixer.clipAction(clip));
+    out.push({ root, mixer, actions, current: '' });
+  }
+  return out;
+}
+
+function fit(root: THREE.Object3D): void {
+  const box = new THREE.Box3().setFromObject(root);
+  const h = Math.max(0.001, box.max.y - box.min.y);
+  const s = 1.75 / h;
+  root.scale.setScalar(s);
+  root.position.y = -box.min.y * s;
+}
+
+export function playClip(p: Puppet, name: string): void {
+  if (p.current === name) return;
+  const next = p.actions.get(name) ?? p.actions.get('Idle');
+  if (!next) return;
+  const prev = p.actions.get(p.current);
+  next.reset().fadeIn(0.15).play();
+  prev?.fadeOut(0.15);
+  p.current = next.getClip().name;
+}
+
+void (0 as unknown as SkinnedMesh);

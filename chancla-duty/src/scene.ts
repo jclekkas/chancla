@@ -7,6 +7,7 @@ import { EL_PATIO, type MapData } from '../../shared/map';
 import type { WorldOptions } from '../../src/fps/render/world';
 import { THEMES } from '../../src/fps/render/world';
 import { buildCourtyard, scrollWater } from './courtyard';
+import { applyCc0Look, loadPuppets, playClip, type Puppet } from './cc0';
 import type { Engine } from '../../src/fps/engine';
 import type { WeaponId } from '../../shared/config';
 
@@ -24,7 +25,7 @@ export interface DutyStats {
   calls: number;
   triangles: number;
   gpu: string;
-  tier: 'fast' | 'high';
+  tier: 'fast' | 'medium' | 'high';
 }
 
 function chanclaGeometry(hex: number, heel: boolean): THREE.BufferGeometry {
@@ -87,10 +88,16 @@ export class DutyScene {
   private hemi: THREE.HemisphereLight | null = null;
   private seenEnd = '';
   private gpuTier = false;
+  private tier: 'fast' | 'medium' | 'high' = 'fast';
+  private puppets: Puppet[] = [];
+  private lastAnim = 0;
+  private gl: THREE.WebGLRenderer | null = null;
+  private worldScene: THREE.Scene | null = null;
 
-  constructor(gpu: boolean) {
-    this.gpuTier = gpu;
-    this.stats.tier = gpu ? 'high' : 'fast';
+  constructor(tier: 'fast' | 'medium' | 'high') {
+    this.tier = tier;
+    this.gpuTier = tier !== 'fast';
+    this.stats.tier = tier;
     this.root.name = 'duty-scene';
     this.skin = new THREE.MeshLambertMaterial({ vertexColors: true });
     for (let i = 0; i < 6; i++) this.actors.push(this.makeActor(i < 3 ? 0 : 1));
@@ -200,6 +207,23 @@ export class DutyScene {
     this.pinata = yard.pinata;
     this.clouds = yard.clouds;
     this.wall = yard.wall;
+    if (this.tier !== 'fast' && this.gl && this.worldScene) void applyCc0Look(this.gl, this.worldScene, this.root, true);
+  }
+
+  bind(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
+    this.gl = renderer;
+    this.worldScene = scene;
+    if (this.tier === 'fast') {
+      (window as unknown as { __duty?: { assets?: boolean } }).__duty && ((window as unknown as { __duty: { assets?: boolean } }).__duty.assets = true);
+      return;
+    }
+    void Promise.all([
+      applyCc0Look(renderer, scene, this.root, true),
+      loadPuppets(this.root).then((puppets) => { this.puppets = puppets; }),
+    ]).then(() => {
+      const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
+      if (box) box.assets = true;
+    });
   }
 
   /** Swap the wall grain for the shipped KTX2 file when the GPU can transcode it. */
@@ -232,7 +256,33 @@ export class DutyScene {
     const mode = engine.mode;
     const session = (engine as unknown as { session: { remotes: Map<number, Remote>; body: { x: number; y: number; z: number }; alive: boolean; team: 0 | 1 | null; weapon: WeaponId; cooldownMs: number; projectiles: Map<string, Shot> } | null }).session;
     let used = 0;
-    if (mode === 'menu') {
+    const dt = this.lastAnim ? Math.min(0.05, (now - this.lastAnim) / 1000) : 0;
+    this.lastAnim = now;
+    if (this.puppets.length) {
+      for (const actor of this.actors) actor.root.visible = false;
+      const spots: Array<[number, number, number, number, number, boolean, boolean, boolean, number, number]> = [];
+      if (mode === 'menu') {
+        spots.push([-1.7, 0, 3.2, 0.6, 0, true, false, true, (now * 0.001) % 3.2, 9]);
+        spots.push([1.7, 0, 3.2, -0.6, 0, true, false, true, 9, 9]);
+      } else if (mode === 'match' && session) {
+        for (const remote of session.remotes.values()) {
+          spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.onGround, remote.crouched, remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
+        }
+      }
+      for (let i = 0; i < this.puppets.length; i++) {
+        const p = this.puppets[i]!;
+        const spot = spots[i];
+        if (!spot) { p.root.visible = false; continue; }
+        const [x, y, z, yaw, speed, ground, crouch, alive, throwAge, hitAge] = spot;
+        p.root.visible = true;
+        p.root.position.set(x, y, z);
+        p.root.rotation.y = yaw;
+        const clip = !alive ? 'Death' : !ground ? 'Jump' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : crouch ? 'SitDown' : 'Idle';
+        playClip(p, clip);
+        p.mixer.update(dt);
+      }
+      used = this.actors.length;
+    } else if (mode === 'menu') {
       for (const actor of this.actors) actor.root.visible = false;
       pose(this.actors[0]!, -1.7, 0, 3.2, 0.6, 0, true, false, true, (now * 0.001) % 3.2, 9, now);
       pose(this.actors[3]!, 1.7, 0, 3.2, -0.6, 0, true, false, true, 9, 9, now);
@@ -347,7 +397,7 @@ export class DutyScene {
       const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
       gtao.output = GTAOPass.OUTPUT.Default;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.18, 0.4, 0.85));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.06, 0.3, 0.92));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       try {

@@ -46,25 +46,32 @@ const origStart = Engine.prototype.start;
 Engine.prototype.start = function () {
   origStart.call(this);
   const gpu = gpuName(this.renderer);
-  duty = new DutyScene(!gpu.software);
+  const asked = new URLSearchParams(location.search).get('quality');
+  const tier = asked === 'high' || asked === 'medium' || asked === 'fast' ? asked : (gpu.software ? 'fast' : 'high');
+  duty = new DutyScene(tier);
   duty.stats.gpu = gpu.name;
   duty.rebuild({});
   this.scene.add(duty.root);
   this.world.group.visible = false;
   this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  this.renderer.toneMappingExposure = 1.12;
+  this.renderer.toneMappingExposure = tier === 'high' ? 0.55 : 1.05;
   this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-  this.renderer.shadowMap.enabled = !gpu.software;
-  this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gpu.software ? 1 : 1.5));
+  this.renderer.shadowMap.enabled = tier !== 'fast';
+  this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  this.renderer.setPixelRatio(1);
   for (const vm of duty.viewmodels) this.vmScene.add(vm);
   const stats = duty.stats;
-  (window as unknown as { __duty?: unknown }).__duty = { engine: this, scene: duty, stats, gpu: gpu.name };
+  (window as unknown as { __duty?: unknown }).__duty = { engine: this, scene: duty, stats, gpu: gpu.name, ready: false };
+  duty.bind(this.renderer, this.scene);
   installRender(this);
   void duty.useCompressedGrain(this.renderer);
-  if (!gpu.software) {
+  if (tier === 'high') {
     void duty.enableHigh(this.renderer, this.scene, this.camera).then((render) => {
       highRender = render;
+      (window as unknown as { __duty?: { ready?: boolean } }).__duty!.ready = true;
     });
+  } else {
+    (window as unknown as { __duty?: { ready?: boolean } }).__duty!.ready = true;
   }
 };
 
@@ -108,7 +115,7 @@ function installRender(engine: Engine): void {
       highRender(scene, camera);
       rendering = false;
     } else orig(scene, camera);
-    if (duty && scene === engine.scene) {
+    if (duty && scene === engine.scene && engine.renderer.info.render.calls > 4) {
       duty.stats.calls = engine.renderer.info.render.calls;
       duty.stats.triangles = engine.renderer.info.render.triangles;
     }

@@ -100,3 +100,6 @@ if (hud) {
   const syncShop = (): void => { shop.hidden = !hud.hidden; };
   new MutationObserver(syncShop).observe(hud, { attributes: true, attributeFilter: ['hidden'] });
 }
+const hudFit = document.createElement('style');
+hudFit.textContent = '.weapons{transform:scale(0.38);transform-origin:bottom right;right:0;bottom:0;gap:2px}.wslot{min-width:46px;padding:1px 4px 2px}.wicon{width:22px;height:12px}.wslot .wname{font-size:9px}';
+document.head.appendChild(hudFit);

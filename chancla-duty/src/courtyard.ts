@@ -186,6 +186,23 @@ export interface Courtyard {
   wall: THREE.MeshLambertMaterial;
 }
 
+/** A flag with a couple of folds so the cloth standard material actually shades. */
+function pennant(): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(1, 1, 4, 1);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const fold = Math.sin((x + 0.5) * Math.PI * 2) * 0.09;
+    pos.setZ(i, fold);
+    const k = 0.58 + 0.42 * (0.5 + Math.sin((x + 0.5) * Math.PI * 2));
+    col[i * 3] = k; col[i * 3 + 1] = k; col[i * 3 + 2] = k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName: ThemeName, teamDecor: boolean, detailed = false): Courtyard {
   const theme = THEMES[themeName];
   const decor = map.decor;
@@ -203,10 +220,12 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 220);
   const shade = new Batch(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.33, depthWrite: false }), 48);
   const blooms = new Batch(new THREE.SphereGeometry(0.12, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), 120);
-  const cloth = new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }), 180);
-  const bulbs = new Batch(new THREE.SphereGeometry(0.5, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }), 140);
-  const glow = new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  const cloth = new Batch(pennant(), new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }), 180);
+  const bulbs = new Batch(new THREE.SphereGeometry(0.5, 7, 5), new THREE.MeshStandardMaterial({
+    color: 0xffffff, emissive: 0xfff6d0, emissiveIntensity: 3.4, roughness: 0.35, metalness: 0, toneMapped: false,
+  }), 140);
+  const glow = new Batch(new THREE.SphereGeometry(0.5, 6, 4), new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   }), 140);
 
   const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
@@ -491,6 +510,11 @@ function dressMap(
     const w = a.maxX - a.minX;
     for (let i = 0; i < 4; i++) add(a.minX + (w / 4) * i, a.y, a.minZ, a.minX + (w / 4) * (i + 1), a.y + 0.08, a.maxZ, stripes[i % 2]!);
   }
+  // Contact shadows for the showcase crowd. The skinned meshes themselves skip
+  // the shadow map so three characters stay inside the triangle budget.
+  shade.add(-2.6, 0.03, 2.2, 0.5, 0.35, 1, 0.4, 0x000000);
+  shade.add(0.3, 0.03, 1.5, 0.5, 0.35, 1, -0.3, 0x000000);
+  shade.add(2.1, 0.03, 3.3, 0.42, 0.3, 1, 0.2, 0x000000);
   lineProps(cloth, decor.laundry ?? [], true);
   lineProps(cloth, decor.papel ?? [], false);
   stringLights(bulbs, glow, decor.lights ?? []);
@@ -528,8 +552,8 @@ function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, n
       const sag = Math.sin(t * Math.PI) * 1.05;
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       const col = colors[i % 3]!;
-      bulbs.add(x, y - sag - 0.08, z, 0.16, 0.2, 0.16, 0, col);
-      glow.add(x, y - sag - 0.08, z, 0.7, 0.7, 1, 0, col);
+      bulbs.add(x, y - sag - 0.08, z, 0.24, 0.28, 0.24, 0, col);
+      glow.add(x, y - sag - 0.08, z, 0.85, 0.85, 0.85, 0, col);
     }
   }
 }
@@ -558,28 +582,33 @@ function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
     if (!(b.minX <= camX && camX <= b.maxX && b.minZ <= camZ && camZ <= b.maxZ)) continue;
     const f = faceOf(b);
     const alongCam = (camX - f.fx) * f.ux + (camZ - f.fz) * f.uz;
-    const span = 2.3;
-    const a0 = Math.max(0, Math.min(f.len - span, alongCam - span * 0.35));
+    const span = 2.6;
+    const a0 = Math.max(0, Math.min(f.len - span, alongCam - span * 0.22));
     const a1 = Math.min(f.len, a0 + span);
     const inset = 0.05;
-    const hue = HUE[b.mat] ?? 0xffe4c0;
     const y0 = b.minY, y1 = b.maxY;
     const at = (along: number, y: number) => new THREE.Vector3(
       f.fx + f.ux * along - f.nx * inset,
       y,
       f.fz + f.uz * along - f.nz * inset,
     );
-    const p0 = at(a0, y0), p1 = at(a1, y0), p2 = at(a1, y1), p3 = at(a0, y1);
-    const g = new THREE.BufferGeometry();
-    const pos = new Float32Array([
-      p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z,
-      p0.x, p0.y, p0.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z,
-    ]);
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]), 2));
-    g.computeVertexNormals();
-    paint(g, hue);
-    geos.push(g);
+    const bands = [0xd24b78, 0xe08a32, 0x1f9a90];
+    for (let band = 0; band < 3; band++) {
+      const s0 = a0 + (a1 - a0) * (band / 3);
+      const s1 = a0 + (a1 - a0) * ((band + 1) / 3);
+      const q0 = at(s0, y0), q1 = at(s1, y0), q2 = at(s1, y1), q3 = at(s0, y1);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        q0.x, q0.y, q0.z, q1.x, q1.y, q1.z, q2.x, q2.y, q2.z,
+        q0.x, q0.y, q0.z, q2.x, q2.y, q2.z, q3.x, q3.y, q3.z,
+      ]), 3));
+      g.computeVertexNormals();
+      const cols = new Float32Array(6 * 3);
+      _c.setHex(bands[band]!);
+      for (let i = 0; i < 6; i++) { cols[i * 3] = _c.r; cols[i * 3 + 1] = _c.g; cols[i * 3 + 2] = _c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+      geos.push(g);
+    }
   }
   const geo = geos.length ? mergeGeometries(geos, false) : null;
   if (!geo) return null;

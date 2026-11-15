@@ -194,20 +194,23 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xffd2a8, 0x5c3024, this.tier === 'high' ? 0.32 : 0.72);
-    this.root.add(new THREE.AmbientLight(0xffc898, this.tier === 'high' ? 0.08 : 0.22));
-    const sun = new THREE.DirectionalLight(0xff7a24, this.tier === 'high' ? 3.1 : 2.2);
+    this.hemi = new THREE.HemisphereLight(0xffe0c0, 0x6a4030, this.tier === 'high' ? 0.42 : 0.72);
+    this.root.add(new THREE.AmbientLight(0xffd0a4, this.tier === 'high' ? 0.1 : 0.22));
+    const sun = new THREE.DirectionalLight(0xff6a18, this.tier === 'high' ? 3.6 : 2.2);
     sun.position.set(...theme.sunPos);
     if (this.gpuTier) {
       sun.castShadow = true;
-      sun.shadow.mapSize.set(1024, 1024);
-      sun.shadow.bias = -0.0004;
-      sun.shadow.normalBias = 0.035;
-      const bd = map.bounds;
+      sun.shadow.mapSize.set(this.tier === 'high' ? 2048 : 1024, this.tier === 'high' ? 2048 : 1024);
+      sun.shadow.radius = 1;
+      sun.shadow.bias = -0.00025;
+      sun.shadow.normalBias = 0.02;
       const sc = sun.shadow.camera;
-      sc.left = bd.minX; sc.right = bd.maxX; sc.top = bd.maxZ; sc.bottom = bd.minZ; sc.near = 1; sc.far = 80;
+      // A tight shadow box keeps the map's far corners out of the shadow pass.
+      sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
     }
-    this.root.add(this.hemi, sun);
+    const fill = new THREE.DirectionalLight(0xfff6e4, this.tier === 'high' ? 1.65 : 0.35);
+    fill.position.set(8, 12, 18);
+    this.root.add(this.hemi, sun, fill);
     const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
     if (detailed) dressKit(yard.root, boxes, map);
     this.root.add(yard.root);
@@ -236,6 +239,7 @@ export class DutyScene {
         if (!fist) continue;
         for (const child of [...fist.children]) fist.remove(child);
         const shoe = chanclaObject(0x2bb5b0, false);
+        shoe.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false; });
         shoe.scale.setScalar(0.55);
         shoe.position.set(0, 0.06, 0.05);
         shoe.rotation.set(0.6, 0.2, 1.2);
@@ -249,7 +253,7 @@ export class DutyScene {
       if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true);
       const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
       if (box) box.assets = true;
-    });
+    }).catch((err) => { console.warn('duty bind', err); });
   }
 
   private upgradeHands(): void {
@@ -258,24 +262,25 @@ export class DutyScene {
     this.viewmodels.forEach((g, i) => {
       const [hex, heel, twin] = specs[i] ?? [0x2bb5b0, false, false];
       const hand = g.children[0] as THREE.Mesh;
-      const arm = forearmGeometry();
-      if (arm && hand.isMesh) {
+      const baked = forearmGeometry();
+      const arm = baked ?? fallbackForearm();
+      if (hand.isMesh) {
         hand.geometry = arm;
-        hand.material = new THREE.MeshStandardMaterial({ color: 0xd08a5c, roughness: 0.55, metalness: 0 });
-        hand.scale.setScalar(1.85);
-        hand.position.set(0.08, 0.1, -0.06);
-        hand.rotation.set(0.75, -0.35, 0.15);
+        hand.material = new THREE.MeshStandardMaterial({ color: 0xe0a070, roughness: 0.48, metalness: 0, emissive: 0x4a2814, emissiveIntensity: 0.18 });
+        if (baked) aimForearm(hand, arm);
+        else { hand.scale.setScalar(1.25); hand.position.set(0.02, -0.02, 0); hand.rotation.set(0, 0.15, 0); }
       }
       for (const child of [...g.children]) if (child !== hand) g.remove(child);
       const shoe = chanclaObject(hex, heel);
-      shoe.scale.setScalar(1.7);
-      shoe.position.set(0.02, 0.0, -0.1);
-      shoe.rotation.set(-0.5, 0.15, 0.05);
+      shoe.scale.setScalar(1.25);
+      shoe.position.set(0.02, 0.0, -0.07);
+      shoe.rotation.order = 'YXZ';
+      shoe.rotation.set(1.05, 0.55, 0.35);
       shoe.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).frustumCulled = false; });
       g.add(shoe);
       if (twin) {
         const other = shoe.clone(true);
-        other.position.x = 0.18;
+        other.position.x = 0.2;
         g.add(other);
       }
     });
@@ -317,8 +322,11 @@ export class DutyScene {
       for (const actor of this.actors) actor.root.visible = false;
       const spots: Array<[number, number, number, number, number, boolean, boolean, boolean, number, number]> = [];
       if (mode === 'menu') {
-        spots.push([-1.7, 0, 3.2, 0.6, 0, true, false, true, (now * 0.001) % 3.2, 9]);
-        spots.push([1.7, 0, 3.2, -0.6, 0, true, false, true, 9, 9]);
+        const face = (x: number, z: number) => Math.atan2(5.2 - x, 8.6 - z);
+        spots.push([-2.6, 0, 2.2, face(-2.6, 2.2), 0, true, false, true, (now * 0.001) % 3.2, 9]);
+        spots.push([0.3, 0, 1.5, face(0.3, 1.5), 0, true, false, true, 9, 9]);
+        const mapId = (engine as unknown as { map?: { id?: string } }).map?.id;
+        if (mapId === 'plaza') spots.push([2.1, 0, 3.3, face(2.1, 3.3), 1.1, true, false, true, 9, 9]);
       } else if (mode === 'match' && session) {
         for (const remote of session.remotes.values()) {
           spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.onGround, remote.crouched, remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
@@ -396,8 +404,9 @@ export class DutyScene {
       vm.visible = showHand && i === Math.min(4, weapon);
       if (!vm.visible) continue;
       const wind = cd > 280 ? Math.min(1, (cd - 280) / 500) : 0;
-      vm.rotation.x = 0.15 - wind * 1.1;
-      vm.position.y = -0.24 + Math.sin(now * 0.004) * 0.008;
+      const bob = Math.sin(now * 0.004) * 0.004;
+      vm.position.set(0.16, 0.02 + bob, -0.45);
+      vm.rotation.set(0.02 - wind * 0.35, -0.05, 0.06);
     }
     this.stats.syncMs = performance.now() - t0;
   }
@@ -451,9 +460,9 @@ export class DutyScene {
       composer.addPass(new RenderPass(scene, camera));
       const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
       gtao.output = GTAOPass.OUTPUT.Default;
-      gtao.blendIntensity = 1.45;
+      gtao.blendIntensity = 1.05;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.06, 0.3, 0.92));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.32, 0.5, 0.94));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();
@@ -501,6 +510,34 @@ function tinted(geo: THREE.BufferGeometry, hex: number, x: number, y: number, z:
   for (let i = 0; i < n; i++) { cols[i * 3] = _c.r; cols[i * 3 + 1] = _c.g; cols[i * 3 + 2] = _c.b; }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   return geo;
+}
+
+/** Point the baked elbow at the lower right and scale the forearm so it stays in frame. */
+function fallbackForearm(): THREE.BufferGeometry {
+  const fore = new THREE.CapsuleGeometry(0.042, 0.2, 4, 8);
+  fore.rotateZ(-0.55);
+  fore.translate(0.06, -0.03, 0);
+  return fore;
+}
+
+function aimForearm(hand: THREE.Mesh, arm: THREE.BufferGeometry): void {
+  const pos = arm.attributes.position as THREE.BufferAttribute;
+  const v = new THREE.Vector3();
+  let maxD = 0;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    maxD = Math.max(maxD, v.length());
+  }
+  const acc = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) acc.add(v.fromBufferAttribute(pos, i));
+  if (pos.count < 3 || maxD < 0.02) return;
+  const from = acc.multiplyScalar(1 / pos.count);
+  const reach = Math.max(0.05, from.length());
+  from.normalize();
+  const want = new THREE.Vector3(0.82, -0.48, 0.3).normalize();
+  hand.quaternion.setFromUnitVectors(from, want);
+  hand.scale.setScalar(Math.min(2.6, 0.32 / Math.max(reach, maxD * 0.45)));
+  hand.position.set(0, 0, 0);
 }
 
 function handMesh(hex: number): THREE.Mesh {

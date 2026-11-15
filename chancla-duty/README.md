@@ -65,8 +65,8 @@ Same camera, 1280×720, the showcase view of each map. Draw calls and triangles 
 
 | Map | Original draw calls | Duty draws, high | Original triangles | Duty triangles, high | Duty triangles, medium | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 48 | 34,910 | 47,484 | 15,460 | 0.10 ms |
-| Plaza | 71 | 45 | 27,094 | 47,488 | 14,396 | 0.20 ms |
-| Fiesta | 70 | 44 | 22,352 | 48,024 | 15,240 | 0.10 ms |
+| Patio | 75 | 36 | 34,910 | 44,558 | 18,220 | 0.30 ms |
+| Plaza | 71 | 39 | 27,094 | 46,004 | 16,728 | 0.30 ms |
+| Fiesta | 70 | 28 | 22,352 | 36,768 | 18,920 | 0.20 ms |
 
 High tier batches the Kenney pieces into one mesh per material, so it draws fewer times than the original on every map, and stays under 50k triangles. Medium tier is the textured courtyard without that kit, and its triangle counts sit under the original. The JavaScript before `gl.draw*` stays under 0.4 ms. SwiftShader still presents both games at about 10–13 fps.

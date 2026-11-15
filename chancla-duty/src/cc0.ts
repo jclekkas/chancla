@@ -68,16 +68,9 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     if (!mesh.isMesh) return;
     if (mesh.name === 'duty-walls') { mesh.material = plaster; mesh.castShadow = shadows; mesh.receiveShadow = true; }
     if (mesh.name === 'duty-skin') {
-      const skin = plaster.clone();
-      skin.side = THREE.DoubleSide;
-      skin.polygonOffset = true;
-      skin.polygonOffsetFactor = -1;
-      skin.polygonOffsetUnits = -1;
-      skin.emissive.setHex(0x4a2c18);
-      skin.emissiveIntensity = 0.45;
-      mesh.material = skin;
-      mesh.castShadow = shadows;
-      mesh.receiveShadow = true;
+      mesh.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
     }
     if (mesh.name === 'duty-floor') { mesh.material = tiles; mesh.receiveShadow = true; }
     if (mesh.name === 'duty-wood') { mesh.material = wood; mesh.castShadow = shadows; mesh.receiveShadow = true; }
@@ -89,15 +82,15 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromEquirectangular(hdr).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.38;
+    scene.environmentIntensity = 0.5;
     scene.background = hdr;
     scene.backgroundBlurriness = 0;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = 1.02;
     pmrem.dispose();
     root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
   } catch { /* keep the gradient sky */ }
   const fog = scene.fog as THREE.Fog | null;
-  if (fog) { fog.color.set(0xd7b08a); fog.near = 14; fog.far = 52; }
+  if (fog) { fog.color.set(0xe4c4a0); fog.near = 18; fog.far = 72; }
 }
 
 let armGeo: THREE.BufferGeometry | null = null;
@@ -106,48 +99,52 @@ export function forearmGeometry(): THREE.BufferGeometry | null { return armGeo; 
 const ARM = new Set(['Shoulder.R', 'UpperArm.R', 'LowerArm.R', 'Fist.R']);
 
 function sculptArm(root: THREE.Object3D): THREE.BufferGeometry | null {
-  let skin: THREE.SkinnedMesh | null = null;
-  root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skin = o as THREE.SkinnedMesh; });
-  if (!skin) return null;
-  const mesh: THREE.SkinnedMesh = skin;
-  root.getObjectByName('UpperArm.R')?.rotateX(-1.25);
-  root.getObjectByName('LowerArm.R')?.rotateX(-0.55);
+  const meshes: THREE.SkinnedMesh[] = [];
+  root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh); });
+  if (!meshes.length) return null;
+  root.getObjectByName('UpperArm.R')?.rotateX(-1.2);
+  root.getObjectByName('LowerArm.R')?.rotateX(-0.45);
   root.updateMatrixWorld(true);
-  mesh.skeleton.update();
-  const pos = mesh.geometry.attributes.position as THREE.BufferAttribute;
-  const src = mesh.geometry.index;
-  const skinI = mesh.geometry.attributes.skinIndex as THREE.BufferAttribute;
-  const skinW = mesh.geometry.attributes.skinWeight as THREE.BufferAttribute;
-  const bones = mesh.skeleton.bones;
-  const arm = new Uint8Array(pos.count);
-  const comp = (attr: THREE.BufferAttribute, i: number, k: number) => k === 0 ? attr.getX(i) : k === 1 ? attr.getY(i) : k === 2 ? attr.getZ(i) : attr.getW(i);
-  for (let i = 0; i < pos.count; i++) {
-    let best = 0, bw = -1;
-    for (let k = 0; k < 4; k++) {
-      const w = comp(skinW, i, k);
-      if (w > bw) { bw = w; best = comp(skinI, i, k); }
-    }
-    if (ARM.has(bones[best]?.name ?? '')) arm[i] = 1;
-  }
+  for (const mesh of meshes) mesh.skeleton.update();
   const fist = new THREE.Vector3();
   root.getObjectByName('Fist.R')?.getWorldPosition(fist);
-  const v = new THREE.Vector3();
-  const map = new Int32Array(pos.count).fill(-1);
   const arr: number[] = [];
   const indices: number[] = [];
-  const add = (i: number) => {
-    if (map[i]! >= 0) return map[i]!;
-    v.fromBufferAttribute(pos, i);
-    mesh.applyBoneTransform(i, v);
-    v.applyMatrix4(mesh.matrixWorld).sub(fist);
-    const id = arr.length / 3;
-    arr.push(v.x, v.y, v.z);
-    map[i] = id;
-    return id;
-  };
-  const tri = (a: number, b: number, c: number) => { if (arm[a] && arm[b] && arm[c]) indices.push(add(a), add(b), add(c)); };
-  if (src) for (let t = 0; t < src.count; t += 3) tri(src.getX(t), src.getX(t + 1), src.getX(t + 2));
-  else for (let t = 0; t < pos.count; t += 3) tri(t, t + 1, t + 2);
+  const v = new THREE.Vector3();
+  const comp = (attr: THREE.BufferAttribute, i: number, k: number) => k === 0 ? attr.getX(i) : k === 1 ? attr.getY(i) : k === 2 ? attr.getZ(i) : attr.getW(i);
+  for (const mesh of meshes) {
+    const pos = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined;
+    const skinI = mesh.geometry.attributes.skinIndex as THREE.BufferAttribute | undefined;
+    const skinW = mesh.geometry.attributes.skinWeight as THREE.BufferAttribute | undefined;
+    if (!pos || !skinI || !skinW) continue;
+    const bones = mesh.skeleton.bones;
+    const arm = new Uint8Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      let best = 0, bw = -1;
+      for (let k = 0; k < 4; k++) {
+        const w = comp(skinW, i, k);
+        if (w > bw) { bw = w; best = Math.round(comp(skinI, i, k)); }
+      }
+      if (ARM.has(bones[best]?.name ?? '')) arm[i] = 1;
+    }
+    const map = new Int32Array(pos.count).fill(-1);
+    const add = (i: number) => {
+      if (map[i]! >= 0) return map[i]!;
+      v.fromBufferAttribute(pos, i);
+      mesh.applyBoneTransform(i, v);
+      v.applyMatrix4(mesh.matrixWorld).sub(fist);
+      const id = arr.length / 3;
+      arr.push(v.x, v.y, v.z);
+      map[i] = id;
+      return id;
+    };
+    const src = mesh.geometry.index;
+    const tri = (a: number, b: number, c: number) => {
+      if ((arm[a]! + arm[b]! + arm[c]!) >= 2) indices.push(add(a), add(b), add(c));
+    };
+    if (src) for (let t = 0; t < src.count; t += 3) tri(src.getX(t), src.getX(t + 1), src.getX(t + 2));
+    else for (let t = 0; t < pos.count; t += 3) tri(t, t + 1, t + 2);
+  }
   if (indices.length < 12) return null;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr), 3));
@@ -164,14 +161,16 @@ export async function loadPuppets(parent: THREE.Object3D): Promise<Puppet[]> {
   loader.setMeshoptDecoder(MeshoptDecoder);
   const files = ['rosa.glb', 'luna.glb', 'kid.glb', 'npc.glb'];
   const gltfs = await Promise.all(files.map((f) => loader.loadAsync(`/chancla-duty/cc0/characters/${f}`)));
-  try { if (gltfs[0]) armGeo = sculptArm(clone(gltfs[0].scene) as Object3D); } catch { armGeo = null; }
+  try {
+    if (gltfs[0]) armGeo = sculptArm(clone(gltfs[0].scene) as Object3D);
+  } catch { armGeo = null; }
   const out: Puppet[] = [];
   for (const gltf of gltfs) {
     const root = clone(gltf.scene) as Object3D;
     fit(root);
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = true; }
+      if (mesh.isMesh) { mesh.castShadow = false; mesh.receiveShadow = true; mesh.frustumCulled = true; }
       if (o.name === 'Fist.R') {
         const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.16), new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.6 }));
         shoe.position.set(0, 0.04, 0.06);

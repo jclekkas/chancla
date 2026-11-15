@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { LINES } from '../src/audio/lines';
+import { DUTY_LINES } from '../chancla-duty/src/voice-lines';
 import { MAPS, makeEndlessWave, emptyRanks } from '../chancla-duty/src/content';
 import { I18N } from '../chancla-duty/src/i18n';
 import { circleMtv } from '../chancla-duty/src/phys';
@@ -33,6 +35,16 @@ describe('chancla duty rules', () => {
 
   it('keeps English and Spanish on the same keys', () => {
     expect(Object.keys(I18N.en).sort()).toEqual(Object.keys(I18N.es).sort());
+  });
+
+  it('writes a new voice line for every original dialogue beat', () => {
+    for (const line of LINES) {
+      const next = DUTY_LINES[line.id];
+      expect(next, line.id).toBeTruthy();
+      expect(next!.es.length).toBeGreaterThan(4);
+      expect(next!.en.length).toBeGreaterThan(4);
+      expect(next!.es).not.toBe(line.es);
+    }
   });
 });
 

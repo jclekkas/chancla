@@ -11,7 +11,7 @@ Doña Rosa versus Doña Rosa. A comedic first-person team shooter for the browse
 - **Story: Doña Rosa: Antes de que lleguen (Before the Guests Arrive):** a four-mission solo campaign. Rosa's missing ruleros, a kitchen under siege, a patio to rescue, and a piñata that fights back. It runs entirely in the browser. See [docs/CAMPAIGN.md](docs/CAMPAIGN.md).
 - **Languages:** English and Spanish throughout.
 - **Classic solo arcade:** the original wave-and-boss game is still at [`/classic.html`](docs/CLASSIC.md).
-- **Chancla Duty:** a remaster of Warfare, the classic arcade, and the story, in [`chancla-duty/`](chancla-duty/README.md), served at `/chancla-duty/` from the same build. The original game is unchanged.
+- **Chancla Duty:** a first-person remaster of Warfare in [`chancla-duty/`](chancla-duty/README.md), at `/chancla-duty/`. Same matches, story, and soundtrack, with new voices. The original game is unchanged.
 
 **Site:** https://chancla.vercel.app. The site deploys from `main`. Online play also needs the game server, which is not hosted anywhere yet; see [Deploying](#deploying). Until it is, the deployed site offers practice only and says so on the title screen.
 

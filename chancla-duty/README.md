@@ -61,11 +61,11 @@ The fast tier bakes shading into vertex colors (a cheap ambient-occlusion term f
 
 No hardware GPU is attached. `/dev/dri` is empty, and Chrome's unmasked renderer is `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))`. Forcing `--use-gl=angle --use-angle=gl` falls back to Mesa llvmpipe. There is no hardware frame time to report.
 
-Same camera, 1280×720, the showcase view of each map. Draw calls and triangles are `renderer.info` after the frame. Duty's CPU time is the JavaScript before `gl.draw*`, including the scene sync.
+1280×720. Plaza and Fiesta use the shared showcase camera. Patio is framed from inside the café, a step further back and a little wider, so the balcony, pots, and lanterns sit in the shot. Draw calls and triangles are `renderer.info` after the kit has attached. Duty's CPU time is the JavaScript before `gl.draw*`, including the scene sync.
 
 | Map | Original draw calls | Duty draws, high | Original triangles | Duty triangles, high | Duty triangles, medium | Duty CPU before draw |
 | --- | --- | --- | --- | --- | --- | --- |
-| Patio | 75 | 36 | 34,910 | 44,558 | 18,220 | 0.30 ms |
+| Patio | 75 | 36 | 34,910 | 44,582 | 18,220 | 0.30 ms |
 | Plaza | 71 | 39 | 27,094 | 46,004 | 16,728 | 0.30 ms |
 | Fiesta | 70 | 28 | 22,352 | 36,768 | 18,920 | 0.20 ms |
 

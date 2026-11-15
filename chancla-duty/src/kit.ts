@@ -295,22 +295,23 @@ function frameDress(boxes: readonly MapBox[]): void {
       const along = a0 + span * t;
       return { x: f.fx + f.ux * along + f.nx * out, z: f.fz + f.uz * along + f.nz * out };
     };
-    const win = place(0.62, -0.2);
-    shuttered(f, yaw, win.x, win.z, 1.42, 0.7, 1.12, 0x14b0a4, 0);
-    const by = 2.08;
-    const bal = place(0.62, -0.32);
-    marker(bal.x, by, bal.z, 0.36, 0.07, 1.45, yaw, 0xfff0d4);
-    marker(bal.x + f.nx * -0.14, by + 0.38, bal.z + f.nz * -0.14, 0.05, 0.05, 1.4, yaw, 0xfff6ea);
-    for (let i = -3; i <= 3; i++) {
-      marker(bal.x + f.ux * i * 0.18 + f.nx * -0.14, by + 0.07, bal.z + f.uz * i * 0.18 + f.nz * -0.14, 0.045, 0.34, 0.045, yaw, 0xfff6ea);
+    const win = place(0.58, -0.2);
+    shuttered(f, yaw, win.x, win.z, 1.15, 0.78, 1.05, 0x14b0a4, 0);
+    const by = 1.78;
+    const bal = place(0.58, -0.38);
+    marker(bal.x, by, bal.z, 0.42, 0.08, 1.7, yaw, 0xfff0d4);
+    marker(bal.x + f.nx * -0.16, by + 0.42, bal.z + f.nz * -0.16, 0.06, 0.06, 1.65, yaw, 0xfff6ea);
+    for (let i = -4; i <= 4; i++) {
+      marker(bal.x + f.ux * i * 0.18 + f.nx * -0.16, by + 0.08, bal.z + f.uz * i * 0.18 + f.nz * -0.16, 0.05, 0.4, 0.05, yaw, 0xfff6ea);
     }
-    potAt(f, yaw, bal.x + f.ux * -0.32 + f.nx * -0.06, by + 0.07, bal.z + f.uz * -0.32 + f.nz * -0.06, 0xf07898);
-    potAt(f, yaw, bal.x + f.ux * 0.3 + f.nx * -0.06, by + 0.07, bal.z + f.uz * 0.3 + f.nz * -0.06, 0xf0a030);
-    for (const t of [0.28, 0.9]) {
-      const lamp = place(t, -0.24);
-      marker(lamp.x, 1.7, lamp.z, 0.07, 0.55, 0.07, yaw, 0x3a2418);
-      marker(lamp.x + f.nx * -0.02, 2.18, lamp.z + f.nz * -0.02, 0.14, 0.24, 0.14, yaw, 0xffe08a);
-      blob(lamp.x + f.nx * -0.04, 2.28, lamp.z + f.nz * -0.04, 0.08, 0xfff6c8);
+    potAt(f, yaw, bal.x + f.ux * -0.42 + f.nx * -0.1, by + 0.08, bal.z + f.uz * -0.42 + f.nz * -0.1, 0xf07898);
+    potAt(f, yaw, bal.x + f.ux * 0.4 + f.nx * -0.1, by + 0.08, bal.z + f.uz * 0.4 + f.nz * -0.1, 0xf0a030);
+    for (const side of [-0.78, 0.78]) {
+      const x = bal.x + f.ux * side + f.nx * -0.18;
+      const z = bal.z + f.uz * side + f.nz * -0.18;
+      marker(x, by + 0.05, z, 0.08, 0.22, 0.08, yaw, 0x2a160f);
+      marker(x + f.nx * -0.02, by + 0.28, z + f.nz * -0.02, 0.18, 0.26, 0.18, yaw, 0xffe08a);
+      blob(x + f.nx * -0.04, by + 0.42, z + f.nz * -0.04, 0.11, 0xfff8d0);
     }
     const door = place(0.4, -0.2);
     marker(door.x, 0, door.z, 0.07, 2.05, 0.7, yaw, 0xfff0d4);

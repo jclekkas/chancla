@@ -29,6 +29,84 @@ export interface DutyStats {
   tier: 'fast' | 'medium' | 'high';
 }
 
+let tread: THREE.CanvasTexture | null = null;
+function treadMap(): THREE.CanvasTexture {
+  if (tread) return tread;
+  const cnv = document.createElement('canvas');
+  cnv.width = 128; cnv.height = 256;
+  const g = cnv.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 128, 256);
+  g.strokeStyle = '#1a120c';
+  g.lineWidth = 7;
+  for (let y = 14; y < 256; y += 18) {
+    g.beginPath();
+    g.moveTo(10, y);
+    for (let x = 10; x <= 118; x += 16) g.lineTo(x, y + (x % 32 ? 6 : -6));
+    g.stroke();
+  }
+  g.fillStyle = '#8a6244';
+  for (let y = 8; y < 256; y += 36) for (let x = 18; x < 118; x += 28) g.fillRect(x, y, 8, 4);
+  tread = new THREE.CanvasTexture(cnv);
+  tread.colorSpace = THREE.SRGBColorSpace;
+  tread.anisotropy = 8;
+  return tread;
+}
+
+/** A flip-flop whose sole faces the camera, with a Y-strap and a grooved tread. */
+function viewChancla(hex: number, heel: boolean): THREE.Group {
+  const g = new THREE.Group();
+  const soleMat = new THREE.MeshStandardMaterial({
+    color: hex, map: treadMap(), roughness: 0.42, metalness: 0.04,
+    emissive: hex, emissiveIntensity: 0.12,
+  });
+  const strapMat = new THREE.MeshStandardMaterial({
+    color: 0xfff6d8, roughness: 0.28, emissive: 0xffe29a, emissiveIntensity: 0.7,
+  });
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0xfff1c2, emissive: 0xfff1c2, emissiveIntensity: 0.85, roughness: 0.3,
+  });
+  const shape = new THREE.Shape();
+  shape.moveTo(0, -0.11);
+  shape.bezierCurveTo(0.09, -0.11, 0.11, 0.02, 0.05, 0.1);
+  shape.bezierCurveTo(0, 0.14, -0.05, 0.1, -0.11, 0.02);
+  shape.bezierCurveTo(-0.12, -0.04, -0.08, -0.11, 0, -0.11);
+  const sole = new THREE.ExtrudeGeometry(shape, { depth: heel ? 0.07 : 0.034, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 2 });
+  sole.rotateX(-Math.PI / 2);
+  const soleMesh = new THREE.Mesh(sole, soleMat);
+  const rim = sole.clone();
+  rim.scale(1.06, 0.35, 1.06);
+  const rimMesh = new THREE.Mesh(rim, rimMat);
+  rimMesh.position.y = -0.01;
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.08, 8), strapMat);
+  post.position.set(0, 0.04, 0.055);
+  const toe = new THREE.Vector3(0, 0.075, 0.05);
+  const strapBar = (end: THREE.Vector3) => {
+    const mid = toe.clone().add(end).multiplyScalar(0.5);
+    const dir = end.clone().sub(toe);
+    const len = dir.length();
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, len, 6), strapMat);
+    mesh.position.copy(mid);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    return mesh;
+  };
+  const groove = new THREE.MeshStandardMaterial({ color: 0x08332f, roughness: 0.72 });
+  for (let i = -3; i <= 3; i++) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.16 - Math.abs(i) * 0.012, 0.01, 0.012), groove);
+    rib.position.set(0, 0.042, i * 0.026);
+    rib.rotation.y = i % 2 ? 0.08 : -0.08;
+    g.add(rib);
+  }
+  g.add(rimMesh, soleMesh, post, strapBar(new THREE.Vector3(-0.085, 0.02, -0.03)), strapBar(new THREE.Vector3(0.085, 0.02, -0.03)));
+  if (heel) {
+    const block = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.048, 0.08, 8), soleMat);
+    block.position.set(0, 0.01, -0.06);
+    g.add(block);
+  }
+  g.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).frustumCulled = false; });
+  return g;
+}
+
 function chanclaGeometry(hex: number, heel: boolean): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(0, -0.07);
@@ -271,12 +349,14 @@ export class DutyScene {
         else { hand.scale.setScalar(1.25); hand.position.set(0.02, -0.02, 0); hand.rotation.set(0, 0.15, 0); }
       }
       for (const child of [...g.children]) if (child !== hand) g.remove(child);
-      const shoe = chanclaObject(hex, heel);
-      shoe.scale.setScalar(1.25);
-      shoe.position.set(0.02, 0.0, -0.07);
+      hand.position.set(0.1, -0.1, 0.06);
+      hand.scale.setScalar(baked ? hand.scale.x : 0.85);
+      const shoe = viewChancla(hex, heel);
+      // Sole faces the camera; the Y-strap stands up off the tread.
+      shoe.scale.setScalar(1.55);
+      shoe.position.set(0.02, -0.02, -0.18);
       shoe.rotation.order = 'YXZ';
-      shoe.rotation.set(1.05, 0.55, 0.35);
-      shoe.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).frustumCulled = false; });
+      shoe.rotation.set(0.95, 0.45, 0.1);
       g.add(shoe);
       if (twin) {
         const other = shoe.clone(true);
@@ -404,9 +484,13 @@ export class DutyScene {
       vm.visible = showHand && i === Math.min(4, weapon);
       if (!vm.visible) continue;
       const wind = cd > 280 ? Math.min(1, (cd - 280) / 500) : 0;
-      const bob = Math.sin(now * 0.004) * 0.004;
-      vm.position.set(0.16, 0.02 + bob, -0.45);
-      vm.rotation.set(0.02 - wind * 0.35, -0.05, 0.06);
+      const bar = document.getElementById('duty-charge');
+      const held = bar ? Number(/scaleX\(([\d.]+)\)/.exec(bar.style.transform)?.[1] ?? 0) : 0;
+      const cock = Math.max(held, wind * 0.7);
+      const bob = Math.sin(now * 0.0032) * 0.016;
+      const sway = Math.sin(now * 0.0021) * 0.05;
+      vm.position.set(0.22, -0.18 + bob + cock * 0.07, -0.34 + cock * 0.1);
+      vm.rotation.set(0.42 - cock * 0.95, -0.2 - sway, 0.18 + cock * 0.4);
     }
     this.stats.syncMs = performance.now() - t0;
   }

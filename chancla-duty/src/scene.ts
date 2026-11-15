@@ -662,7 +662,7 @@ export class DutyScene {
       gtao.output = GTAOPass.OUTPUT.Default;
       gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.12, 0.3, 0.94));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.04, 0.25, 0.96));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

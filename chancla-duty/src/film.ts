@@ -453,9 +453,9 @@ export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]
     proxy.position.y = 0.85;
     proxy.castShadow = true;
     // Soft fill from above the face, and a warm rim from behind. Local +Z is the face.
-    const faceFill = new THREE.PointLight(0xfff6ee, 0.55, 3.4, 2);
-    faceFill.position.set(0, 1.6, 1.25);
-    const rim = new THREE.PointLight(0xffc98a, 0.4, 2.8, 2);
+    const faceFill = new THREE.PointLight(0xfff6ee, 0.28, 3.2, 2);
+    faceFill.position.set(0, 1.55, 1.05);
+    const rim = new THREE.PointLight(0xffc98a, 0.16, 2.4, 2);
     rim.position.set(0, 1.75, -0.65);
     root.add(proxy, faceFill, rim);
     root.visible = false;
@@ -476,11 +476,25 @@ function prepCast(root: THREE.Object3D): void {
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
-    const mat = mesh.material as THREE.MeshStandardMaterial;
-    if (mat && mat.isMeshStandardMaterial) {
-      mat.metalness = 0;
-      mat.roughness = Math.max(0.35, mat.roughness);
-    }
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    if (!src || !src.isMaterial) return;
+    const painted = !!mesh.geometry.getAttribute('color');
+    const mat = new THREE.MeshStandardMaterial({
+      color: painted ? new THREE.Color(0xffffff) : (src.color ? src.color.clone() : new THREE.Color(0xffffff)),
+      map: src.map ?? null,
+      roughness: 0.72,
+      metalness: 0,
+      emissive: new THREE.Color(0x000000),
+      emissiveIntensity: 0,
+    });
+    mat.transparent = false;
+    mat.opacity = 1;
+    mat.depthWrite = true;
+    mat.depthTest = true;
+    mat.alphaTest = 0;
+    mat.side = THREE.FrontSide;
+    mat.vertexColors = painted;
+    mesh.material = mat;
   });
 }
 

@@ -241,18 +241,21 @@ function talavera(): THREE.CanvasTexture {
   c.width = 128;
   c.height = 128;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#f4efe4';
+  g.fillStyle = '#1c4e96';
   g.fillRect(0, 0, 128, 128);
-  g.strokeStyle = '#1f6f86';
-  g.lineWidth = 6;
-  g.strokeRect(8, 8, 112, 112);
+  g.fillStyle = '#f4efe4';
+  g.fillRect(14, 14, 100, 100);
+  g.fillStyle = '#1c4e96';
+  g.beginPath();
+  g.arc(64, 64, 26, 0, Math.PI * 2);
+  g.fill();
   g.fillStyle = '#f0a030';
   g.beginPath();
-  g.arc(64, 64, 28, 0, Math.PI * 2);
+  g.arc(64, 64, 10, 0, Math.PI * 2);
   g.fill();
-  g.strokeStyle = '#3d6fbf';
-  g.lineWidth = 4;
-  g.stroke();
+  g.strokeStyle = '#f4efe4';
+  g.lineWidth = 3;
+  g.strokeRect(8, 8, 112, 112);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -357,7 +360,9 @@ export interface FilmPuppet {
   root: THREE.Object3D;
   lods: THREE.Object3D[];
   mixer: THREE.AnimationMixer;
+  mixers: THREE.AnimationMixer[];
   actions: Map<string, THREE.AnimationAction>;
+  tracks: Map<string, THREE.AnimationAction>[];
   current: string;
 }
 
@@ -371,6 +376,7 @@ export interface HeroProps {
 }
 
 const HERO = '/chancla-duty/cc0/heroes';
+const CAST = '/chancla-duty/cc0/cast';
 
 function prepMesh(root: THREE.Object3D): void {
   root.traverse((o) => {
@@ -407,7 +413,7 @@ function fitHeight(root: THREE.Object3D, meters: number): number {
   return foot;
 }
 
-/** Textured TripoSR / Hunyuan meshes. LOD0 is the detailed mesh. */
+/** Rigged MPFB women. LOD0 is the skinned mesh; LOD1 and LOD2 are the same clip at lower cost. */
 export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]> {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
   const loader = new GLTFLoader();
@@ -415,40 +421,81 @@ export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]
   const heights: Record<string, number> = { rosa: 1.6, luna: 1.58, abuela: 1.5, 'abuela-patio': 1.48 };
   const out: FilmPuppet[] = [];
   for (const name of names) {
-    const gltfs = await Promise.all([0, 1, 2].map((i) => loader.loadAsync(`${HERO}/${name}-lod${i}.glb`)));
+    const gltfs = await Promise.all([0, 1, 2].map((i) => loader.loadAsync(`${CAST}/${name}-lod${i}.glb`)));
     const root = new THREE.Group();
     root.name = `hero-${name}`;
     const lods: THREE.Object3D[] = [];
+    const mixers: THREE.AnimationMixer[] = [];
+    const tracks: Map<string, THREE.AnimationAction>[] = [];
     gltfs.forEach((gltf, i) => {
       const lod = gltf.scene;
-      prepMesh(lod);
-      dropStackedTop(lod);
+      prepCast(lod);
       if (i === 0) fitHeight(lod, heights[name] ?? 1.58);
       else {
-        lod.scale.copy(gltfs[0].scene.scale);
-        lod.position.copy(gltfs[0].scene.position);
+        lod.scale.copy(gltfs[0]!.scene.scale);
+        lod.position.copy(gltfs[0]!.scene.position);
       }
-      sculptFriendlyHead(lod, name);
       lod.visible = i === 0;
       root.add(lod);
       lods.push(lod);
+      const mixer = new THREE.AnimationMixer(lod);
+      const actions = new Map<string, THREE.AnimationAction>();
+      for (const clip of gltf.animations) {
+        const key = clip.name.split('_')[0] ?? clip.name;
+        if (!['Idle', 'Walk', 'Run', 'SwordSlash', 'RecieveHit', 'Death'].includes(key)) continue;
+        if (!actions.has(key)) actions.set(key, mixer.clipAction(clip));
+      }
+      if (!actions.has('Idle') && actions.has('Walk')) actions.set('Idle', actions.get('Walk')!);
+      mixers.push(mixer);
+      tracks.push(actions);
     });
     const proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.7, 2, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
     proxy.position.y = 0.85;
     proxy.castShadow = true;
     // Soft fill from above the face, and a warm rim from behind. Local +Z is the face.
-  const faceFill = new THREE.PointLight(0xfff6ee, 2.4, 3.4, 2);
-  faceFill.position.set(0, 1.6, 1.25);
-  const rim = new THREE.PointLight(0xffc98a, 1.2, 2.8, 2);
-  rim.position.set(0, 1.75, -0.65);
+    const faceFill = new THREE.PointLight(0xfff6ee, 0.28, 3.2, 2);
+    faceFill.position.set(0, 1.55, 1.05);
+    const rim = new THREE.PointLight(0xffc98a, 0.16, 2.4, 2);
+    rim.position.set(0, 1.75, -0.65);
     root.add(proxy, faceFill, rim);
     root.visible = false;
     root.userData['keep'] = true;
     root.userData['foot'] = 0;
     parent.add(root);
-    out.push({ root, lods, mixer: new THREE.AnimationMixer(root), actions: new Map(), current: '' });
+    const actions = tracks[0] ?? new Map<string, THREE.AnimationAction>();
+    const mixer = mixers[0] ?? new THREE.AnimationMixer(root);
+    out.push({ root, lods, mixer, mixers, actions, tracks, current: '' });
   }
   return out;
+}
+
+function prepCast(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    if (!src || !src.isMaterial) return;
+    const painted = !!mesh.geometry.getAttribute('color');
+    const mat = new THREE.MeshStandardMaterial({
+      color: painted ? new THREE.Color(0xffffff) : (src.color ? src.color.clone() : new THREE.Color(0xffffff)),
+      map: src.map ?? null,
+      roughness: 0.72,
+      metalness: 0,
+      emissive: new THREE.Color(0x000000),
+      emissiveIntensity: 0,
+    });
+    mat.transparent = false;
+    mat.opacity = 1;
+    mat.depthWrite = true;
+    mat.depthTest = true;
+    mat.alphaTest = 0;
+    mat.side = THREE.FrontSide;
+    mat.vertexColors = painted;
+    mesh.material = mat;
+  });
 }
 
 export async function loadHeroProps(): Promise<HeroProps> {
@@ -484,243 +531,6 @@ export async function loadHeroProps(): Promise<HeroProps> {
   };
 }
 
-/** Legs grafted above a bust sit entirely in the top half. Drop them so the real head is the top. */
-function dropStackedTop(lod: THREE.Object3D): void {
-  const meshes: THREE.Mesh[] = [];
-  lod.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (mesh.isMesh && (mesh.geometry?.getAttribute('position')?.count ?? 0) > 200) meshes.push(mesh);
-  });
-  if (meshes.length < 2) return;
-  const boxes = meshes.map((mesh) => {
-    mesh.geometry.computeBoundingBox();
-    return mesh.geometry.boundingBox!;
-  });
-  const minY = Math.min(...boxes.map((b) => b.min.y));
-  const maxY = Math.max(...boxes.map((b) => b.max.y));
-  const mid = (minY + maxY) / 2;
-  meshes.forEach((mesh, i) => {
-    if (boxes[i]!.min.y > mid) mesh.parent?.remove(mesh);
-  });
-}
-
-/** Remove the generated head so only the body and clothing silhouette remain. */
-function dropOldHead(geo: THREE.BufferGeometry, cx: number, cy: number, cz: number, r: number): THREE.BufferGeometry {
-  const src = geo.index ? geo.toNonIndexed() : geo;
-  const pos = src.getAttribute('position') as THREE.BufferAttribute;
-  const uv = src.getAttribute('uv') as THREE.BufferAttribute | undefined;
-  const kept: number[] = [];
-  const sphere = r * 1.28;
-  const sphere2 = sphere * sphere;
-  const column = r * 1.55;
-  const column2 = column * column;
-  const yLo = cy - r * 0.5;
-  const yHi = cy + r * 1.35;
-  for (let i = 0; i < pos.count; i += 3) {
-    let x = 0; let y = 0; let z = 0;
-    for (let k = 0; k < 3; k++) { x += pos.getX(i + k); y += pos.getY(i + k); z += pos.getZ(i + k); }
-    x /= 3; y /= 3; z /= 3;
-    const dx = x - cx; const dy = y - cy; const dz = z - cz;
-    const inSkull = dx * dx + dy * dy + dz * dz < sphere2;
-    const inHair = y > yLo && y < yHi && dx * dx + dz * dz < column2;
-    const inFace = y > cy - r * 1.2 && y < cy + r && Math.abs(dx) < r * 1.05 && dz > -r * 0.35;
-    const inBrim = y > cy - r * 0.85 && y < cy + r * 0.55 && Math.abs(dx) < r * 2.4 && dz > -r * 0.05;
-    const inChin = y > cy - r * 1.65 && y < cy - r * 0.35 && dx * dx + dz * dz < (r * 1.35) * (r * 1.35);
-    if (inSkull || inHair || inFace || inBrim || inChin) continue;
-    kept.push(i, i + 1, i + 2);
-  }
-  if (kept.length < 90 || kept.length > pos.count * 0.98) return geo;
-  const n = kept.length;
-  const nextPos = new Float32Array(n * 3);
-  const nextUv = uv ? new Float32Array(n * 2) : null;
-  for (let i = 0; i < n; i++) {
-    const s = kept[i]!;
-    nextPos[i * 3] = pos.getX(s);
-    nextPos[i * 3 + 1] = pos.getY(s);
-    nextPos[i * 3 + 2] = pos.getZ(s);
-    if (uv && nextUv) { nextUv[i * 2] = uv.getX(s); nextUv[i * 2 + 1] = uv.getY(s); }
-  }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.BufferAttribute(nextPos, 3));
-  if (nextUv) out.setAttribute('uv', new THREE.BufferAttribute(nextUv, 2));
-  out.computeVertexNormals();
-  return out;
-}
-
-function percentile(values: number[], t: number): number {
-  if (!values.length) return 0;
-  const s = values.slice().sort((a, b) => a - b);
-  const i = Math.min(s.length - 1, Math.max(0, Math.floor(t * (s.length - 1))));
-  return s[i]!;
-}
-
-/**
- * Replace the generated face with a clean stylized one.
- * Large glossy eyes, a lid over the top of each iris, soft cheeks, and a smile whose corners turn up.
- * Local +Z is the face the gameplay camera looks at.
- */
-function sculptFriendlyHead(lod: THREE.Object3D, name: string): void {
-  const meshes: THREE.Mesh[] = [];
-  lod.updateMatrixWorld(true);
-  lod.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || mesh.userData['friendly']) return;
-    const count = mesh.geometry?.getAttribute('position')?.count ?? 0;
-    if (count > 80) meshes.push(mesh);
-  });
-  if (!meshes.length) return;
-  let minX = Infinity; let minY = Infinity; let minZ = Infinity;
-  let maxX = -Infinity; let maxY = -Infinity; let maxZ = -Infinity;
-  for (const mesh of meshes) {
-    mesh.geometry.computeBoundingBox();
-    const bb = mesh.geometry.boundingBox!;
-    minX = Math.min(minX, bb.min.x); maxX = Math.max(maxX, bb.max.x);
-    minY = Math.min(minY, bb.min.y); maxY = Math.max(maxY, bb.max.y);
-    minZ = Math.min(minZ, bb.min.z); maxZ = Math.max(maxZ, bb.max.z);
-  }
-  const height = Math.max(0.001, maxY - minY);
-  const width = Math.max(0.001, maxX - minX);
-  const torsoX: number[] = [];
-  const torsoZ: number[] = [];
-  const crown: Array<[number, number, number]> = [];
-  const yTorso0 = minY + height * 0.4;
-  const yTorso1 = minY + height * 0.68;
-  const yCrown0 = minY + height * 0.74;
-  const yCrown1 = minY + height * 0.94;
-  for (const mesh of meshes) {
-    const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i += 2) {
-      const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
-      if (y >= yTorso0 && y <= yTorso1) { torsoX.push(x); torsoZ.push(z); }
-      else if (y >= yCrown0 && y <= yCrown1) crown.push([x, y, z]);
-    }
-  }
-  const cx = percentile(torsoX, 0.5) || (minX + maxX) / 2;
-  const mid = crown.filter((p) => Math.abs(p[0] - cx) < width * 0.2);
-  const pool = mid.length > 30 ? mid : crown;
-  const faceZ = percentile(pool.map((p) => p[2]), 0.94);
-  const r = height * 0.118;
-  const hx = cx;
-  const hy = minY + height * 0.8;
-  const hz = (Number.isFinite(faceZ) ? faceZ : maxZ) - r * 0.42;
-  for (const mesh of meshes) mesh.geometry = dropOldHead(mesh.geometry, hx, hy, hz, r);
-
-  const grey = name.startsWith('abuela');
-  const skin = new THREE.MeshPhysicalMaterial({
-    color: grey ? 0xe7a484 : 0xf2b394,
-    roughness: 0.55,
-    metalness: 0,
-    sheen: 0.22,
-    sheenRoughness: 0.45,
-    sheenColor: new THREE.Color(0xffd0b4),
-    emissive: 0x7a4530,
-    emissiveIntensity: 0.04,
-  });
-  const cheekMat = new THREE.MeshPhysicalMaterial({
-    color: 0xf09a86, roughness: 0.58, metalness: 0, emissive: 0x9a4038, emissiveIntensity: 0.05,
-  });
-  const hair = new THREE.MeshPhysicalMaterial({ color: grey ? 0xc8c4be : 0x3a2418, roughness: 0.72, metalness: 0 });
-  const whiteMat = new THREE.MeshPhysicalMaterial({ color: 0xfffbf8, roughness: 0.22, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.08 });
-  const irisMat = new THREE.MeshPhysicalMaterial({ color: 0x4a2810, roughness: 0.22, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06 });
-  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x120a06 });
-  const catchMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const browMat = new THREE.MeshPhysicalMaterial({ color: grey ? 0x7a7364 : 0x4a3020, roughness: 0.62, metalness: 0 });
-  const smileMat = new THREE.MeshPhysicalMaterial({ color: 0xc45c66, roughness: 0.42, metalness: 0, emissive: 0x6a2430, emissiveIntensity: 0.06 });
-  const group = new THREE.Group();
-  group.name = 'friendly-head';
-  group.position.set(hx, hy, hz);
-  group.userData['friendly'] = true;
-
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 20), skin);
-  skull.scale.set(1.06, 1.12, 0.96);
-  skull.userData['friendly'] = true;
-  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.36, r * 0.28, 3, 10), skin);
-  neck.position.y = -r * 0.92;
-  neck.userData['friendly'] = true;
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(r * 0.96, 22, 16), hair);
-  cap.position.set(0, r * 0.26, -r * 0.04);
-  cap.scale.set(1.04, 0.58, 0.92);
-  cap.userData['friendly'] = true;
-  group.add(skull, neck, cap);
-
-  const eyeR = r * 0.22;
-  const ex = r * 0.32;
-  const ey = r * 0.06;
-  const ez = r * 0.8;
-  for (const side of [-1, 1] as const) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(eyeR, 16, 12), whiteMat);
-    white.scale.set(1.02, 1.05, 0.7);
-    white.position.set(side * ex, ey, ez);
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.5, 14, 10), irisMat);
-    iris.position.set(side * ex, ey - eyeR * 0.02, ez + eyeR * 0.38);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.28, 10, 8), pupilMat);
-    pupil.position.set(side * ex, ey - eyeR * 0.02, ez + eyeR * 0.62);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.09, 8, 6), catchMat);
-    glint.position.set(side * ex + side * eyeR * 0.1, ey + eyeR * 0.08, ez + eyeR * 0.78);
-    const lid = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.88, 12, 8), skin);
-    lid.scale.set(1.12, 0.26, 0.42);
-    lid.position.set(side * ex, ey + eyeR * 0.58, ez + eyeR * 0.46);
-    const brow = new THREE.Mesh(new THREE.TorusGeometry(r * 0.13, r * 0.016, 6, 12, Math.PI * 0.7), browMat);
-    brow.rotation.z = Math.PI * 0.15 + side * -0.1;
-    brow.position.set(side * ex, ey + eyeR * 1.42, ez + eyeR * 0.22);
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(r * 0.15, 12, 8), cheekMat);
-    cheek.scale.set(1.15, 0.7, 0.5);
-    cheek.position.set(side * r * 0.42, -r * 0.1, r * 0.5);
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(r * 0.14, 10, 8), skin);
-    ear.scale.set(0.38, 0.72, 0.42);
-    ear.position.set(side * r * 1.02, 0, -r * 0.05);
-    for (const part of [white, iris, pupil, glint, lid, brow, cheek, ear]) part.userData['friendly'] = true;
-    group.add(white, iris, pupil, glint, lid, brow, cheek, ear);
-  }
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(r * 0.075, 10, 8), skin);
-  nose.scale.set(1, 0.8, 0.85);
-  nose.position.set(0, -r * 0.05, r * 0.94);
-  const smile = new THREE.Mesh(new THREE.TorusGeometry(r * 0.2, r * 0.034, 8, 18, Math.PI), smileMat);
-  smile.rotation.z = Math.PI;
-  smile.position.set(0, -r * 0.3, r * 0.9);
-  nose.userData['friendly'] = true;
-  smile.userData['friendly'] = true;
-  group.add(nose, smile);
-  if (name === 'rosa') {
-    const straw = new THREE.MeshPhysicalMaterial({ color: 0xe6c56a, roughness: 0.62, metalness: 0 });
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.45, r * 1.55, r * 0.07, 22), straw);
-    brim.position.set(0, r * 0.7, -r * 0.02);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.62, r * 0.7, r * 0.42, 16), straw);
-    crown.position.set(0, r * 0.94, -r * 0.02);
-    brim.userData['friendly'] = true;
-    crown.userData['friendly'] = true;
-    group.add(brim, crown);
-  }
-  if (grey) {
-    const frameMat = new THREE.MeshPhysicalMaterial({ color: 0x6a3e2c, roughness: 0.35, metalness: 0.35 });
-    for (const side of [-1, 1] as const) {
-      const glass = new THREE.Mesh(new THREE.TorusGeometry(eyeR * 1.38, r * 0.011, 6, 18), frameMat);
-      glass.position.set(side * ex, ey, ez + eyeR * 0.72);
-      glass.userData['friendly'] = true;
-      group.add(glass);
-    }
-    const bridge = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.012, ex * 0.55, 2, 5), frameMat);
-    bridge.rotation.z = Math.PI / 2;
-    bridge.position.set(0, ey + eyeR * 0.15, ez + eyeR * 0.15);
-    bridge.userData['friendly'] = true;
-    group.add(bridge);
-    const bun = new THREE.Mesh(new THREE.SphereGeometry(r * 0.42, 14, 10), hair);
-    bun.position.set(0, r * 0.78, -r * 0.18);
-    bun.userData['friendly'] = true;
-    group.add(bun);
-    [0xf07898, 0x3ec4b8, 0xf0a030, 0x8d6ad4].forEach((hex, i) => {
-      const roller = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, r * 0.22, 8), new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.45, metalness: 0 }));
-      roller.rotation.z = Math.PI / 2;
-      roller.rotation.y = (i - 1.5) * 0.35;
-      roller.position.set((i - 1.5) * r * 0.22, r * 0.95, -r * 0.05 + (i % 2 ? r * 0.06 : 0));
-      roller.userData['friendly'] = true;
-      group.add(roller);
-    });
-  }
-  const anchor = meshes[0]!;
-  group.position.applyMatrix4(anchor.matrix);
-  anchor.parent?.add(group);
-}
 
 function firstMesh(root: THREE.Object3D): THREE.Mesh | null {
   let found: THREE.Mesh | null = null;
@@ -753,11 +563,16 @@ function scaleLongest(mesh: THREE.Mesh | null, meters: number): void {
 
 export function playFilm(p: FilmPuppet, name: string): void {
   if (p.current === name) return;
-  const next = p.actions.get(name) ?? p.actions.get('Idle');
-  if (!next) return;
-  p.actions.get(p.current)?.fadeOut(0.15);
-  next.reset().fadeIn(0.15).play();
-  p.current = name;
+  const layers = p.tracks?.length ? p.tracks : [p.actions];
+  let played = false;
+  for (const actions of layers) {
+    const next = actions.get(name) ?? actions.get('Idle');
+    if (!next) continue;
+    actions.get(p.current)?.fadeOut(0.15);
+    next.reset().fadeIn(0.15).play();
+    played = true;
+  }
+  if (played) p.current = name;
 }
 
 const floralMat = cloth(0xf29a2e);

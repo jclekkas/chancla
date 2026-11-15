@@ -512,7 +512,7 @@ export class DutyScene {
         p.lods.forEach((mesh, k) => { mesh.visible = k === lod; });
         const clip = !alive ? 'Death' : throwAge < 0.45 ? 'SwordSlash' : hitAge < 0.35 ? 'RecieveHit' : speed > 6 ? 'Run' : speed > 0.4 ? 'Walk' : 'Idle';
         playFilm(p, clip);
-        p.mixer.update(dt);
+        for (const mixer of p.mixers) mixer.update(dt);
       }
       used = this.actors.length;
     } else if (this.women.length) {
@@ -662,7 +662,7 @@ export class DutyScene {
       gtao.output = GTAOPass.OUTPUT.Default;
       gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.12, 0.3, 0.94));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.04, 0.25, 0.96));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

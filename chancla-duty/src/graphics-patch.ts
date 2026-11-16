@@ -73,6 +73,25 @@ Engine.prototype.start = function () {
   } else {
     (window as unknown as { __duty?: { ready?: boolean } }).__duty!.ready = true;
   }
+  const shot = new URLSearchParams(location.search).get('shot');
+  if (shot && duty) {
+    const views: Record<string, { map: string; pos: [number, number, number]; look: [number, number, number]; hand: boolean }> = {
+      plaza: { map: 'plaza', pos: [0.2, 2.05, 8.4], look: [0, 1.6, -6], hand: false },
+      street: { map: 'plaza', pos: [1.2, 1.65, 9.2], look: [-2, 1.7, -8], hand: false },
+      patio: { map: 'patio', pos: [1.5, 1.65, 7.2], look: [-2, 1.5, -6], hand: true },
+    };
+    const view = views[shot] ?? views.plaza!;
+    const engine = this;
+    const frameShot = () => {
+      const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
+      if (!box?.assets) { window.setTimeout(frameShot, 300); return; }
+      document.querySelectorAll<HTMLElement>('.screen, #click-to-play, button, .panel').forEach((el) => { el.style.visibility = 'hidden'; });
+      duty!.handForShot = view.hand;
+      engine.setShowcase(view.map, view.pos, view.look);
+      document.body.dataset['shot'] = 'ready';
+    };
+    window.setTimeout(frameShot, 400);
+  }
 };
 
 const origResize = Engine.prototype.resize;
@@ -114,6 +133,10 @@ function installRender(engine: Engine): void {
       rendering = true;
       highRender(scene, camera);
       rendering = false;
+      if (duty?.handForShot) {
+        engine.renderer.clearDepth();
+        orig(engine.vmScene, engine.vmCamera);
+      }
     } else orig(scene, camera);
     if (duty && scene === engine.scene && engine.renderer.info.render.calls > 4) {
       duty.stats.calls = engine.renderer.info.render.calls;

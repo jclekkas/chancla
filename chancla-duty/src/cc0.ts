@@ -43,7 +43,7 @@ function standard(diff: THREE.Texture, nor: THREE.Texture, rough: THREE.Texture,
   });
 }
 
-export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.Scene, root: THREE.Object3D, shadows: boolean): Promise<void> {
+export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.Scene, root: THREE.Object3D, shadows: boolean, golden = false): Promise<void> {
   const base = '/chancla-duty/cc0';
   const [plasterD, plasterN, plasterR, tileD, tileN, tileR, woodD, woodN, woodR] = await Promise.all([
     map(`${base}/tex/plaster/diff.ktx2`, true, renderer),
@@ -88,7 +88,8 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
       mesh.castShadow = false;
       mesh.receiveShadow = false;
     }
-    if (mesh.name === 'duty-floor') { mesh.material = tiles; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-floor' && !golden) { mesh.material = tiles; mesh.receiveShadow = true; }
+    if (mesh.name === 'duty-floor' && golden) mesh.receiveShadow = true;
     if (mesh.name === 'duty-wood') { mesh.material = wood; mesh.castShadow = shadows; mesh.receiveShadow = true; }
   });
   try {
@@ -98,15 +99,21 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromEquirectangular(hdr).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.85;
-    scene.background = hdr;
-    scene.backgroundBlurriness = 0.04;
-    renderer.toneMappingExposure = 1.05;
+    scene.environmentIntensity = golden ? 0.32 : 0.85;
+    if (!golden) {
+      scene.background = hdr;
+      scene.backgroundBlurriness = 0.04;
+      root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
+    }
+    renderer.toneMappingExposure = golden ? 1.14 : 1.05;
     pmrem.dispose();
-    root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
   } catch { /* keep the gradient sky */ }
   const fog = scene.fog as THREE.Fog | null;
-  if (fog) { fog.color.set(0xf3ddc4); fog.near = 36; fog.far = 140; }
+  if (fog) {
+    fog.color.set(golden ? 0xf3b07a : 0xf3ddc4);
+    fog.near = golden ? 22 : 36;
+    fog.far = golden ? 95 : 140;
+  }
 }
 
 let armGeo: THREE.BufferGeometry | null = null;

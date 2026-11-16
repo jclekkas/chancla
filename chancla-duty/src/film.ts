@@ -231,10 +231,34 @@ export function poseFilm(w: FilmWoman, speed: number, throwAge: number, hitAge: 
   }
 }
 
-const roofMat = new THREE.MeshStandardMaterial({ color: 0xc45a32, roughness: 0.82, metalness: 0 });
+const roofMat = new THREE.MeshStandardMaterial({ color: 0xc45a32, roughness: 0.78, metalness: 0, map: barrelTiles() });
 const stoneTrim = new THREE.MeshStandardMaterial({ color: 0xe7d7c4, roughness: 0.9, metalness: 0 });
 const mountainMat = new THREE.MeshStandardMaterial({ color: 0x8d6a78, roughness: 1, metalness: 0 });
 const vineMat = new THREE.MeshStandardMaterial({ color: 0xc43b78, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
+
+function barrelTiles(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#a84828';
+  g.fillRect(0, 0, 128, 64);
+  for (let x = 0; x < 128; x += 16) {
+    const grd = g.createLinearGradient(x, 0, x + 16, 0);
+    grd.addColorStop(0, '#7a3018');
+    grd.addColorStop(0.5, '#e07a48');
+    grd.addColorStop(1, '#7a3018');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.ellipse(x + 8, 32, 7, 28, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(6, 2);
+  return t;
+}
 
 function talavera(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -337,10 +361,28 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   mountains.receiveShadow = false;
   parent.add(mountains);
 
-  const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.45, 0.5, 18), new THREE.MeshStandardMaterial({ map: talavera(), roughness: 0.45, metalness: 0.05 }));
-  basin.name = 'duty-basin';
-  basin.position.set(0, 0.28, 0);
-  parent.add(basin);
+  const fountainBox = boxes.find((b) => b.mat === 'fountain' && b.minY < 0.2);
+  const fx = fountainBox ? (fountainBox.minX + fountainBox.maxX) / 2 : 0;
+  const fz = fountainBox ? (fountainBox.minZ + fountainBox.maxZ) / 2 : 0;
+  const glaze = talavera();
+  glaze.repeat.set(3, 2);
+  const tileMat = new THREE.MeshStandardMaterial({ map: glaze, roughness: 0.42, metalness: 0.04, color: 0xffffff });
+  const base = new THREE.CylinderGeometry(2.2, 2.45, 0.58, 24);
+  const lip = new THREE.TorusGeometry(2.1, 0.1, 6, 24);
+  lip.rotateX(Math.PI / 2);
+  lip.translate(0, 0.28, 0);
+  const stem = new THREE.CylinderGeometry(0.32, 0.42, 1.15, 12);
+  stem.translate(0, 1.05, 0);
+  const bowl = new THREE.CylinderGeometry(1.15, 0.82, 0.42, 18);
+  bowl.translate(0, 1.55, 0);
+  const finial = new THREE.ConeGeometry(0.22, 0.4, 8);
+  finial.translate(0, 1.95, 0);
+  const fountain = new THREE.Mesh(merge([base, lip, stem, bowl, finial]), tileMat);
+  fountain.name = 'duty-basin';
+  fountain.position.set(fx, 0.24, fz);
+  fountain.castShadow = false;
+  fountain.receiveShadow = true;
+  parent.add(fountain);
 
   const niche = new THREE.Group();
   niche.position.set(7.2, 0, -4.6);

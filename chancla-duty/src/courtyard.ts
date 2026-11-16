@@ -208,6 +208,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const root = new THREE.Group();
   root.name = 'duty-courtyard';
   const parts: THREE.BufferGeometry[] = [];
+  const trim: THREE.BufferGeometry[] = [];
   const wall = new THREE.MeshLambertMaterial({ map: plasterTex(), vertexColors: true });
   liveWater.length = 0;
   const a = new THREE.PlaneGeometry(1, 1).toNonIndexed();
@@ -227,28 +228,43 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     color: 0xfff0c0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false,
   }), 140);
 
-  const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
+  const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => {
+    const vol = Math.abs((x1 - x0) * (y1 - y0) * (z1 - z0));
+    box(detailed && vol < 0.45 ? trim : parts, x0, y0, z0, x1, y1, z1, hex);
+  };
 
   for (const b of boxes) placeBox(leaves, blooms, b, add, detailed);
   dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor, detailed);
 
+  const wallMesh = (geos: THREE.BufferGeometry[]) => {
+    const merged = mergeGeometries(geos, false);
+    if (!merged) return null;
+    const mesh = new THREE.Mesh(merged, wall);
+    mesh.name = 'duty-walls';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
   if (parts.length) {
-    const merged = mergeGeometries(parts, false);
-    if (merged) {
-      const mesh = new THREE.Mesh(merged, wall);
-      mesh.name = 'duty-walls';
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      root.add(mesh);
+    if (detailed && trim.length) {
+      const lod = new THREE.LOD();
+      const near = wallMesh([...parts, ...trim]);
+      const far = wallMesh(parts);
+      if (near) lod.addLevel(near, 0);
+      if (far) lod.addLevel(far, 24);
+      root.add(lod);
+    } else {
+      const mesh = wallMesh(parts);
+      if (mesh) root.add(mesh);
     }
-    for (const p of parts) p.dispose();
+    for (const p of [...parts, ...trim]) p.dispose();
   }
   for (const batch of [leaves, blooms, cloth, bulbs, glow, shade]) {
     const mesh = batch.finish();
     if (mesh) root.add(mesh);
   }
 
-  const floor = paintedFloor(decor);
+  const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
   for (const b of boxes) {
     if (b.mat === 'fountain' || b.mat === 'stall') {
@@ -257,12 +273,13 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     if (b.mat === 'fountain') {
       const ripples = waterTex();
       liveWater.push(ripples);
+      const inset = detailed ? 2.4 : 0.7;
       const water = new THREE.Mesh(
-        new THREE.PlaneGeometry((b.maxX - b.minX) - 0.7, (b.maxZ - b.minZ) - 0.7),
-        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: 0.92, color: 0xd8ffff }),
+        new THREE.PlaneGeometry(Math.max(0.8, (b.maxX - b.minX) - inset), Math.max(0.8, (b.maxZ - b.minZ) - inset)),
+        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: detailed ? 0.45 : 0.92, color: detailed ? 0x8fd4ea : 0xd8ffff }),
       );
       water.rotation.x = -Math.PI / 2;
-      water.position.set((b.minX + b.maxX) / 2, b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
+      water.position.set((b.minX + b.maxX) / 2, detailed ? 0.5 : b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
       root.add(water);
     }
     if (b.sign && b.facade) {
@@ -286,7 +303,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
       if (bit) root.add(new THREE.Mesh(bit, wall));
     }
   }
-  root.add(skyDome(theme.sky));
+  root.add(skyDome(detailed ? [0x5c3d78, 0xf08a48, 0xffc56a] : theme.sky));
   if (detailed) {
     const skin = frameWall(boxes);
     if (skin) root.add(skin);
@@ -318,7 +335,10 @@ function placeBox(
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
     }
-    if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
+    if (b.facade && h >= 3) {
+      if (detailed) colonial(add, blooms, b);
+      else facade(add, blooms, b, hue);
+    }
     return;
   }
   switch (b.mat) {
@@ -400,6 +420,59 @@ function placeBox(
       return;
     default:
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
+  }
+}
+
+/** Doors, arches, windows, quoins and a balcony, all in the wall mesh. */
+function colonial(add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void, blooms: Batch, b: MapBox): void {
+  const f = faceOf(b);
+  if (f.len < 2.4) return;
+  const h = b.maxY;
+  const cols = Math.max(1, Math.min(4, Math.floor(f.len / 3.1)));
+  const spacing = f.len / cols;
+  const ax = Math.abs(f.ux);
+  const az = Math.abs(f.uz);
+  const put = (along: number, y0: number, y1: number, half: number, depth: number, hex: number) => {
+    const px = f.fx + f.ux * along;
+    const pz = f.fz + f.uz * along;
+    const n0 = 0.02;
+    add(
+      px - ax * half + f.nx * n0, y0, pz - az * half + f.nz * n0,
+      px + ax * half + f.nx * (n0 + depth), y1, pz + az * half + f.nz * (n0 + depth),
+      hex,
+    );
+  };
+  // Worn brick at the two front corners.
+  put(0.22, 0, h * 0.96, 0.16, 0.08, 0x8a4e38);
+  put(f.len - 0.22, 0, h * 0.96, 0.16, 0.08, 0x8a4e38);
+  for (let k = 0; k < cols; k++) {
+    const along = spacing * (k + 0.5);
+    if (k === 0) {
+      put(along, 0.08, 2.05, 0.42, 0.06, 0x4a2814);
+      put(along, 2.05, 2.18, 0.5, 0.08, 0xf3e2c4);
+      put(along, 2.18, 2.42, 0.28, 0.07, 0xf3e2c4);
+      put(along, 2.42, 2.58, 0.12, 0.06, 0xf3e2c4);
+      put(along + 0.62, 1.7, 2.15, 0.08, 0.1, 0x6a3a22);
+    }
+    const winY = h > 5.2 ? [3.35, 5.05] : [3.15];
+    for (const y of winY) {
+      if (y + 0.7 > h) continue;
+      put(along, y - 0.55, y + 0.55, 0.38, 0.05, 0x1c3348);
+      put(along, y - 0.62, y - 0.5, 0.48, 0.09, 0xf4ead8);
+      put(along, y + 0.55, y + 0.68, 0.48, 0.08, 0xf4ead8);
+      // A shallow grille: three dark bars.
+      put(along - 0.16, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
+      put(along, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
+      put(along + 0.16, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
+    }
+    if (h > 4.8 && k === cols - 1) {
+      put(along, 2.55, 2.64, 0.7, 0.42, 0x5c3a28);
+      put(along, 2.95, 3.02, 0.68, 0.38, 0x2a2624);
+      put(along - 0.55, 2.6, 3.02, 0.03, 0.36, 0x2a2624);
+      put(along + 0.55, 2.6, 3.02, 0.03, 0.36, 0x2a2624);
+    }
+    blooms.add(f.fx + f.ux * along + f.nx * 0.85, h - 0.05, f.fz + f.uz * along + f.nz * 0.85, 1.8, 2.4, 1.3, f.ry, 0xd4126a);
+    if (k % 2 === 0) blooms.add(f.fx + f.ux * along + f.nx * 0.7, h - 1.4, f.fz + f.uz * along + f.nz * 0.7, 1.4, 2.1, 1.1, f.ry, 0xf25aa8);
   }
 }
 
@@ -514,9 +587,15 @@ function dressMap(
   shade.add(-2.6, 0.03, 2.2, 0.5, 0.35, 1, 0.4, 0x000000);
   shade.add(0.3, 0.03, 1.5, 0.5, 0.35, 1, -0.3, 0x000000);
   shade.add(2.1, 0.03, 3.3, 0.42, 0.3, 1, 0.2, 0x000000);
+  if (detailed && map.id === 'plaza') {
+    add(-24, 0, -10.2, 24, 0.14, -9.92, 0xe8d7bc);
+    add(-24, 0, 9.92, 24, 0.14, 10.2, 0xe8d7bc);
+    add(-10.2, 0, -9.9, -9.92, 0.14, 9.9, 0xe8d7bc);
+    add(9.92, 0, -9.9, 10.2, 0.14, 9.9, 0xe8d7bc);
+  }
   lineProps(cloth, decor.laundry ?? [], true);
   lineProps(cloth, decor.papel ?? [], false);
-  stringLights(bulbs, glow, decor.lights ?? []);
+  stringLights(bulbs, glow, decor.lights ?? [], detailed);
   if (teamDecor) {
     for (const bn of decor.banners ?? []) {
       const c = bn.team === 0 ? 0xf0a030 : 0x3ec4b8;
@@ -542,27 +621,95 @@ function lineProps(cloth: Batch, lines: Array<[number, number, number, number, n
   }
 }
 
-function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, number, number, number]>): void {
-  const colors = [0xf07898, 0xfff0b0, 0x9ee8e4];
+function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, number, number, number]>, lanterns = false): void {
+  const colors = [0xffd27a, 0xfff0b0, 0xf0a030];
   for (const [ax, az, bx, bz, y] of lines) {
-    const n = 16;
+    const n = lanterns ? 10 : 16;
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const sag = Math.sin(t * Math.PI) * 1.05;
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       const col = colors[i % 3]!;
-      bulbs.add(x, y - sag - 0.08, z, 0.1, 0.12, 0.1, 0, col);
-      glow.add(x, y - sag - 0.08, z, 0.28, 0.28, 0.28, 0, col);
+      const s = lanterns ? 0.16 : 0.1;
+      bulbs.add(x, y - sag - 0.12, z, s, s * 1.35, s, 0, col);
+      glow.add(x, y - sag - 0.12, z, lanterns ? 0.42 : 0.28, lanterns ? 0.42 : 0.28, lanterns ? 0.42 : 0.28, 0, col);
     }
   }
 }
 
-function paintedFloor(decor: MapDecor | undefined): THREE.Mesh | null {
-  const tex = groundTexture(26);
+function cobbleNormal(): THREE.CanvasTexture {
+  const tex = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#8080ff';
+    g.fillRect(0, 0, 128, 128);
+    for (let y = 8; y < 128; y += 22) {
+      for (let x = ((y / 22) % 2) * 11; x < 128; x += 22) {
+        const grd = g.createRadialGradient(x, y, 2, x, y, 9);
+        grd.addColorStop(0, '#c0c0ff');
+        grd.addColorStop(1, '#6060d0');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.ellipse(x, y, 9, 7, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  });
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+function cobbleRough(): THREE.CanvasTexture {
+  const tex = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#d8d8d8';
+    g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#8a8a8a';
+    for (let y = 8; y < 128; y += 22) {
+      for (let x = ((y / 22) % 2) * 11; x < 128; x += 22) {
+        g.beginPath();
+        g.ellipse(x, y, 8, 6, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }, true);
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+function dutyGround(): THREE.CanvasTexture {
+  return canvasTex(512, 512, (g) => {
+    g.fillStyle = '#c4b49a';
+    g.fillRect(0, 0, 512, 512);
+    for (let y = 6; y < 512; y += 18) {
+      const shift = (Math.floor(y / 18) % 2) * 9;
+      for (let x = shift; x < 512; x += 18) {
+        const n = (x * 13 + y * 7) % 40;
+        g.fillStyle = `rgb(${168 + n},${132 + (n % 18)},${96 + (n % 12)})`;
+        g.beginPath();
+        g.ellipse(x + 8, y + 8, 7, 5.5, ((x + y) % 5) * 0.2, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = 'rgba(90,60,40,0.35)';
+        g.stroke();
+      }
+    }
+  });
+}
+
+function paintedFloor(decor: MapDecor | undefined, detailed = false): THREE.Mesh | null {
+  const tex = detailed ? dutyGround() : groundTexture(26);
   if (!tex) return null;
+  const mat = detailed
+    ? new THREE.MeshStandardMaterial({
+      map: tex, color: 0xfff3e4, roughness: 0.92, metalness: 0,
+      normalMap: cobbleNormal(), roughnessMap: cobbleRough(),
+    })
+    : new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 });
+  if (detailed && mat instanceof THREE.MeshStandardMaterial && mat.normalMap && mat.roughnessMap) {
+    mat.normalMap.repeat.set(18, 12);
+    mat.roughnessMap.repeat.set(18, 12);
+    mat.normalScale = new THREE.Vector2(0.65, 0.65);
+  }
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(decor?.ground.w ?? 54, decor?.ground.d ?? 38),
-    new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 }),
+    mat,
   );
   mesh.name = 'duty-floor';
   mesh.receiveShadow = true;

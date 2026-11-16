@@ -156,6 +156,8 @@ const burstL = new Float32Array(BURST);
 export class DutyScene {
   readonly root = new THREE.Group();
   readonly stats: DutyStats = { cpuMs: 0, syncMs: 0, frames: 0, calls: 0, triangles: 0, gpu: '', tier: 'fast' };
+  /** Review shots keep the chancla in frame while the camera is on the menu. */
+  handForShot = false;
   readonly viewmodels: THREE.Object3D[] = [];
   private readonly skin: THREE.Material;
   private readonly actors: Actor[] = [];
@@ -272,7 +274,8 @@ export class DutyScene {
     this.worldOpts = opts;
     const map: MapData = opts.map ?? EL_PATIO;
     const boxes = opts.boxes ?? map.boxes;
-    const theme = THEMES[opts.theme ?? 'afternoon'];
+    const asked = opts.theme ?? 'afternoon';
+    const theme = THEMES[this.tier === 'high' && asked === 'noon' ? 'afternoon' : asked];
     const detailed = this.tier === 'high' && kitReady();
     for (const child of [...this.root.children]) {
       if (child.userData['keep']) continue;
@@ -284,35 +287,36 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xffe0b0, 0xc47a48, this.tier === 'high' ? 0.72 : 0.8);
-    this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.38 : 0.28));
-    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc27a : 0xfff3d8, this.tier === 'high' ? 2.25 : 2.0);
+    this.hemi = new THREE.HemisphereLight(0xffd2a4, 0x8a4030, this.tier === 'high' ? 0.48 : 0.8);
+    this.root.add(new THREE.AmbientLight(0xfff1dc, this.tier === 'high' ? 0.22 : 0.28));
+    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffb15a : 0xfff3d8, this.tier === 'high' ? 2.6 : 2.0);
     sun.position.set(...theme.sunPos);
-    if (this.tier === 'high') sun.position.y *= 0.62;
+    if (this.tier === 'high') sun.position.y *= 0.42;
     if (this.gpuTier) {
       sun.castShadow = true;
       sun.shadow.mapSize.set(this.tier === 'high' ? 2048 : 1024, this.tier === 'high' ? 2048 : 1024);
-      sun.shadow.radius = 1;
+      sun.shadow.radius = this.tier === 'high' ? 2.5 : 1;
       sun.shadow.bias = -0.00025;
       sun.shadow.normalBias = 0.02;
       const sc = sun.shadow.camera;
       // A tight shadow box keeps the map's far corners out of the shadow pass.
       sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
     }
-    const fill = new THREE.DirectionalLight(0xfff3e2, this.tier === 'high' ? 1.15 : 0.35);
+    const fill = new THREE.DirectionalLight(0xffe0b8, this.tier === 'high' ? 0.38 : 0.35);
     fill.position.set(0, 6, 10);
     this.root.add(this.hemi, sun, fill);
     const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
     if (detailed) {
       dressKit(yard.root, boxes, map);
-      addFilmTown(yard.root, boxes);
+      try { addFilmTown(yard.root, boxes); }
+      catch (err) { console.error('film town', err); }
       this.placeGenerated(yard.root);
     }
     this.root.add(yard.root);
     this.pinata = yard.pinata;
     this.clouds = yard.clouds;
     this.wall = yard.wall;
-    if (this.tier !== 'fast' && this.gl && this.worldScene) void applyCc0Look(this.gl, this.worldScene, this.root, true);
+    if (this.tier !== 'fast' && this.gl && this.worldScene) void applyCc0Look(this.gl, this.worldScene, this.root, true, this.tier === 'high');
   }
 
   bind(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
@@ -322,7 +326,7 @@ export class DutyScene {
       (window as unknown as { __duty?: { assets?: boolean } }).__duty && ((window as unknown as { __duty: { assets?: boolean } }).__duty.assets = true);
       return;
     }
-    const jobs: Promise<unknown>[] = [applyCc0Look(renderer, scene, this.root, true)];
+    const jobs: Promise<unknown>[] = [];
     if (this.tier === 'high') {
       jobs.push(loadKit());
       jobs.push(loadFilmCast(this.root).then((cast) => { this.cast = cast; }));
@@ -338,9 +342,9 @@ export class DutyScene {
         this.shots.geometry = shot;
         this.shots.material = new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.7, metalness: 0 });
       }
-      if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true);
       const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
       if (box) box.assets = true;
+      if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true, this.tier === 'high');
     }).catch((err) => { console.warn('duty bind', err); });
   }
 
@@ -591,7 +595,7 @@ export class DutyScene {
     if (this.clouds) this.clouds.rotation.y = now * 0.000015;
     scrollWater(now);
     const weapon = session?.weapon ?? 0;
-    const showHand = mode !== 'menu';
+    const showHand = mode !== 'menu' || this.handForShot;
     const cd = session?.cooldownMs ?? 0;
     for (let i = 0; i < this.viewmodels.length; i++) {
       const vm = this.viewmodels[i]!;
@@ -601,9 +605,11 @@ export class DutyScene {
       const bar = document.getElementById('duty-charge');
       const held = bar ? Number(/scaleX\(([\d.]+)\)/.exec(bar.style.transform)?.[1] ?? 0) : 0;
       const cock = Math.max(held, wind * 0.7);
+      if (this.handForShot) vm.scale.setScalar(0.16);
+      else vm.scale.setScalar(1);
       const bob = Math.sin(now * 0.0032) * 0.016;
       const sway = Math.sin(now * 0.0021) * 0.05;
-      vm.position.set(0.32, -0.28 + bob + cock * 0.06, -0.46 + cock * 0.08);
+      vm.position.set(this.handForShot ? 0.72 : 0.32, (this.handForShot ? -0.85 : -0.28) + bob + cock * 0.06, (this.handForShot ? -1.35 : -0.46) + cock * 0.08);
       vm.rotation.set(0.2 - cock * 0.7, -0.35 - sway * 0.4, 0.12 + cock * 0.25);
       const reach = vm.getObjectByName('reach');
       if (reach) reach.visible = cock > 0.22;
@@ -662,7 +668,7 @@ export class DutyScene {
       gtao.output = GTAOPass.OUTPUT.Default;
       gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.04, 0.25, 0.96));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.08, 0.35, 0.86));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

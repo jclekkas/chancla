@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MapBox, MapData, MapDecor } from '../../shared/map';
 import { groundTexture, signTexture } from '../../src/fps/render/materials';
+import { placeFacadeModules } from './facades';
 import { THEMES, type ThemeName } from '../../src/fps/render/world';
 
 const _m = new THREE.Matrix4();
@@ -264,22 +265,23 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     if (mesh) root.add(mesh);
   }
 
+  if (detailed) placeFacadeModules(root, boxes);
   const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
   for (const b of boxes) {
     if (b.mat === 'fountain' || b.mat === 'stall') {
       shade.add((b.minX + b.maxX) / 2, 0.03, (b.minZ + b.maxZ) / 2, (b.maxX - b.minX) * 0.55, (b.maxZ - b.minZ) * 0.55, 1, 0, 0x000000);
     }
-    if (b.mat === 'fountain') {
+    if (b.mat === 'fountain' && b.minY < 0.2) {
       const ripples = waterTex();
       liveWater.push(ripples);
-      const inset = detailed ? 2.4 : 0.7;
+      const inset = detailed ? 3.4 : 0.7;
       const water = new THREE.Mesh(
         new THREE.PlaneGeometry(Math.max(0.8, (b.maxX - b.minX) - inset), Math.max(0.8, (b.maxZ - b.minZ) - inset)),
-        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: detailed ? 0.45 : 0.92, color: detailed ? 0x8fd4ea : 0xd8ffff }),
+        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: detailed ? 0.85 : 0.92, color: detailed ? 0x3aa0c8 : 0xd8ffff }),
       );
       water.rotation.x = -Math.PI / 2;
-      water.position.set((b.minX + b.maxX) / 2, detailed ? 0.5 : b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
+      water.position.set((b.minX + b.maxX) / 2, detailed ? 0.68 : b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
       root.add(water);
     }
     if (b.sign && b.facade) {
@@ -315,7 +317,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
 }
 
 function hiddenByKit(b: MapBox): boolean {
-  if (b.mat === 'fountain' && b.minY < 0.2 && b.maxY < 2) return true;
+  if (b.mat === 'fountain') return true;
   if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge') return true;
   return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
 }
@@ -331,14 +333,11 @@ function placeBox(
   const hue = HUE[b.mat] ?? 0xffe4c0;
   if (b.mat.startsWith('stucco')) {
     add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
-    if (h >= 2.5 && b.minY === 0) add(b.minX - 0.04, 0, b.minZ - 0.04, b.maxX + 0.04, 0.55, b.maxZ + 0.04, shade(hue, 0.72));
+    if (h >= 2.5 && b.minY === 0) add(b.minX - 0.06, 0, b.minZ - 0.06, b.maxX + 0.06, detailed ? 0.85 : 0.55, b.maxZ + 0.06, shade(hue, detailed ? 0.58 : 0.72));
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
     }
-    if (b.facade && h >= 3) {
-      if (detailed) colonial(add, blooms, b);
-      else facade(add, blooms, b, hue);
-    }
+    if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
     return;
   }
   switch (b.mat) {
@@ -420,59 +419,6 @@ function placeBox(
       return;
     default:
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
-  }
-}
-
-/** Doors, arches, windows, quoins and a balcony, all in the wall mesh. */
-function colonial(add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void, blooms: Batch, b: MapBox): void {
-  const f = faceOf(b);
-  if (f.len < 2.4) return;
-  const h = b.maxY;
-  const cols = Math.max(1, Math.min(4, Math.floor(f.len / 3.1)));
-  const spacing = f.len / cols;
-  const ax = Math.abs(f.ux);
-  const az = Math.abs(f.uz);
-  const put = (along: number, y0: number, y1: number, half: number, depth: number, hex: number) => {
-    const px = f.fx + f.ux * along;
-    const pz = f.fz + f.uz * along;
-    const n0 = 0.02;
-    add(
-      px - ax * half + f.nx * n0, y0, pz - az * half + f.nz * n0,
-      px + ax * half + f.nx * (n0 + depth), y1, pz + az * half + f.nz * (n0 + depth),
-      hex,
-    );
-  };
-  // Worn brick at the two front corners.
-  put(0.22, 0, h * 0.96, 0.16, 0.08, 0x8a4e38);
-  put(f.len - 0.22, 0, h * 0.96, 0.16, 0.08, 0x8a4e38);
-  for (let k = 0; k < cols; k++) {
-    const along = spacing * (k + 0.5);
-    if (k === 0) {
-      put(along, 0.08, 2.05, 0.42, 0.06, 0x4a2814);
-      put(along, 2.05, 2.18, 0.5, 0.08, 0xf3e2c4);
-      put(along, 2.18, 2.42, 0.28, 0.07, 0xf3e2c4);
-      put(along, 2.42, 2.58, 0.12, 0.06, 0xf3e2c4);
-      put(along + 0.62, 1.7, 2.15, 0.08, 0.1, 0x6a3a22);
-    }
-    const winY = h > 5.2 ? [3.35, 5.05] : [3.15];
-    for (const y of winY) {
-      if (y + 0.7 > h) continue;
-      put(along, y - 0.55, y + 0.55, 0.38, 0.05, 0x1c3348);
-      put(along, y - 0.62, y - 0.5, 0.48, 0.09, 0xf4ead8);
-      put(along, y + 0.55, y + 0.68, 0.48, 0.08, 0xf4ead8);
-      // A shallow grille: three dark bars.
-      put(along - 0.16, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
-      put(along, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
-      put(along + 0.16, y - 0.5, y + 0.5, 0.025, 0.07, 0x2a2624);
-    }
-    if (h > 4.8 && k === cols - 1) {
-      put(along, 2.55, 2.64, 0.7, 0.42, 0x5c3a28);
-      put(along, 2.95, 3.02, 0.68, 0.38, 0x2a2624);
-      put(along - 0.55, 2.6, 3.02, 0.03, 0.36, 0x2a2624);
-      put(along + 0.55, 2.6, 3.02, 0.03, 0.36, 0x2a2624);
-    }
-    blooms.add(f.fx + f.ux * along + f.nx * 0.85, h - 0.05, f.fz + f.uz * along + f.nz * 0.85, 1.8, 2.4, 1.3, f.ry, 0xd4126a);
-    if (k % 2 === 0) blooms.add(f.fx + f.ux * along + f.nx * 0.7, h - 1.4, f.fz + f.uz * along + f.nz * 0.7, 1.4, 2.1, 1.1, f.ry, 0xf25aa8);
   }
 }
 
@@ -588,10 +534,10 @@ function dressMap(
   shade.add(0.3, 0.03, 1.5, 0.5, 0.35, 1, -0.3, 0x000000);
   shade.add(2.1, 0.03, 3.3, 0.42, 0.3, 1, 0.2, 0x000000);
   if (detailed && map.id === 'plaza') {
-    add(-24, 0, -10.2, 24, 0.14, -9.92, 0xe8d7bc);
-    add(-24, 0, 9.92, 24, 0.14, 10.2, 0xe8d7bc);
-    add(-10.2, 0, -9.9, -9.92, 0.14, 9.9, 0xe8d7bc);
-    add(9.92, 0, -9.9, 10.2, 0.14, 9.9, 0xe8d7bc);
+    add(-26, 0.02, -14.2, 26, 0.12, -9.85, 0xe6d3b4);
+    add(-26, 0.02, 9.85, 26, 0.12, 14.2, 0xe6d3b4);
+    add(-26, 0, -9.95, 26, 0.2, -9.72, 0xc4b496);
+    add(-26, 0, 9.72, 26, 0.2, 9.95, 0xc4b496);
   }
   lineProps(cloth, decor.laundry ?? [], true);
   lineProps(cloth, decor.papel ?? [], false);
@@ -674,27 +620,38 @@ function cobbleRough(): THREE.CanvasTexture {
   return tex;
 }
 
-function dutyGround(): THREE.CanvasTexture {
-  return canvasTex(512, 512, (g) => {
-    g.fillStyle = '#c4b49a';
-    g.fillRect(0, 0, 512, 512);
-    for (let y = 6; y < 512; y += 18) {
-      const shift = (Math.floor(y / 18) % 2) * 9;
-      for (let x = shift; x < 512; x += 18) {
-        const n = (x * 13 + y * 7) % 40;
-        g.fillStyle = `rgb(${168 + n},${132 + (n % 18)},${96 + (n % 12)})`;
-        g.beginPath();
-        g.ellipse(x + 8, y + 8, 7, 5.5, ((x + y) % 5) * 0.2, 0, Math.PI * 2);
-        g.fill();
-        g.strokeStyle = 'rgba(90,60,40,0.35)';
-        g.stroke();
-      }
+function dutyGround(width: number, depth: number): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 768;
+  return canvasTex(W, H, (g) => {
+    g.fillStyle = '#b7a48c';
+    g.fillRect(0, 0, W, H);
+    const worldX = (px: number) => (px / W - 0.5) * width;
+    const worldZ = (py: number) => (py / H - 0.5) * depth;
+    let n = 17;
+    for (let i = 0; i < 2400; i++) {
+      n = (Math.imul(n, 1103515245) + 12345) | 0;
+      const px = (n >>> 8) % W;
+      n = (Math.imul(n, 1103515245) + 12345) | 0;
+      const py = (n >>> 8) % H;
+      const z = worldZ(py);
+      const gutter = Math.abs(Math.abs(z) - 9.4) < 0.7 || Math.abs(Math.abs(worldX(px)) - 18) < 0.5;
+      const walk = Math.abs(z) > 10.2 && Math.abs(z) < 15.5;
+      const tone = gutter ? 62 + (Math.abs(n) % 16) : walk ? 188 + (Math.abs(n) % 20) : 138 + (Math.abs(n) % 50);
+      g.fillStyle = gutter ? `rgb(${tone},${tone + 2},${tone + 8})` : `rgb(${tone + 22},${tone},${tone - 18})`;
+      g.beginPath();
+      const rw = gutter ? 4 : 5 + (Math.abs(n) % 9);
+      const rh = gutter ? 3 : 3 + ((Math.abs(n) >>> 4) % 7);
+      g.ellipse(px, py, rw, rh, ((n >>> 3) % 9) * 0.2, 0, Math.PI * 2);
+      g.fill();
     }
   });
 }
 
 function paintedFloor(decor: MapDecor | undefined, detailed = false): THREE.Mesh | null {
-  const tex = detailed ? dutyGround() : groundTexture(26);
+  const gw = decor?.ground.w ?? 54;
+  const gd = decor?.ground.d ?? 38;
+  const tex = detailed ? dutyGround(gw, gd) : groundTexture(26);
   if (!tex) return null;
   const mat = detailed
     ? new THREE.MeshStandardMaterial({

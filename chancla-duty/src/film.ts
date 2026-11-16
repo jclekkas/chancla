@@ -262,28 +262,30 @@ function barrelTiles(): THREE.CanvasTexture {
 
 function talavera(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 128;
+  c.width = 512;
   c.height = 128;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#1c4e96';
-  g.fillRect(0, 0, 128, 128);
-  g.fillStyle = '#f4efe4';
-  g.fillRect(14, 14, 100, 100);
-  g.fillStyle = '#1c4e96';
-  g.beginPath();
-  g.arc(64, 64, 26, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#f0a030';
-  g.beginPath();
-  g.arc(64, 64, 10, 0, Math.PI * 2);
-  g.fill();
-  g.strokeStyle = '#f4efe4';
-  g.lineWidth = 3;
-  g.strokeRect(8, 8, 112, 112);
+  for (let i = 0; i < 8; i++) {
+    const x = i * 64;
+    g.fillStyle = '#f6f1e6';
+    g.fillRect(x, 0, 64, 128);
+    g.fillStyle = '#163e8c';
+    g.fillRect(x + 5, 10, 54, 108);
+    g.fillStyle = '#f6f1e6';
+    g.beginPath();
+    g.moveTo(x + 32, 22);
+    g.lineTo(x + 52, 64);
+    g.lineTo(x + 32, 106);
+    g.lineTo(x + 12, 64);
+    g.fill();
+    g.fillStyle = '#163e8c';
+    g.beginPath();
+    g.arc(x + 32, 64, 7, 0, Math.PI * 2);
+    g.fill();
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 2);
   return t;
 }
 
@@ -365,23 +367,28 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   const fx = fountainBox ? (fountainBox.minX + fountainBox.maxX) / 2 : 0;
   const fz = fountainBox ? (fountainBox.minZ + fountainBox.maxZ) / 2 : 0;
   const glaze = talavera();
-  glaze.repeat.set(3, 2);
-  const tileMat = new THREE.MeshStandardMaterial({ map: glaze, roughness: 0.42, metalness: 0.04, color: 0xffffff });
-  const base = new THREE.CylinderGeometry(2.2, 2.45, 0.58, 24);
-  const lip = new THREE.TorusGeometry(2.1, 0.1, 6, 24);
+  const tileMat = new THREE.MeshStandardMaterial({ map: glaze, roughness: 0.4, metalness: 0.02, color: 0xffffff });
+  const cream = new THREE.MeshStandardMaterial({ color: 0xf7f1e6, roughness: 0.55, metalness: 0.02 });
+  const base = new THREE.CylinderGeometry(2.7, 2.9, 0.95, 8);
+  const stem = new THREE.CylinderGeometry(0.38, 0.5, 1.35, 8);
+  stem.translate(0, 1.15, 0);
+  const bowl = new THREE.CylinderGeometry(1.25, 0.85, 0.48, 8);
+  bowl.translate(0, 1.9, 0);
+  const body = new THREE.Mesh(merge([base, stem, bowl]), tileMat);
+  const lip = new THREE.TorusGeometry(2.6, 0.14, 6, 8);
   lip.rotateX(Math.PI / 2);
-  lip.translate(0, 0.28, 0);
-  const stem = new THREE.CylinderGeometry(0.32, 0.42, 1.15, 12);
-  stem.translate(0, 1.05, 0);
-  const bowl = new THREE.CylinderGeometry(1.15, 0.82, 0.42, 18);
-  bowl.translate(0, 1.55, 0);
-  const finial = new THREE.ConeGeometry(0.22, 0.4, 8);
-  finial.translate(0, 1.95, 0);
-  const fountain = new THREE.Mesh(merge([base, lip, stem, bowl, finial]), tileMat);
+  lip.translate(0, 0.42, 0);
+  const upperLip = new THREE.TorusGeometry(1.15, 0.08, 6, 8);
+  upperLip.rotateX(Math.PI / 2);
+  upperLip.translate(0, 2.12, 0);
+  const rims = new THREE.Mesh(merge([lip, upperLip]), cream);
+  const stream = new THREE.CylinderGeometry(0.1, 0.16, 1.15, 8);
+  stream.translate(0, 1.35, 0);
+  const fall = new THREE.Mesh(stream, new THREE.MeshStandardMaterial({ color: 0x7ec8e8, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.9 }));
+  const fountain = new THREE.Group();
   fountain.name = 'duty-basin';
-  fountain.position.set(fx, 0.24, fz);
-  fountain.castShadow = false;
-  fountain.receiveShadow = true;
+  fountain.position.set(fx, 0.15, fz);
+  fountain.add(body, rims, fall);
   parent.add(fountain);
 
   const niche = new THREE.Group();

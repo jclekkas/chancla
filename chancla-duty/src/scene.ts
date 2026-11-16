@@ -351,8 +351,7 @@ export class DutyScene {
   private placeGenerated(yard: THREE.Object3D): void {
     const heroes = this.heroes;
     if (!heroes) return;
-    yard.traverse((o) => { if (o.name === 'duty-basin') o.visible = false; });
-    if (heroes.fountain) {
+    if (heroes.fountain && !yard.getObjectByName('duty-basin')) {
       const fountain = heroes.fountain.clone(true);
       fountain.position.set(0, 0, 0);
       fountain.name = 'hero-fountain';
@@ -605,11 +604,17 @@ export class DutyScene {
       const bar = document.getElementById('duty-charge');
       const held = bar ? Number(/scaleX\(([\d.]+)\)/.exec(bar.style.transform)?.[1] ?? 0) : 0;
       const cock = Math.max(held, wind * 0.7);
-      if (this.handForShot) vm.scale.setScalar(0.16);
+      const arms = vm.getObjectByName('hero-arms');
+      if (arms) arms.visible = !this.handForShot;
+      const shoe = vm.getObjectByName('hero-chancla');
+      if (shoe) shoe.scale.setScalar(this.handForShot ? 2.6 : 1);
+      const palm = vm.children[0];
+      if (palm && this.handForShot) palm.scale.setScalar(0.42);
+      if (this.handForShot) vm.scale.setScalar(0.72);
       else vm.scale.setScalar(1);
       const bob = Math.sin(now * 0.0032) * 0.016;
       const sway = Math.sin(now * 0.0021) * 0.05;
-      vm.position.set(this.handForShot ? 0.72 : 0.32, (this.handForShot ? -0.85 : -0.28) + bob + cock * 0.06, (this.handForShot ? -1.35 : -0.46) + cock * 0.08);
+      vm.position.set(this.handForShot ? 0.38 : 0.32, (this.handForShot ? -0.34 : -0.28) + bob + cock * 0.06, (this.handForShot ? -0.78 : -0.46) + cock * 0.08);
       vm.rotation.set(0.2 - cock * 0.7, -0.35 - sway * 0.4, 0.12 + cock * 0.25);
       const reach = vm.getObjectByName('reach');
       if (reach) reach.visible = cock > 0.22;
@@ -654,13 +659,14 @@ export class DutyScene {
 
   async enableHigh(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<((scene: THREE.Scene, camera: THREE.Camera) => void) | null> {
     try {
-      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { FXAAPass }] = await Promise.all([
+      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { FXAAPass }, { ShaderPass }] = await Promise.all([
         import('three/examples/jsm/postprocessing/EffectComposer.js'),
         import('three/examples/jsm/postprocessing/RenderPass.js'),
         import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
         import('three/examples/jsm/postprocessing/GTAOPass.js'),
         import('three/examples/jsm/postprocessing/OutputPass.js'),
         import('three/examples/jsm/postprocessing/FXAAPass.js'),
+        import('three/examples/jsm/postprocessing/ShaderPass.js'),
       ]);
       const composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
@@ -668,7 +674,12 @@ export class DutyScene {
       gtao.output = GTAOPass.OUTPUT.Default;
       gtao.blendIntensity = 0.35;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.08, 0.35, 0.86));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.11, 0.4, 0.92));
+      composer.addPass(new ShaderPass({
+        uniforms: { tDiffuse: { value: null }, lift: { value: new THREE.Vector3(0.045, 0.02, 0.0) }, contrast: { value: 1.08 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform sampler2D tDiffuse; uniform vec3 lift; uniform float contrast; varying vec2 vUv; void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = (c - 0.5) * contrast + 0.5; c += lift * (1.0 - c); gl_FragColor = vec4(c, 1.0); }',
+      }));
       composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();

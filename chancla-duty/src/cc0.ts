@@ -111,8 +111,8 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
   const fog = scene.fog as THREE.Fog | null;
   if (fog) {
     fog.color.set(golden ? 0xf3b07a : 0xf3ddc4);
-    fog.near = golden ? 22 : 36;
-    fog.far = golden ? 95 : 140;
+    fog.near = golden ? 18 : 36;
+    fog.far = golden ? 72 : 140;
   }
 }
 

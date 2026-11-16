@@ -77,7 +77,7 @@ Engine.prototype.start = function () {
   if (shot && duty) {
     const views: Record<string, { map: string; pos: [number, number, number]; look: [number, number, number]; hand: boolean }> = {
       plaza: { map: 'plaza', pos: [0.2, 2.05, 8.4], look: [0, 1.6, -6], hand: false },
-      street: { map: 'plaza', pos: [1.2, 1.65, 9.2], look: [-2, 1.7, -8], hand: false },
+      street: { map: 'plaza', pos: [1.4, 1.72, 6.4], look: [-1.2, 1.85, -10], hand: true },
       patio: { map: 'patio', pos: [1.5, 1.65, 7.2], look: [-2, 1.5, -6], hand: true },
     };
     const view = views[shot] ?? views.plaza!;
@@ -134,6 +134,7 @@ function installRender(engine: Engine): void {
       highRender(scene, camera);
       rendering = false;
       if (duty?.handForShot) {
+        engine.vm.root.visible = false;
         engine.renderer.clearDepth();
         orig(engine.vmScene, engine.vmCamera);
       }

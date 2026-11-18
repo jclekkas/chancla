@@ -583,26 +583,6 @@ function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, n
   }
 }
 
-function cobbleNormal(): THREE.CanvasTexture {
-  const tex = canvasTex(128, 128, (g) => {
-    g.fillStyle = '#8080ff';
-    g.fillRect(0, 0, 128, 128);
-    for (let y = 8; y < 128; y += 22) {
-      for (let x = ((y / 22) % 2) * 11; x < 128; x += 22) {
-        const grd = g.createRadialGradient(x, y, 2, x, y, 9);
-        grd.addColorStop(0, '#c0c0ff');
-        grd.addColorStop(1, '#6060d0');
-        g.fillStyle = grd;
-        g.beginPath();
-        g.ellipse(x, y, 9, 7, 0, 0, Math.PI * 2);
-        g.fill();
-      }
-    }
-  });
-  tex.colorSpace = THREE.NoColorSpace;
-  return tex;
-}
-
 function cobbleRough(): THREE.CanvasTexture {
   const tex = canvasTex(128, 128, (g) => {
     g.fillStyle = '#d8d8d8';
@@ -628,22 +608,27 @@ function dutyGround(width: number, depth: number): THREE.CanvasTexture {
     g.fillRect(0, 0, W, H);
     const worldX = (px: number) => (px / W - 0.5) * width;
     const worldZ = (py: number) => (py / H - 0.5) * depth;
+    g.fillStyle = '#6e5a48';
+    g.fillRect(0, 0, W, H);
     let n = 17;
-    for (let i = 0; i < 2400; i++) {
+    for (let i = 0; i < 420; i++) {
       n = (Math.imul(n, 1103515245) + 12345) | 0;
-      const px = (n >>> 8) % W;
+      const px = (Math.abs(n) % W);
       n = (Math.imul(n, 1103515245) + 12345) | 0;
-      const py = (n >>> 8) % H;
+      const py = (Math.abs(n) % H);
       const z = worldZ(py);
-      const gutter = Math.abs(Math.abs(z) - 9.4) < 0.7 || Math.abs(Math.abs(worldX(px)) - 18) < 0.5;
-      const walk = Math.abs(z) > 10.2 && Math.abs(z) < 15.5;
-      const tone = gutter ? 62 + (Math.abs(n) % 16) : walk ? 188 + (Math.abs(n) % 20) : 138 + (Math.abs(n) % 50);
-      g.fillStyle = gutter ? `rgb(${tone},${tone + 2},${tone + 8})` : `rgb(${tone + 22},${tone},${tone - 18})`;
+      const gutter = Math.abs(Math.abs(z) - 9.4) < 0.8 || Math.abs(Math.abs(worldX(px)) - 18) < 0.55;
+      const walk = Math.abs(z) > 10.1 && Math.abs(z) < 15.5;
+      const tone = gutter ? 48 + (Math.abs(n) % 18) : walk ? 196 + (Math.abs(n) % 24) : 150 + (Math.abs(n) % 40);
+      g.fillStyle = gutter ? `rgb(${tone},${tone + 4},${tone + 10})` : `rgb(${tone + 28},${tone + 6},${tone - 16})`;
       g.beginPath();
-      const rw = gutter ? 4 : 5 + (Math.abs(n) % 9);
-      const rh = gutter ? 3 : 3 + ((Math.abs(n) >>> 4) % 7);
-      g.ellipse(px, py, rw, rh, ((n >>> 3) % 9) * 0.2, 0, Math.PI * 2);
+      const rw = gutter ? 10 : 16 + (Math.abs(n) % 18);
+      const rh = gutter ? 7 : 11 + (Math.abs(n) % 12);
+      g.ellipse(px, py, rw, rh, ((Math.abs(n) >>> 3) % 9) * 0.18, 0, Math.PI * 2);
       g.fill();
+      g.strokeStyle = 'rgba(40,28,18,0.55)';
+      g.lineWidth = 2;
+      g.stroke();
     }
   });
 }
@@ -655,13 +640,12 @@ function paintedFloor(decor: MapDecor | undefined, detailed = false): THREE.Mesh
   if (!tex) return null;
   const mat = detailed
     ? new THREE.MeshStandardMaterial({
-      map: tex, color: 0xfff3e4, roughness: 0.92, metalness: 0,
-      normalMap: cobbleNormal(), roughnessMap: cobbleRough(),
+      map: tex, color: 0xfff3e4, roughness: 0.94, metalness: 0,
+      roughnessMap: cobbleRough(),
     })
     : new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 });
-  if (detailed && mat instanceof THREE.MeshStandardMaterial && mat.normalMap && mat.roughnessMap) {
-    mat.normalMap.repeat.set(18, 12);
-    mat.roughnessMap.repeat.set(18, 12);
+  if (detailed && mat instanceof THREE.MeshStandardMaterial && mat.roughnessMap) {
+    mat.roughnessMap.repeat.set(1, 1);
     mat.normalScale = new THREE.Vector2(0.65, 0.65);
   }
   const mesh = new THREE.Mesh(

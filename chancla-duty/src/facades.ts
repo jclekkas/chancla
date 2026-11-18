@@ -53,8 +53,8 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 function doorFrame(): THREE.BufferGeometry {
-  const frame = extrude(archShape(0.66, 1.62, 0.44), 0.42);
-  const reveal = box(0.82, 2.0, 0.05, 0, 1.0, -0.2);
+  const frame = extrude(archShape(0.7, 1.7, 0.46), 0.62);
+  const reveal = box(0.86, 2.05, 0.06, 0, 1.02, -0.28);
   return merge([frame, reveal]);
 }
 
@@ -67,9 +67,9 @@ function doorLeaf(): THREE.BufferGeometry {
 }
 
 function windowFrame(): THREE.BufferGeometry {
-  const frame = extrude(archShape(0.52, 1.2, 0.34), 0.36);
+  const frame = extrude(archShape(0.52, 1.2, 0.34), 0.55);
   frame.translate(0, 0.2, 0);
-  const reveal = box(0.62, 1.45, 0.04, 0, 0.9, -0.16);
+  const reveal = box(0.62, 1.45, 0.05, 0, 0.9, -0.24);
   const lintel = box(1.2, 0.09, 0.14, 0, 1.95, 0.04);
   const sill = box(1.25, 0.08, 0.24, 0, 0.16, 0.1);
   return merge([frame, reveal, lintel, sill]);
@@ -205,20 +205,23 @@ export function placeFacadeModules(parent: THREE.Object3D, boxes: readonly MapBo
       const along = f.len * ((k + 0.5) / cols);
       const x = f.fx + f.ux * along + f.nx * 0.16;
       const z = f.fz + f.uz * along + f.nz * 0.16;
-      if (!upper && k === 0) {
+      if (!upper) {
         doorFrames.push({ x, y: 0, z, ry: f.ry, color: 0xf4ead8 });
         doors.push({ x, y: 0, z, ry: f.ry, color: 0x6a3a22 });
-      } else if (upper || k > 0) {
-        const y = upper ? 4.35 : 1.7;
+        const bx = x + f.nx * 0.28;
+        const bz = z + f.nz * 0.28;
+        balconies.push({ x: bx, y: 2.25, z: bz, ry: f.ry, color: 0x2a2622 });
+        drape(bx + f.nx * 0.4, 2.7, bz + f.nz * 0.4, f.ry, 8);
+      } else {
+        const y = 4.35;
         windows.push({ x, y, z, ry: f.ry, color: 0xf4ead8 });
         grilles.push({ x, y, z, ry: f.ry, color: 0x2c2926 });
-      }
-      if (b.maxY > 5 && k === cols - 1) {
-        const by = upper ? 4.05 : 2.55;
-        const bx = x + f.nx * 0.2;
-        const bz = z + f.nz * 0.2;
-        balconies.push({ x: bx, y: by, z: bz, ry: f.ry, color: 0x2c2926 });
-        drape(bx + f.nx * 0.45, by + 0.55, bz + f.nz * 0.45, f.ry, 8);
+        if (k === cols - 1) {
+          const bx = x + f.nx * 0.28;
+          const bz = z + f.nz * 0.28;
+          balconies.push({ x: bx, y: 4.05, z: bz, ry: f.ry, color: 0x2a2622 });
+          drape(bx + f.nx * 0.45, 4.55, bz + f.nz * 0.45, f.ry, 8);
+        }
       }
     }
     const segments = Math.max(2, Math.floor(f.len / 1.15));

@@ -531,8 +531,10 @@ function prepCast(root: THREE.Object3D): void {
     const mat = new THREE.MeshStandardMaterial({
       color: painted ? new THREE.Color(0xffffff) : (src.color ? src.color.clone() : new THREE.Color(0xffffff)),
       map: src.map ?? null,
-      roughness: 0.72,
-      metalness: 0,
+      roughnessMap: src.roughnessMap ?? null,
+      metalnessMap: src.metalnessMap ?? null,
+      roughness: src.roughnessMap ? 1 : 0.72,
+      metalness: src.metalnessMap ? 1 : 0,
       emissive: new THREE.Color(0x000000),
       emissiveIntensity: 0,
     });

@@ -4,7 +4,7 @@ Chancla Duty's new look uses public-domain (CC0) assets. The original Warfare ar
 
 ## Characters
 
-The high tier does not use the Grab3D soldier. Rosa in `public/chancla-duty/cc0/cast/` is the Hunyuan3D-2.1 mesh and its texture, with a fitted 53-bone armature. The existing Idle, Walk, Run, SwordSlash, RecieveHit, and Death clips are retargeted by rest-pose offset onto that bind pose. LOD0 keeps the source mesh (40k triangles), LOD1 is 8k, and LOD2 is 2.5k, one skinned draw each. Luna, the abuelas, and the props in `heroes/` are the earlier meshes. A capsule casts the shadow.
+The high tier does not use the Grab3D soldier. Rosa and Luna in `public/chancla-duty/cc0/cast/` are Hunyuan3D-2.1 meshes and textures, each with a fitted 53-bone armature. The existing Idle, Walk, Run, SwordSlash, RecieveHit, and Death clips are retargeted by rest-pose offset. LOD0 keeps the source mesh (40k triangles), LOD1 is 8k, and LOD2 is 2.5k, one skinned draw each. The abuelas and the props in `heroes/` are the earlier meshes. A capsule casts the shadow.
 
 ## Surfaces and sky
 

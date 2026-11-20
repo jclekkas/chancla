@@ -68,12 +68,12 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     if (!mesh.isMesh) return;
     if (mesh.name === 'duty-walls') {
       const stucco = plaster.clone();
-      stucco.map = null;
-      stucco.normalMap = null;
-      stucco.roughnessMap = null;
       stucco.color.set(0xffffff);
-      stucco.roughness = 0.9;
+      stucco.roughness = 0.92;
       stucco.vertexColors = true;
+      if (stucco.map) stucco.map.repeat.set(2, 2);
+      if (stucco.normalMap) stucco.normalMap.repeat.set(2, 2);
+      if (stucco.roughnessMap) stucco.roughnessMap.repeat.set(2, 2);
       mesh.material = stucco;
       mesh.castShadow = shadows;
       mesh.receiveShadow = true;

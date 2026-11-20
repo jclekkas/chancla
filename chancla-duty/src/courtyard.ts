@@ -16,8 +16,8 @@ const _e = new THREE.Euler();
 const _c = new THREE.Color();
 
 const HUE: Record<string, number> = {
-  stuccoTerracotta: 0xe07048, stuccoCream: 0xffe4c0, stuccoTurquoise: 0x3ec4b8,
-  stuccoMarigold: 0xf0a030, stuccoViolet: 0x8d5cb0, stuccoPink: 0xf07898,
+  stuccoTerracotta: 0xc47a52, stuccoCream: 0xf0d7b4, stuccoTurquoise: 0xd7b48a,
+  stuccoMarigold: 0xd9a15a, stuccoViolet: 0xb08968, stuccoPink: 0xd08a6a,
   stone: 0xf0e2cc, step: 0xf6e7c8, parapet: 0xfff0d8, planter: 0xc45a38,
   wood: 0xc48448, lintel: 0xf7efe0, stall: 0x2fafa6, crate: 0xb5814a,
   fountain: 0xfff6ea, statue: 0xf4efe4, kiosk: 0xf0c44a, table: 0xf07898,
@@ -236,6 +236,10 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
 
   for (const b of boxes) placeBox(leaves, blooms, b, add, detailed);
   dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor, detailed);
+  if (detailed) {
+    const cable = cableFor(decor?.lights ?? []);
+    if (cable) root.add(cable);
+  }
 
   const wallMesh = (geos: THREE.BufferGeometry[]) => {
     const merged = mergeGeometries(geos, false);
@@ -265,7 +269,10 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     if (mesh) root.add(mesh);
   }
 
-  if (detailed) placeFacadeModules(root, boxes);
+  if (detailed) {
+    placeFacadeModules(root, boxes);
+    placeCover(root, boxes);
+  }
   const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
   for (const b of boxes) {
@@ -316,9 +323,83 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   return { root, pinata, clouds, wall };
 }
 
+/** Market cover that sits on the hidden collision boxes: stalls, crates, pots, benches. */
+function placeCover(parent: THREE.Object3D, boxes: readonly MapBox[]): void {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8d5a34, roughness: 0.78, metalness: 0 });
+  const awning = new THREE.MeshStandardMaterial({ color: 0xf6efe2, roughness: 0.62, metalness: 0 });
+  const clay = new THREE.MeshStandardMaterial({ color: 0xb85c3c, roughness: 0.72, metalness: 0 });
+  const counters: THREE.BufferGeometry[] = [];
+  const roofs: THREE.BufferGeometry[] = [];
+  const crates: THREE.BufferGeometry[] = [];
+  const pots: THREE.BufferGeometry[] = [];
+  const seats: THREE.BufferGeometry[] = [];
+  for (const b of boxes) {
+    const cx = (b.minX + b.maxX) / 2;
+    const cz = (b.minZ + b.maxZ) / 2;
+    const w = b.maxX - b.minX;
+    const d = b.maxZ - b.minZ;
+    const h = b.maxY - b.minY;
+    if (b.mat === 'stall' || b.mat === 'kiosk') {
+      const counter = new THREE.BoxGeometry(Math.max(w, 0.9), Math.max(h * 0.72, 0.7), Math.max(d, 0.55));
+      counter.translate(cx, Math.max(h * 0.36, 0.35), cz);
+      counters.push(counter);
+      const shade = new THREE.BoxGeometry(w + 0.55, 0.05, d + 0.4);
+      shade.translate(cx, h + 0.18, cz);
+      roofs.push(shade);
+    } else if (b.mat === 'crate') {
+      const crate = new THREE.BoxGeometry(w, h, d);
+      crate.translate(cx, h / 2, cz);
+      crates.push(crate);
+    } else if (b.mat === 'planter' || b.mat === 'bin') {
+      const pot = new THREE.CylinderGeometry(Math.min(w, d) * 0.46, Math.min(w, d) * 0.36, Math.max(h, 0.45), 8);
+      pot.translate(cx, Math.max(h, 0.45) / 2, cz);
+      pots.push(pot);
+    } else if (b.mat === 'stone' && h < 1.25 && !b.facade) {
+      const seat = new THREE.BoxGeometry(Math.max(w, 0.9), 0.08, Math.max(d * 0.45, 0.32));
+      seat.translate(cx, 0.42, cz);
+      seats.push(seat);
+    }
+  }
+  const add = (geos: THREE.BufferGeometry[], mat: THREE.Material) => {
+    if (!geos.length) return;
+    const mesh = new THREE.Mesh(mergeGeometries(geos, false) ?? geos[0]!, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+  };
+  add(counters, wood);
+  add(roofs, awning);
+  add(crates, wood);
+  add(pots, clay);
+  add(seats, wood);
+}
+
+function cableFor(lines: Array<[number, number, number, number, number]>): THREE.Mesh | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const [ax, az, bx, bz, y] of lines) {
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n;
+      const t1 = (i + 1) / n;
+      const p0 = new THREE.Vector3(ax + (bx - ax) * t0, y - Math.sin(t0 * Math.PI) * 1.05, az + (bz - az) * t0);
+      const p1 = new THREE.Vector3(ax + (bx - ax) * t1, y - Math.sin(t1 * Math.PI) * 1.05, az + (bz - az) * t1);
+      const dir = p1.clone().sub(p0);
+      const len = dir.length();
+      if (len < 0.02) continue;
+      const g = new THREE.CylinderGeometry(0.012, 0.012, len, 4);
+      g.translate(0, len / 2, 0);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
+      g.translate(p0.x, p0.y, p0.z);
+      parts.push(g);
+    }
+  }
+  if (!parts.length) return null;
+  return new THREE.Mesh(mergeGeometries(parts, false) ?? parts[0]!, new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.45, metalness: 0.55 }));
+}
+
 function hiddenByKit(b: MapBox): boolean {
   if (b.mat === 'fountain') return true;
-  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge') return true;
+  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge' || b.mat === 'kiosk' || b.mat === 'table') return true;
   return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
 }
 
@@ -403,8 +484,8 @@ function placeBox(
       return;
     }
     case 'stage':
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.05, b.maxZ, 0x6a3a86);
-      add(b.minX - 0.04, b.maxY - 0.05, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xf5c542);
+      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.05, b.maxZ, 0x8a5a32);
+      add(b.minX - 0.04, b.maxY - 0.05, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xf3e6c8);
       return;
     case 'crate':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc48448);
@@ -576,78 +657,71 @@ function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, n
       const sag = Math.sin(t * Math.PI) * 1.05;
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       const col = colors[i % 3]!;
-      const s = lanterns ? 0.16 : 0.1;
-      bulbs.add(x, y - sag - 0.12, z, s, s * 1.35, s, 0, col);
-      glow.add(x, y - sag - 0.12, z, lanterns ? 0.42 : 0.28, lanterns ? 0.42 : 0.28, lanterns ? 0.42 : 0.28, 0, col);
+      const s = lanterns ? 0.09 : 0.1;
+      bulbs.add(x, y - sag - 0.22, z, s, s * 1.6, s, 0, col);
+      if (!lanterns) glow.add(x, y - sag - 0.12, z, 0.22, 0.22, 0.22, 0, col);
     }
   }
 }
 
-function cobbleRough(): THREE.CanvasTexture {
-  const tex = canvasTex(128, 128, (g) => {
-    g.fillStyle = '#d8d8d8';
-    g.fillRect(0, 0, 128, 128);
-    g.fillStyle = '#8a8a8a';
-    for (let y = 8; y < 128; y += 22) {
-      for (let x = ((y / 22) % 2) * 11; x < 128; x += 22) {
-        g.beginPath();
-        g.ellipse(x, y, 8, 6, 0, 0, Math.PI * 2);
-        g.fill();
+/** Seamless cobbles. Eight stones across the tile, so a 1.5 m repeat is about 19 cm a stone. */
+function dutyGround(): THREE.CanvasTexture {
+  const S = 512;
+  const n = 8;
+  const cell = S / n;
+  return canvasTex(S, S, (g) => {
+    g.fillStyle = '#4a382c';
+    g.fillRect(0, 0, S, S);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const k = (i * 13 + j * 29) % 36;
+        const tone = 132 + k;
+        g.fillStyle = `rgb(${tone + 30},${tone + 8},${tone - 22})`;
+        const inset = 5 + ((i + j) % 3);
+        const shift = (j % 2) * cell * 0.5;
+        const x = (i * cell + shift) % S;
+        g.fillRect(x + inset * 0.3, j * cell + 4, cell - inset, cell - 8);
+        g.strokeStyle = 'rgba(42,28,18,0.85)';
+        g.lineWidth = 3;
+        g.stroke();
       }
     }
-  }, true);
-  tex.colorSpace = THREE.NoColorSpace;
-  return tex;
+  });
 }
 
-function dutyGround(width: number, depth: number): THREE.CanvasTexture {
-  const W = 1024;
-  const H = 768;
-  return canvasTex(W, H, (g) => {
-    g.fillStyle = '#b7a48c';
-    g.fillRect(0, 0, W, H);
-    const worldX = (px: number) => (px / W - 0.5) * width;
-    const worldZ = (py: number) => (py / H - 0.5) * depth;
-    g.fillStyle = '#6e5a48';
-    g.fillRect(0, 0, W, H);
-    let n = 17;
-    for (let i = 0; i < 420; i++) {
-      n = (Math.imul(n, 1103515245) + 12345) | 0;
-      const px = (Math.abs(n) % W);
-      n = (Math.imul(n, 1103515245) + 12345) | 0;
-      const py = (Math.abs(n) % H);
-      const z = worldZ(py);
-      const gutter = Math.abs(Math.abs(z) - 9.4) < 0.8 || Math.abs(Math.abs(worldX(px)) - 18) < 0.55;
-      const walk = Math.abs(z) > 10.1 && Math.abs(z) < 15.5;
-      const tone = gutter ? 48 + (Math.abs(n) % 18) : walk ? 196 + (Math.abs(n) % 24) : 150 + (Math.abs(n) % 40);
-      g.fillStyle = gutter ? `rgb(${tone},${tone + 4},${tone + 10})` : `rgb(${tone + 28},${tone + 6},${tone - 16})`;
-      g.beginPath();
-      const rw = gutter ? 10 : 16 + (Math.abs(n) % 18);
-      const rh = gutter ? 7 : 11 + (Math.abs(n) % 12);
-      g.ellipse(px, py, rw, rh, ((Math.abs(n) >>> 3) % 9) * 0.18, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = 'rgba(40,28,18,0.55)';
-      g.lineWidth = 2;
-      g.stroke();
+function cobbleBump(): THREE.CanvasTexture {
+  const S = 128;
+  const tex = canvasTex(S, S, (g) => {
+    g.fillStyle = '#8080ff';
+    g.fillRect(0, 0, S, S);
+    g.fillStyle = '#b0b0ff';
+    for (let j = 0; j < 8; j++) {
+      for (let i = 0; i < 8; i++) {
+        g.fillRect(i * 16 + 2, j * 16 + 2, 12, 12);
+      }
     }
   });
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
 }
 
 function paintedFloor(decor: MapDecor | undefined, detailed = false): THREE.Mesh | null {
   const gw = decor?.ground.w ?? 54;
   const gd = decor?.ground.d ?? 38;
-  const tex = detailed ? dutyGround(gw, gd) : groundTexture(26);
+  const tex = detailed ? dutyGround() : groundTexture(26);
   if (!tex) return null;
+  const bump = detailed ? cobbleBump() : null;
+  if (detailed && tex) {
+    const tile = 1.5;
+    tex.repeat.set(gw / tile, gd / tile);
+    if (bump) bump.repeat.set(gw / tile, gd / tile);
+  }
   const mat = detailed
     ? new THREE.MeshStandardMaterial({
-      map: tex, color: 0xfff3e4, roughness: 0.94, metalness: 0,
-      roughnessMap: cobbleRough(),
+      map: tex, normalMap: bump, color: 0xffffff, roughness: 0.82, metalness: 0.04,
     })
     : new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 });
-  if (detailed && mat instanceof THREE.MeshStandardMaterial && mat.roughnessMap) {
-    mat.roughnessMap.repeat.set(1, 1);
-    mat.normalScale = new THREE.Vector2(0.65, 0.65);
-  }
+  if (detailed && mat instanceof THREE.MeshStandardMaterial) mat.normalScale = new THREE.Vector2(0.45, 0.45);
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(decor?.ground.w ?? 54, decor?.ground.d ?? 38),
     mat,

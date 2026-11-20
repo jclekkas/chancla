@@ -265,22 +265,22 @@ function talavera(): THREE.CanvasTexture {
   c.width = 512;
   c.height = 128;
   const g = c.getContext('2d')!;
-  for (let i = 0; i < 8; i++) {
-    const x = i * 64;
-    g.fillStyle = '#f6f1e6';
-    g.fillRect(x, 0, 64, 128);
-    g.fillStyle = '#163e8c';
-    g.fillRect(x + 5, 10, 54, 108);
-    g.fillStyle = '#f6f1e6';
+  for (let i = 0; i < 16; i++) {
+    const x = i * 32;
+    g.fillStyle = i % 2 ? '#f7f3ea' : '#143a86';
+    g.fillRect(x, 0, 32, 128);
+    g.fillStyle = i % 2 ? '#143a86' : '#f7f3ea';
     g.beginPath();
-    g.moveTo(x + 32, 22);
-    g.lineTo(x + 52, 64);
-    g.lineTo(x + 32, 106);
-    g.lineTo(x + 12, 64);
+    g.moveTo(x + 16, 8);
+    g.lineTo(x + 28, 32);
+    g.lineTo(x + 16, 56);
+    g.lineTo(x + 4, 32);
     g.fill();
-    g.fillStyle = '#163e8c';
     g.beginPath();
-    g.arc(x + 32, 64, 7, 0, Math.PI * 2);
+    g.moveTo(x + 16, 72);
+    g.lineTo(x + 28, 96);
+    g.lineTo(x + 16, 120);
+    g.lineTo(x + 4, 96);
     g.fill();
   }
   const t = new THREE.CanvasTexture(c);
@@ -384,7 +384,14 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   const rims = new THREE.Mesh(merge([lip, upperLip]), cream);
   const stream = new THREE.CylinderGeometry(0.1, 0.16, 1.15, 8);
   stream.translate(0, 1.35, 0);
-  const fall = new THREE.Mesh(stream, new THREE.MeshStandardMaterial({ color: 0x7ec8e8, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.9 }));
+  const drops: THREE.BufferGeometry[] = [stream];
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6;
+    const drop = new THREE.SphereGeometry(0.045, 6, 5);
+    drop.translate(0, 2.05 + Math.sin(t * Math.PI) * 0.55, -0.15 + t * 0.3);
+    drops.push(drop);
+  }
+  const fall = new THREE.Mesh(merge(drops), new THREE.MeshStandardMaterial({ color: 0x7ec8e8, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.9 }));
   const fountain = new THREE.Group();
   fountain.name = 'duty-basin';
   fountain.position.set(fx, 0.15, fz);

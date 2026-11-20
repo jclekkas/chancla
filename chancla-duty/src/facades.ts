@@ -189,8 +189,8 @@ export function placeFacadeModules(parent: THREE.Object3D, boxes: readonly MapBo
       const hang = 0.15 + (i % 4) * 0.22;
       const spread = (i - n / 2) * 0.16;
       const rx = -0.7 - (i % 3) * 0.25;
-      petals.push({ x: x + Math.cos(ry) * spread, y: y - hang, z: z + Math.sin(ry) * spread, ry: ry + i * 0.4, rx, s: 1.8 + (i % 3) * 0.35, color: i % 2 ? 0xff4d94 : 0xd41468 });
-      if (i % 2 === 0) leaves.push({ x, y: y - hang * 0.6, z, ry: ry + 0.5, rx: rx * 0.5, s: 1.6, color: 0x1f7a32 });
+      petals.push({ x: x + Math.cos(ry) * spread, y: y - hang, z: z + Math.sin(ry) * spread, ry: ry + i * 0.5, rx, s: 0.55 + (i % 3) * 0.15, color: i % 2 ? 0xe23a78 : 0xc41468 });
+      leaves.push({ x: x + Math.sin(ry) * spread * 0.4, y: y - hang * 0.45, z, ry: ry + 0.6, rx: rx * 0.6, s: 0.85, color: 0x1c6b32 });
     }
   };
   for (const b of boxes) {
@@ -211,7 +211,7 @@ export function placeFacadeModules(parent: THREE.Object3D, boxes: readonly MapBo
         const bx = x + f.nx * 0.28;
         const bz = z + f.nz * 0.28;
         balconies.push({ x: bx, y: 2.25, z: bz, ry: f.ry, color: 0x2a2622 });
-        drape(bx + f.nx * 0.4, 2.7, bz + f.nz * 0.4, f.ry, 8);
+        if (k === 0 && cols > 1) drape(bx + f.nx * 0.35, 2.55, bz + f.nz * 0.35, f.ry, 5);
       } else {
         const y = 4.35;
         windows.push({ x, y, z, ry: f.ry, color: 0xf4ead8 });
@@ -230,7 +230,7 @@ export function placeFacadeModules(parent: THREE.Object3D, boxes: readonly MapBo
       const x = f.fx + f.ux * along + f.nx * 0.05;
       const z = f.fz + f.uz * along + f.nz * 0.05;
       cornices.push({ x, y: b.maxY - 0.35, z, ry: f.ry, color: 0xf6efe4 });
-      if (i % 2 === 0) drape(x + f.nx * 0.4, b.maxY - 0.1, z + f.nz * 0.4, f.ry, 5);
+      if (i === 0 && Math.abs(Math.round(b.minX + b.minZ)) % 3 === 0) drape(x + f.nx * 0.35, b.maxY - 0.15, z + f.nz * 0.35, f.ry, 4);
     }
   }
   const pieces: Array<[THREE.BufferGeometry, THREE.Material, Spot[], boolean]> = [

@@ -20,7 +20,6 @@ export interface FilmWoman {
 }
 
 const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9a07a, roughness: 0.55, metalness: 0 });
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.35, metalness: 0.4 });
 
 function cloth(hex: number, map?: THREE.Texture): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: hex, map: map ?? null, roughness: 0.62, metalness: 0 });
@@ -262,30 +261,60 @@ function barrelTiles(): THREE.CanvasTexture {
 
 function talavera(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 128;
+  c.width = 256;
+  c.height = 256;
   const g = c.getContext('2d')!;
-  for (let i = 0; i < 16; i++) {
-    const x = i * 32;
-    g.fillStyle = i % 2 ? '#f7f3ea' : '#143a86';
-    g.fillRect(x, 0, 32, 128);
-    g.fillStyle = i % 2 ? '#143a86' : '#f7f3ea';
-    g.beginPath();
-    g.moveTo(x + 16, 8);
-    g.lineTo(x + 28, 32);
-    g.lineTo(x + 16, 56);
-    g.lineTo(x + 4, 32);
-    g.fill();
-    g.beginPath();
-    g.moveTo(x + 16, 72);
-    g.lineTo(x + 28, 96);
-    g.lineTo(x + 16, 120);
-    g.lineTo(x + 4, 96);
-    g.fill();
+  g.fillStyle = '#f7f4ee';
+  g.fillRect(0, 0, 256, 256);
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      const x = col * 64;
+      const y = row * 64;
+      g.strokeStyle = '#143a86';
+      g.lineWidth = 3;
+      g.strokeRect(x + 2, y + 2, 60, 60);
+      g.fillStyle = '#143a86';
+      g.beginPath();
+      g.arc(x + 32, y + 32, 8, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#1d4e9e';
+      g.lineWidth = 2;
+      for (const [px, py] of [[18, 18], [46, 18], [18, 46], [46, 46]] as const) {
+        g.beginPath();
+        g.ellipse(x + px, y + py, 6, 10, row + col, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 1);
+  return t;
+}
+
+function vineTex(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  g.clearRect(0, 0, 128, 256);
+  g.strokeStyle = '#3d5a32';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(64, 0);
+  g.bezierCurveTo(40, 60, 90, 120, 58, 256);
+  g.stroke();
+  for (let i = 0; i < 16; i++) {
+    const y = 12 + i * 15;
+    const x = 64 + Math.sin(i * 0.8) * 22;
+    g.fillStyle = i % 3 === 0 ? '#d6337a' : '#2f7a34';
+    g.beginPath();
+    g.ellipse(x, y, i % 3 === 0 ? 9 : 14, i % 3 === 0 ? 9 : 6, i, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -323,26 +352,50 @@ function shrineArt(): THREE.CanvasTexture {
 export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): void {
   const roofs: THREE.BufferGeometry[] = [];
   const trims: THREE.BufferGeometry[] = [];
+  const tiles: THREE.BufferGeometry[] = [];
   let vines = 0;
-  const vine = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.7, 0.9), vineMat, 24);
+  const hanging = vineMat.clone();
+  hanging.map = vineTex();
+  hanging.alphaTest = 0.35;
+  hanging.color.set(0xffffff);
+  const vine = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.85, 1.35), hanging, 72);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   for (const b of boxes) {
     if (!b.mat.startsWith('stucco') || b.maxY - b.minY < 3 || b.minY > 0.4) continue;
     const w = b.maxX - b.minX;
     const d = b.maxZ - b.minZ;
-    const roof = new THREE.BoxGeometry(w + 0.45, 0.22, d + 0.45);
-    roof.translate((b.minX + b.maxX) / 2, b.maxY + 0.12, (b.minZ + b.maxZ) / 2);
+    const roof = new THREE.BoxGeometry(w + 0.45, 0.16, d + 0.45);
+    roof.translate((b.minX + b.maxX) / 2, b.maxY + 0.16, (b.minZ + b.maxZ) / 2);
     roofs.push(roof);
-    const eave = new THREE.BoxGeometry(w + 0.7, 0.08, d + 0.7);
-    eave.translate((b.minX + b.maxX) / 2, b.maxY + 0.02, (b.minZ + b.maxZ) / 2);
+    const eave = new THREE.BoxGeometry(w + 0.7, 0.06, d + 0.7);
+    eave.translate((b.minX + b.maxX) / 2, b.maxY + 0.06, (b.minZ + b.maxZ) / 2);
     trims.push(eave);
-    if (vines < 24 && w > 3) {
-      q.setFromEuler(new THREE.Euler(0, Math.atan2(d, w), 0));
-      m.compose(new THREE.Vector3(b.minX + w * 0.3, b.maxY * 0.55, b.maxZ + 0.08), q, new THREE.Vector3(1, 1, 1));
-      vine.setMatrixAt(vines, m);
-      vine.setColorAt(vines, new THREE.Color(vines % 2 ? 0xc43b78 : 0x6a2a88));
-      vines++;
+    const alongX = w >= d;
+    const span = alongX ? w : d;
+    const count = Math.max(4, Math.floor(span / 0.36));
+    for (const edge of [0, 1]) {
+      for (let i = 0; i < count; i++) {
+        const t = (i + 0.5) / count;
+        const tile = new THREE.CylinderGeometry(0.11, 0.11, 0.34, 5, 1, false, 0, Math.PI);
+        tile.rotateZ(Math.PI / 2);
+        const x = alongX ? b.minX + w * t : (edge ? b.maxX : b.minX) + (edge ? 0.22 : -0.22);
+        const z = alongX ? (edge ? b.maxZ : b.minZ) + (edge ? 0.22 : -0.22) : b.minZ + d * t;
+        if (!alongX) tile.rotateY(Math.PI / 2);
+        tile.translate(x, b.maxY + 0.2, z);
+        tiles.push(tile);
+      }
+    }
+    if (vines < 64 && w > 2.4) {
+      for (let k = 0; k < 2 && vines < 72; k++) {
+        q.setFromEuler(new THREE.Euler(0.35, Math.atan2(d, w) + k, 0.15 * k));
+        const x = b.minX + w * (0.25 + k * 0.4);
+        const z = b.maxZ + 0.12;
+        m.compose(new THREE.Vector3(x, b.maxY * 0.72 - k * 0.35, z), q, new THREE.Vector3(1, 1.15, 1));
+        vine.setMatrixAt(vines, m);
+        vine.setColorAt(vines, new THREE.Color(0xffffff));
+        vines++;
+      }
     }
   }
   vine.count = vines;
@@ -350,6 +403,7 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   if (vine.instanceColor) vine.instanceColor.needsUpdate = true;
   if (roofs.length) parent.add(new THREE.Mesh(merge(roofs), roofMat));
   if (trims.length) parent.add(new THREE.Mesh(merge(trims), stoneTrim));
+  if (tiles.length) parent.add(new THREE.Mesh(merge(tiles), roofMat));
   if (vines) parent.add(vine);
 
   const peaks: THREE.BufferGeometry[] = [];
@@ -369,33 +423,36 @@ export function addFilmTown(parent: THREE.Object3D, boxes: readonly MapBox[]): v
   const glaze = talavera();
   const tileMat = new THREE.MeshStandardMaterial({ map: glaze, roughness: 0.4, metalness: 0.02, color: 0xffffff });
   const cream = new THREE.MeshStandardMaterial({ color: 0xf7f1e6, roughness: 0.55, metalness: 0.02 });
-  const base = new THREE.CylinderGeometry(2.7, 2.9, 0.95, 8);
-  const stem = new THREE.CylinderGeometry(0.38, 0.5, 1.35, 8);
+  const base = new THREE.CylinderGeometry(2.7, 2.9, 0.95, 16);
+  const stem = new THREE.CylinderGeometry(0.38, 0.5, 1.35, 12);
   stem.translate(0, 1.15, 0);
-  const bowl = new THREE.CylinderGeometry(1.25, 0.85, 0.48, 8);
+  const bowl = new THREE.CylinderGeometry(1.25, 0.85, 0.48, 16);
   bowl.translate(0, 1.9, 0);
   const body = new THREE.Mesh(merge([base, stem, bowl]), tileMat);
-  const lip = new THREE.TorusGeometry(2.6, 0.14, 6, 8);
+  const lip = new THREE.TorusGeometry(2.6, 0.14, 8, 20);
   lip.rotateX(Math.PI / 2);
   lip.translate(0, 0.42, 0);
-  const upperLip = new THREE.TorusGeometry(1.15, 0.08, 6, 8);
+  const upperLip = new THREE.TorusGeometry(1.15, 0.08, 8, 18);
   upperLip.rotateX(Math.PI / 2);
   upperLip.translate(0, 2.12, 0);
+  const water = new THREE.CircleGeometry(2.15, 20);
+  water.rotateX(-Math.PI / 2);
+  water.translate(0, 0.72, 0);
   const rims = new THREE.Mesh(merge([lip, upperLip]), cream);
-  const stream = new THREE.CylinderGeometry(0.1, 0.16, 1.15, 8);
-  stream.translate(0, 1.35, 0);
-  const drops: THREE.BufferGeometry[] = [stream];
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6;
-    const drop = new THREE.SphereGeometry(0.045, 6, 5);
-    drop.translate(0, 2.05 + Math.sin(t * Math.PI) * 0.55, -0.15 + t * 0.3);
+  const pool = new THREE.Mesh(water, new THREE.MeshStandardMaterial({ color: 0x8fd4ea, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.82 }));
+  const drops: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 10; i++) {
+    const t = i / 9;
+    const drop = new THREE.SphereGeometry(0.04, 6, 5);
+    const arc = Math.sin(t * Math.PI);
+    drop.translate(0.15 + t * 0.85, 2.05 - t * 1.15 + arc * 0.45, 0.05);
     drops.push(drop);
   }
   const fall = new THREE.Mesh(merge(drops), new THREE.MeshStandardMaterial({ color: 0x7ec8e8, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.9 }));
   const fountain = new THREE.Group();
   fountain.name = 'duty-basin';
   fountain.position.set(fx, 0.15, fz);
-  fountain.add(body, rims, fall);
+  fountain.add(body, rims, pool, fall);
   parent.add(fountain);
 
   const niche = new THREE.Group();
@@ -469,6 +526,31 @@ function fitHeight(root: THREE.Object3D, meters: number): number {
   return foot;
 }
 
+/** Idle skinning can drop a fitted mesh through the floor. Lift until the lowest posed vertex sits on y = 0. */
+function plantFeet(lod: THREE.Object3D): number {
+  lod.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let min = Infinity;
+  lod.traverse((o) => {
+    const mesh = o as THREE.SkinnedMesh;
+    if (!mesh.isSkinnedMesh) return;
+    const pos = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    mesh.skeleton.update();
+    for (let i = 0; i < pos.count; i += 2) {
+      if (pos.getY(i) > -0.2) continue;
+      v.fromBufferAttribute(pos, i);
+      mesh.applyBoneTransform(i, v);
+      v.applyMatrix4(mesh.matrixWorld);
+      if (v.y < min) min = v.y;
+    }
+  });
+  if (!Number.isFinite(min) || min >= -0.02) return 0;
+  const lift = -min;
+  lod.position.y += lift;
+  return lift;
+}
+
 /** Rigged MPFB women. LOD0 is the skinned mesh; LOD1 and LOD2 are the same clip at lower cost. */
 export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]> {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
@@ -504,7 +586,16 @@ export async function loadFilmCast(parent: THREE.Object3D): Promise<FilmPuppet[]
       if (!actions.has('Idle') && actions.has('Walk')) actions.set('Idle', actions.get('Walk')!);
       mixers.push(mixer);
       tracks.push(actions);
+      if (i === 0) {
+        const idle = actions.get('Idle');
+        idle?.reset().play();
+        mixer.update(0);
+        const lift = plantFeet(lod);
+        if (lift) lod.userData['plant'] = lift;
+      }
     });
+    const lift = Number(lods[0]?.userData['plant'] ?? 0);
+    if (lift) for (const lod of lods.slice(1)) lod.position.y += lift;
     const proxy = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.7, 2, 6), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
     proxy.position.y = 0.85;
     proxy.castShadow = true;
@@ -550,7 +641,7 @@ function prepCast(root: THREE.Object3D): void {
     mat.depthWrite = true;
     mat.depthTest = true;
     mat.alphaTest = 0;
-    mat.side = THREE.FrontSide;
+    mat.side = THREE.DoubleSide;
     mat.vertexColors = painted;
     mesh.material = mat;
   });
@@ -655,27 +746,25 @@ function floralSleeve(): THREE.CanvasTexture {
   return t;
 }
 
-/** Forearm in a floral sleeve, bracelets, and a second hand that reaches in on the wind-up. */
+/** A short stylized hand under the chancla. No forearm peg through the strap. */
 export function styleViewmodels(groups: THREE.Object3D[]): void {
   floralMat.map = floralSleeve();
   for (const g of groups) {
     const hand = g.children[0] as THREE.Mesh | undefined;
     if (!hand?.isMesh) continue;
-    hand.geometry = new THREE.CapsuleGeometry(0.045, 0.28, 4, 8);
-    hand.material = floralMat;
-    hand.position.set(0.05, -0.02, 0.02);
-    hand.rotation.set(0.4, 0.2, -0.6);
-    hand.scale.setScalar(1);
-    const skin = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), skinMat);
-    skin.position.set(0.02, -0.2, 0.02);
-    hand.add(skin);
-    const b1 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.008, 6, 12), goldMat);
-    b1.rotation.x = Math.PI / 2;
-    b1.position.y = 0.02;
-    const b2 = b1.clone();
-    b2.material = cloth(0x36b9c9);
-    b2.position.y = 0.05;
-    hand.add(b1, b2);
+    hand.geometry = new THREE.BoxGeometry(0.11, 0.028, 0.09);
+    hand.material = skinMat;
+    // Heel of the sandal, under the sole. Nothing sits in the middle of the strap.
+    hand.position.set(-0.14, -0.02, 0.0);
+    hand.rotation.set(0.55, 0.35, -0.7);
+    hand.scale.set(1, 1, 1);
+    for (const child of [...hand.children]) hand.remove(child);
+    const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.045), skinMat);
+    fingers.position.set(0.01, 0.02, 0.05);
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.02, 0.05), skinMat);
+    thumb.position.set(-0.07, 0.03, 0.0);
+    thumb.rotation.z = 0.4;
+    hand.add(fingers, thumb);
     let reach = g.getObjectByName('reach');
     if (!reach) {
       reach = new THREE.Group();

@@ -12,6 +12,7 @@ The high tier does not use the Grab3D soldier. Rosa, Luna, and the main Abuela i
 
 - `painted_plaster_wall` — wall color, normal, roughness (1K)
 - `terracotta_floor_tiles` — floor color, normal, roughness (1K)
+- `cobblestone_floor_04` — plaza and patio paving, color, normal, and roughness (1K). Walls keep their painted hue through a brightness-multiply of this photo's luminance.
 - `wood_table_001` — wood color, normal, roughness (1K). Photography by Dimitrios Savva, processing by Rico Cilliers
 - `kloofendal_48d_partly_cloudy` — 1K HDRI for image-based lighting and the cloudy sky
 

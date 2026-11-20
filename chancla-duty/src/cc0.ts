@@ -43,6 +43,27 @@ function standard(diff: THREE.Texture, nor: THREE.Texture, rough: THREE.Texture,
   });
 }
 
+/** dilf-war palette patch. Mode 0 keeps the authored stucco hue and uses the photo only as grain. */
+function paletteHook(mat: THREE.MeshStandardMaterial): void {
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+       #ifdef USE_MAP
+         vec2 paletteCell = floor(vMapUv * 4.0);
+         float paletteJitter = fract(sin(dot(paletteCell, vec2(127.1, 311.7))) * 43758.5453);
+         float paletteBomb = mix(0.94, 1.06, paletteJitter);
+         float paletteLuma = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+         #ifdef USE_COLOR
+           diffuseColor.rgb = vColor.rgb * mix(0.82, 1.18, paletteLuma) * paletteBomb;
+         #else
+           diffuseColor.rgb = sampledDiffuseColor.rgb * paletteBomb * vec3(1.18, 1.06, 0.90);
+         #endif
+       #endif`,
+    );
+  };
+}
+
 export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.Scene, root: THREE.Object3D, shadows: boolean, golden = false): Promise<void> {
   const base = '/chancla-duty/cc0';
   const [plasterD, plasterN, plasterR, tileD, tileN, tileR, woodD, woodN, woodR] = await Promise.all([
@@ -56,12 +77,31 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     map(`${base}/tex/wood/nor.ktx2`, false, renderer),
     map(`${base}/tex/wood/rough.ktx2`, false, renderer),
   ]);
+  for (const tex of [plasterD, plasterN, plasterR]) tex.repeat.set(1, 1);
   const plaster = standard(plasterD, plasterN, plasterR);
   plaster.vertexColors = true;
-  const tiles = standard(tileD, tileN, tileR);
-  tiles.map!.repeat.set(10, 8);
-  tiles.normalMap!.repeat.set(10, 8);
-  tiles.roughnessMap!.repeat.set(10, 8);
+  plaster.normalScale = new THREE.Vector2(1.15, 1.15);
+  paletteHook(plaster);
+  let floorDiff = tileD;
+  let floorNor = tileN;
+  let floorRough = tileR;
+  if (golden) {
+    try {
+      const [cobbleD, cobbleN, cobbleR] = await Promise.all([
+        map(`${base}/tex/cobble/diff.jpg`, true, renderer),
+        map(`${base}/tex/cobble/nor.jpg`, false, renderer),
+        map(`${base}/tex/cobble/rough.jpg`, false, renderer),
+      ]);
+      floorDiff = cobbleD;
+      floorNor = cobbleN;
+      floorRough = cobbleR;
+    } catch { /* terracotta tiles stay as the fallback */ }
+  }
+  const tiles = standard(floorDiff, floorNor, floorRough);
+  tiles.roughness = 0.72;
+  tiles.metalness = golden ? 0.06 : 0.02;
+  tiles.normalScale = new THREE.Vector2(1.05, 1.05);
+  paletteHook(tiles);
   const wood = standard(woodD, woodN, woodR);
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -70,17 +110,17 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
       const stucco = plaster.clone();
       stucco.color.set(0xffffff);
       stucco.roughness = 0.92;
+      stucco.envMapIntensity = 0.45;
       stucco.vertexColors = true;
-      if (stucco.map) stucco.map.repeat.set(2, 2);
-      if (stucco.normalMap) stucco.normalMap.repeat.set(2, 2);
-      if (stucco.roughnessMap) stucco.roughnessMap.repeat.set(2, 2);
+      paletteHook(stucco);
       mesh.material = stucco;
       mesh.castShadow = shadows;
       mesh.receiveShadow = true;
     }
     if (mesh.name === 'duty-skin') {
       const warm = (plaster as THREE.MeshStandardMaterial).clone();
-      warm.color.set(0xc9b39a);
+      paletteHook(warm);
+      warm.color.set(0xffffff);
       warm.emissive.set(0x000000);
       warm.emissiveIntensity = 0;
       warm.side = THREE.DoubleSide;
@@ -90,10 +130,11 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     }
     if (mesh.name === 'duty-floor') {
       const paved = tiles.clone();
+      paletteHook(paved);
       const plane = mesh.geometry as THREE.PlaneGeometry;
       const gw = plane.parameters?.width ?? 54;
       const gd = plane.parameters?.height ?? 38;
-      const tileM = golden ? 1.6 : 2.4;
+      const tileM = golden ? 2.0 : 2.4;
       for (const tex of [paved.map, paved.normalMap, paved.roughnessMap]) {
         if (!tex) continue;
         tex.repeat.set(gw / tileM, gd / tileM);

@@ -76,12 +76,13 @@ Engine.prototype.start = function () {
   const shot = new URLSearchParams(location.search).get('shot');
   if (shot && duty) {
     const views: Record<string, { map: string; pos: [number, number, number]; look: [number, number, number]; hand: boolean }> = {
-      plaza: { map: 'plaza', pos: [0.2, 2.05, 8.4], look: [0, 1.6, -6], hand: false },
+      plaza: { map: 'plaza', pos: [0.4, 1.9, 7.2], look: [0, 1.55, -4], hand: false },
       street: { map: 'plaza', pos: [1.2, 1.75, 7.6], look: [0, 1.6, -4], hand: true },
       cast: { map: 'plaza', pos: [0.1, 1.65, 7.5], look: [0.05, 1.15, 4.5], hand: false },
       abuela: { map: 'plaza', pos: [0.55, 1.38, 6.35], look: [0, 1.15, 4.5], hand: false },
       patio: { map: 'patio', pos: [1.5, 1.65, 7.2], look: [-2, 1.5, -6], hand: false },
       fiesta: { map: 'fiesta', pos: [0.4, 2.4, 12], look: [0, 1.8, -2], hand: false },
+      detail: { map: 'plaza', pos: [-1.6, 1.55, 1.4], look: [0.2, 1.15, -2.2], hand: false },
     };
     const view = views[shot] ?? views.plaza!;
     const engine = this;

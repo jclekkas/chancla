@@ -16,8 +16,8 @@ const _e = new THREE.Euler();
 const _c = new THREE.Color();
 
 const HUE: Record<string, number> = {
-  stuccoTerracotta: 0xc47a52, stuccoCream: 0xf0d7b4, stuccoTurquoise: 0xd7b48a,
-  stuccoMarigold: 0xd9a15a, stuccoViolet: 0xb08968, stuccoPink: 0xd08a6a,
+  stuccoTerracotta: 0xe39462, stuccoCream: 0xfff3df, stuccoTurquoise: 0x6fbfc4,
+  stuccoMarigold: 0xe8a84a, stuccoViolet: 0xc9a4d4, stuccoPink: 0xee9a86,
   stone: 0xf0e2cc, step: 0xf6e7c8, parapet: 0xfff0d8, planter: 0xc45a38,
   wood: 0xc48448, lintel: 0xf7efe0, stall: 0x2fafa6, crate: 0xb5814a,
   fountain: 0xfff6ea, statue: 0xf4efe4, kiosk: 0xf0c44a, table: 0xf07898,
@@ -64,11 +64,12 @@ function plasterTex(): THREE.CanvasTexture {
 function leafTex(): THREE.CanvasTexture {
   return canvasTex(128, 128, (g) => {
     g.clearRect(0, 0, 128, 128);
-    g.fillStyle = '#2f8a3a';
-    for (let i = 0; i < 14; i++) {
+    const greens = ['#1f6b32', '#2f8a3a', '#46a84e', '#1a5a2c'];
+    for (let i = 0; i < 18; i++) {
       g.save();
-      g.translate(20 + (i % 4) * 28, 16 + Math.floor(i / 4) * 30);
-      g.rotate(i);
+      g.translate(64 + Math.cos(i * 1.7) * (18 + (i % 5) * 8), 64 + Math.sin(i * 2.1) * (16 + (i % 4) * 9));
+      g.rotate(i * 0.7);
+      g.fillStyle = greens[i % greens.length]!;
       g.beginPath();
       g.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
       g.fill();
@@ -108,12 +109,12 @@ function paint(geo: THREE.BufferGeometry, hex: number): void {
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
     const ny = nrm.getY(i);
-    let ao = 0.88 + ny * 0.12;
-    if (y < 0.35) ao *= 0.9;
-    const sat = 1.05;
+    let ao = 0.94 + ny * 0.06;
+    if (y < 0.2) ao *= 0.9;
+    const sat = 1.08;
     cols[i * 3] = Math.min(1, (0.5 + (_c.r - 0.5) * sat) * ao);
     cols[i * 3 + 1] = Math.min(1, (0.5 + (_c.g - 0.5) * sat) * ao);
-    cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao * 0.92);
+    cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao);
     const u = (((pos.getX(i) + pos.getZ(i)) * 0.42) % 1 + 1) % 1;
     const v = ((y * 0.5) % 1 + 1) % 1;
     uv.setXY(i, u, v);
@@ -136,7 +137,24 @@ function box(parts: THREE.BufferGeometry[], x0: number, y0: number, z0: number, 
     }
   }
   geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  worldUv(geo);
   parts.push(geo);
+}
+
+/** Box-projected UVs in world meters so a plaster tile stays plaster-sized on every wall. */
+function worldUv(geo: THREE.BufferGeometry, meters = 2.2): void {
+  const pos = geo.attributes.position as THREE.BufferAttribute | undefined;
+  const nrm = geo.attributes.normal as THREE.BufferAttribute | undefined;
+  const uv = geo.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!pos || !nrm || !uv) return;
+  for (let i = 0; i < pos.count; i++) {
+    const ax = Math.abs(nrm.getX(i));
+    const ay = Math.abs(nrm.getY(i));
+    const az = Math.abs(nrm.getZ(i));
+    const u = ay >= ax && ay >= az ? pos.getX(i) : ax >= az ? pos.getZ(i) : pos.getX(i);
+    const v = ay >= ax && ay >= az ? pos.getZ(i) : pos.getY(i);
+    uv.setXY(i, u / meters, v / meters);
+  }
 }
 
 interface Face { fx: number; fz: number; ux: number; uz: number; nx: number; nz: number; len: number; ry: number }
@@ -218,7 +236,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const c = new THREE.PlaneGeometry(1, 1).toNonIndexed();
   c.rotateY(Math.PI / 4);
   const leafCard = mergeGeometries([a, b, c], false) ?? a;
-  const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 220);
+  const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 720);
   const shade = new Batch(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.33, depthWrite: false }), 48);
   const blooms = new Batch(new THREE.SphereGeometry(0.12, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), 120);
   const cloth = new Batch(pennant(), new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }), 180);
@@ -274,6 +292,19 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   if (wires) root.add(wires);
   const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
+  if (detailed) {
+    const basin = boxes.find((b) => b.mat === 'fountain' && b.minY < 0.2);
+    if (basin) {
+      const outer = Math.max(basin.maxX - basin.minX, basin.maxZ - basin.minZ) * 0.72;
+      const ring = new THREE.RingGeometry(outer - 0.45, outer, 32);
+      ring.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(ring, new THREE.MeshStandardMaterial({ color: 0xe7d3b0, roughness: 0.78, metalness: 0.02 }));
+      mesh.name = 'duty-ring';
+      mesh.position.set((basin.minX + basin.maxX) / 2, 0.03, (basin.minZ + basin.maxZ) / 2);
+      mesh.receiveShadow = true;
+      root.add(mesh);
+    }
+  }
   for (const b of boxes) {
     if (b.mat === 'fountain' || b.mat === 'stall') {
       shade.add((b.minX + b.maxX) / 2, 0.03, (b.minZ + b.maxZ) / 2, (b.maxX - b.minX) * 0.55, (b.maxZ - b.minZ) * 0.55, 1, 0, 0x000000);
@@ -299,7 +330,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
       );
       if (mesh) root.add(mesh);
     }
-    if (b.mat === 'statue') {
+    if (b.mat === 'statue' && !detailed) {
       const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
       const sole = new THREE.BoxGeometry(1.5, 0.22, 0.62);
       paint(sole, 0xf5c542);
@@ -381,8 +412,9 @@ function placeBox(
       for (let x = b.minX + 0.4; x < b.maxX; x += 0.8) blooms.add(x, b.maxY + 0.22, cz, 1.1, 1.1, 1.1, 0, 0xf07898);
       return;
     case 'planter':
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc45a38);
-      add(b.minX + 0.06, b.maxY - 0.02, b.minZ + 0.06, b.maxX - 0.06, b.maxY + 0.02, b.maxZ - 0.06, 0x5b3a22);
+      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.08, b.maxZ, 0xd86a42);
+      add(b.minX - 0.05, b.maxY - 0.14, b.minZ - 0.05, b.maxX + 0.05, b.maxY - 0.02, b.maxZ + 0.05, 0xe39462);
+      add(b.minX + 0.08, b.maxY - 0.06, b.minZ + 0.08, b.maxX - 0.08, b.maxY + 0.02, b.maxZ - 0.08, 0x5b3a22);
       plantRow(leaves, blooms, b);
       return;
     case 'fountain':
@@ -390,32 +422,51 @@ function placeBox(
       add(b.minX - 0.08, b.maxY - 0.08, b.minZ - 0.08, b.maxX + 0.08, b.maxY + 0.06, b.maxZ + 0.08, 0x3ec4b8);
       return;
     case 'statue':
+      if (detailed) return;
       add(b.minX + 0.2, b.minY, b.minZ + 0.2, b.maxX - 0.2, 2.4, b.maxZ - 0.2, 0x3ec4b8);
       add(cx - 0.5, 2.4, cz - 0.5, cx + 0.5, 2.6, cz + 0.5, 0xf5c542);
       return;
     case 'stall':
+      if (detailed) {
+        openStall(add, b, 0xf0a030);
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 0x2fafa6);
       add(b.minX - 0.04, b.maxY - 0.06, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xfff6ea);
       return;
     case 'kiosk':
+      if (detailed) {
+        openStall(add, b, b.sign === 'ELOTES' ? 0xf0c44a : 0x3ec4b8);
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.28, b.maxZ, b.sign === 'ELOTES' ? 0xf0c44a : 0x3f8f6a);
       add(b.minX - 0.12, b.maxY - 0.28, b.minZ - 0.12, b.maxX + 0.12, b.maxY, b.maxZ + 0.12, 0xe07048);
       return;
     case 'hedge': {
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
+      if (!detailed) add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
       const long = Math.max(w, d), alongX = w >= d;
-      const n = Math.max(2, Math.round(long / 0.55));
+      const n = Math.max(3, Math.round(long / (detailed ? 0.42 : 0.55)));
       for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
         const x = alongX ? b.minX + w * t : cx;
         const z = alongX ? cz : b.minZ + d * t;
-        leaves.add(x, b.maxY - 0.05, z, 1.1, 0.8, 1.1, 0, i % 2 ? 0x3fa84a : 0x2d7a34);
-        if (i % 2 === 0) blooms.add(x, b.maxY + 0.15, z, 1, 1, 1, 0, i % 4 ? 0xf0a030 : 0xf07898);
+        const lift = detailed ? h * 0.45 : b.maxY - 0.05;
+        leaves.add(x, lift, z, detailed ? 0.85 : 1.1, detailed ? h * 0.7 : 0.8, detailed ? 0.85 : 1.1, i * 0.4, i % 2 ? 0x3fa84a : 0x2d7a34);
+        if (detailed) leaves.add(x, lift + h * 0.28, z, 0.6, h * 0.4, 0.6, i * 0.8, 0x46b056);
+        if (i % 2 === 0) blooms.add(x, (detailed ? lift + h * 0.4 : b.maxY + 0.15), z, 1, 1, 1, 0, i % 4 ? 0xf0a030 : 0xf07898);
       }
       return;
     }
     case 'table': {
       const cloth = Math.round(cx + cz) % 2 ? 0xf07898 : 0x3ec4b8;
+      if (detailed) {
+        add(b.minX, b.maxY - 0.06, b.minZ, b.maxX, b.maxY, b.maxZ, cloth);
+        add(b.minX + 0.04, b.maxY - 0.02, b.minZ + 0.04, b.maxX - 0.04, b.maxY + 0.02, b.maxZ - 0.04, 0xfff6ea);
+        for (const [x, z] of [[b.minX + 0.08, b.minZ + 0.08], [b.maxX - 0.14, b.minZ + 0.08], [b.minX + 0.08, b.maxZ - 0.14], [b.maxX - 0.14, b.maxZ - 0.14]] as const) {
+          add(x, 0, z, x + 0.06, b.maxY - 0.06, z + 0.06, 0x6a3a22);
+        }
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.04, b.maxZ, cloth);
       add(b.minX - 0.03, b.maxY - 0.04, b.minZ - 0.03, b.maxX + 0.03, b.maxY, b.maxZ + 0.03, 0xffffff);
       return;
@@ -446,6 +497,30 @@ function placeBox(
       return;
     default:
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
+  }
+}
+
+function openStall(
+  add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
+  b: MapBox,
+  awning: number,
+): void {
+  const top = Math.max(b.maxY, 1.35);
+  const posts: Array<[number, number]> = [
+    [b.minX + 0.07, b.minZ + 0.07],
+    [b.maxX - 0.07, b.minZ + 0.07],
+    [b.minX + 0.07, b.maxZ - 0.07],
+    [b.maxX - 0.07, b.maxZ - 0.07],
+  ];
+  for (const [x, z] of posts) add(x - 0.045, 0, z - 0.045, x + 0.045, top, z + 0.045, 0x6a3a22);
+  add(b.minX + 0.1, Math.min(0.78, top - 0.2), b.minZ + 0.1, b.maxX - 0.1, Math.min(0.9, top - 0.08), b.maxZ - 0.1, 0xc48448);
+  add(b.minX + 0.16, 0, b.minZ + 0.18, b.minX + 0.52, 0.3, b.minZ + 0.52, 0xb5814a);
+  const span = (b.maxX - b.minX) + 0.36;
+  const stripes = [awning, 0xfff6ea];
+  for (let i = 0; i < 4; i++) {
+    const x0 = b.minX - 0.18 + span * (i / 4);
+    const x1 = b.minX - 0.18 + span * ((i + 1) / 4);
+    add(x0, top, b.minZ - 0.22, x1, top + 0.07, b.maxZ + 0.28, stripes[i % 2]!);
   }
 }
 
@@ -486,6 +561,41 @@ function arches(add: (x0: number, y0: number, z0: number, x1: number, y1: number
     const x = f.fx + f.ux * a, z = f.fz + f.uz * a;
     add(x - 0.45 + f.nx * 0.02, 0.2, z - 0.45 + f.nz * 0.02, x + 0.45 + f.nx * 0.06, 1.7, z + 0.45 + f.nz * 0.06, 0x3a2848);
     add(x - 0.6 + f.nx * 0.04, 1.65, z - 0.6 + f.nz * 0.04, x + 0.6 + f.nx * 0.08, 1.85, z + 0.6 + f.nz * 0.08, 0xe07048);
+  }
+}
+
+function branchTree(parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, x: number, y: number, z: number): void {
+  const trunk = new THREE.CylinderGeometry(0.1, 0.16, 2.15, 6);
+  trunk.translate(x, y + 1.08, z);
+  paint(trunk, 0x6b4423);
+  worldUv(trunk, 1.1);
+  parts.push(trunk);
+  const tips: Array<[number, number, number]> = [
+    [0.05, 2.55, 0.08],
+    [0.72, 2.15, 0.22],
+    [-0.68, 2.25, -0.12],
+    [0.22, 2.35, 0.7],
+    [-0.28, 2.2, -0.66],
+    [0.55, 1.95, -0.48],
+    [-0.5, 2.55, 0.4],
+  ];
+  for (const [dx, dy, dz] of tips) {
+    const len = Math.hypot(dx, dy - 1.7, dz);
+    const branch = new THREE.CylinderGeometry(0.028, 0.045, len, 4);
+    branch.translate(0, len / 2, 0);
+    const dir = new THREE.Vector3(dx, dy - 1.7, dz).normalize();
+    branch.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+    branch.translate(x, y + 1.7, z);
+    paint(branch, 0x5c3a22);
+    worldUv(branch, 1.1);
+    parts.push(branch);
+    for (let k = 0; k < 3; k++) {
+      const jx = dx + ((k * 3) % 5 - 2) * 0.16;
+      const jz = dz + ((k * 5) % 5 - 2) * 0.16;
+      const jy = dy + (k % 2) * 0.16;
+      leaves.add(x + jx, y + jy, z + jz, 0.48, 0.36, 0.48, k * 0.8, k % 2 ? 0x2f7a34 : 0x3d9a48);
+    }
+    if (dx > 0.4) blooms.add(x + dx, y + dy + 0.1, z + dz, 0.55, 0.55, 0.55, 0, 0xd6337a);
   }
 }
 
@@ -535,11 +645,14 @@ function dressMap(
 ): void {
   if (!decor) return;
   for (const tr of decor.trees ?? []) {
-    add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
-    leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
-    leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
-    leaves.add(tr.x - 0.7, 3.7, tr.z - 0.4, 1.8, 1.6, 1.8, 1.1, 0xd8f0d0);
-    blooms.add(tr.x + 0.4, 4.3, tr.z + 0.2, 1.2, 1.2, 1.2, 0, 0xf07898);
+    if (detailed) branchTree(parts, leaves, blooms, tr.x, tr.y, tr.z);
+    else {
+      add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
+      leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
+      leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
+      leaves.add(tr.x - 0.7, 3.7, tr.z - 0.4, 1.8, 1.6, 1.8, 1.1, 0xd8f0d0);
+    }
+    blooms.add(tr.x + 0.35, tr.y + 3.15, tr.z + 0.15, 0.7, 0.7, 0.7, 0, 0xd6337a);
     shade.add(tr.x, 0.035, tr.z, 1.7, 1.7, 1, 0, 0x000000);
   }
   if (decor.church) {
@@ -647,13 +760,13 @@ function dutyGround(): THREE.CanvasTexture {
   const n = 8;
   const cell = S / n;
   return canvasTex(S, S, (g) => {
-    g.fillStyle = '#4a382c';
+    g.fillStyle = '#c4a07a';
     g.fillRect(0, 0, S, S);
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const k = (i * 13 + j * 29) % 36;
-        const tone = 132 + k;
-        g.fillStyle = `rgb(${tone + 30},${tone + 8},${tone - 22})`;
+        const tone = 168 + k;
+        g.fillStyle = `rgb(${tone + 40},${tone + 12},${tone - 28})`;
         const inset = 5 + ((i + j) % 3);
         const shift = (j % 2) * cell * 0.5;
         const x = (i * cell + shift) % S;
@@ -730,7 +843,7 @@ function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
       y,
       f.fz + f.uz * along - f.nz * inset,
     );
-    const bands = [0xc4a078, 0xa56b45, 0x5e8f86];
+    const bands = [0xfff3df, 0xe8a84a, 0x6fbfc4];
     for (let band = 0; band < 3; band++) {
       const s0 = a0 + (a1 - a0) * (band / 3);
       const s1 = a0 + (a1 - a0) * ((band + 1) / 3);

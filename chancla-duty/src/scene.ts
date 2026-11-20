@@ -494,12 +494,18 @@ export class DutyScene {
       if (mode === 'menu') {
         const face = (x: number, z: number) => Math.atan2(5.2 - x, 8.6 - z);
         const shot = new URLSearchParams(location.search).get('shot');
-        if (shot === 'cast') {
-          spots.push([-0.55, 0, 4.5, 0.2, 0, true, 9, 9]);
-          spots.push([0.55, 0, 4.5, -0.15, 0, true, 9, 9]);
+        if (shot === 'abuela') {
+          spots.push([7, 0, 14, 0, 0, true, 9, 9]);
+          spots.push([-7, 0, 14, 0, 0, true, 9, 9]);
+          spots.push([0, 0, 4.5, 0.08, 0, true, 9, 9]);
+        } else if (shot === 'cast') {
+          spots.push([-1.05, 0, 4.5, 0.12, 0, true, 9, 9]);
+          spots.push([0.05, 0, 4.45, 0, 0, true, 9, 9]);
+          spots.push([1.15, 0, 4.5, -0.12, 0, true, 9, 9]);
         } else {
           spots.push([-1.7, 0, 4.4, face(-1.7, 4.4), 0, true, 9, 9]);
           spots.push([1.6, 0, 4.2, face(1.6, 4.2), 0, true, (now * 0.001) % 3.2, 9]);
+          spots.push([0.05, 0, 5.2, face(0.05, 5.2), 0, true, 9, 9]);
         }
       } else if (mode === 'match' && session) {
         for (const remote of session.remotes.values()) {

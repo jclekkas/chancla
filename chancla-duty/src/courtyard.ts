@@ -269,10 +269,9 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     if (mesh) root.add(mesh);
   }
 
-  if (detailed) {
-    placeFacadeModules(root, boxes);
-    placeCover(root, boxes);
-  }
+  if (detailed) placeFacadeModules(root, boxes);
+  const wires = wireLines(decor?.lights ?? [], decor?.papel ?? [], decor?.laundry ?? []);
+  if (wires) root.add(wires);
   const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
   for (const b of boxes) {
@@ -312,7 +311,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
       if (bit) root.add(new THREE.Mesh(bit, wall));
     }
   }
-  root.add(skyDome(detailed ? [0x5c3d78, 0xf08a48, 0xffc56a] : theme.sky));
+  root.add(skyDome(detailed ? [0x4a90d9, 0xf6d7b0, 0xfff6e4] : theme.sky));
   if (detailed) {
     const skin = frameWall(boxes);
     if (skin) root.add(skin);
@@ -321,57 +320,6 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const pinata = decor?.pinata ? hangPinata(decor.pinata) : null;
   if (pinata) root.add(pinata);
   return { root, pinata, clouds, wall };
-}
-
-/** Market cover that sits on the hidden collision boxes: stalls, crates, pots, benches. */
-function placeCover(parent: THREE.Object3D, boxes: readonly MapBox[]): void {
-  const wood = new THREE.MeshStandardMaterial({ color: 0x8d5a34, roughness: 0.78, metalness: 0 });
-  const awning = new THREE.MeshStandardMaterial({ color: 0xf6efe2, roughness: 0.62, metalness: 0 });
-  const clay = new THREE.MeshStandardMaterial({ color: 0xb85c3c, roughness: 0.72, metalness: 0 });
-  const counters: THREE.BufferGeometry[] = [];
-  const roofs: THREE.BufferGeometry[] = [];
-  const crates: THREE.BufferGeometry[] = [];
-  const pots: THREE.BufferGeometry[] = [];
-  const seats: THREE.BufferGeometry[] = [];
-  for (const b of boxes) {
-    const cx = (b.minX + b.maxX) / 2;
-    const cz = (b.minZ + b.maxZ) / 2;
-    const w = b.maxX - b.minX;
-    const d = b.maxZ - b.minZ;
-    const h = b.maxY - b.minY;
-    if (b.mat === 'stall' || b.mat === 'kiosk') {
-      const counter = new THREE.BoxGeometry(Math.max(w, 0.9), Math.max(h * 0.72, 0.7), Math.max(d, 0.55));
-      counter.translate(cx, Math.max(h * 0.36, 0.35), cz);
-      counters.push(counter);
-      const shade = new THREE.BoxGeometry(w + 0.55, 0.05, d + 0.4);
-      shade.translate(cx, h + 0.18, cz);
-      roofs.push(shade);
-    } else if (b.mat === 'crate') {
-      const crate = new THREE.BoxGeometry(w, h, d);
-      crate.translate(cx, h / 2, cz);
-      crates.push(crate);
-    } else if (b.mat === 'planter' || b.mat === 'bin') {
-      const pot = new THREE.CylinderGeometry(Math.min(w, d) * 0.46, Math.min(w, d) * 0.36, Math.max(h, 0.45), 8);
-      pot.translate(cx, Math.max(h, 0.45) / 2, cz);
-      pots.push(pot);
-    } else if (b.mat === 'stone' && h < 1.25 && !b.facade) {
-      const seat = new THREE.BoxGeometry(Math.max(w, 0.9), 0.08, Math.max(d * 0.45, 0.32));
-      seat.translate(cx, 0.42, cz);
-      seats.push(seat);
-    }
-  }
-  const add = (geos: THREE.BufferGeometry[], mat: THREE.Material) => {
-    if (!geos.length) return;
-    const mesh = new THREE.Mesh(mergeGeometries(geos, false) ?? geos[0]!, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-  };
-  add(counters, wood);
-  add(roofs, awning);
-  add(crates, wood);
-  add(pots, clay);
-  add(seats, wood);
 }
 
 function cableFor(lines: Array<[number, number, number, number, number]>): THREE.Mesh | null {
@@ -397,10 +345,9 @@ function cableFor(lines: Array<[number, number, number, number, number]>): THREE
   return new THREE.Mesh(mergeGeometries(parts, false) ?? parts[0]!, new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.45, metalness: 0.55 }));
 }
 
-function hiddenByKit(b: MapBox): boolean {
-  if (b.mat === 'fountain') return true;
-  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge' || b.mat === 'kiosk' || b.mat === 'table') return true;
-  return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
+/** High tier only swaps the fountain box for the tiled basin. Everything else stays. */
+export function hiddenByKit(b: MapBox): boolean {
+  return b.mat === 'fountain';
 }
 
 function placeBox(
@@ -418,7 +365,7 @@ function placeBox(
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
     }
-    if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
+    if (b.facade && h >= 3) facade(add, blooms, b, hue);
     return;
   }
   switch (b.mat) {
@@ -436,7 +383,7 @@ function placeBox(
     case 'planter':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc45a38);
       add(b.minX + 0.06, b.maxY - 0.02, b.minZ + 0.06, b.maxX - 0.06, b.maxY + 0.02, b.maxZ - 0.06, 0x5b3a22);
-      if (!detailed) plantRow(leaves, blooms, b);
+      plantRow(leaves, blooms, b);
       return;
     case 'fountain':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xfff6ea);
@@ -456,7 +403,6 @@ function placeBox(
       return;
     case 'hedge': {
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
-      if (detailed) return;
       const long = Math.max(w, d), alongX = w >= d;
       const n = Math.max(2, Math.round(long / 0.55));
       for (let i = 0; i < n; i++) {
@@ -556,13 +502,39 @@ function plantRow(leaves: Batch, blooms: Batch, b: MapBox): void {
   }
 }
 
+function wireLines(
+  lights: Array<[number, number, number, number, number]>,
+  papel: Array<[number, number, number, number, number]>,
+  laundry: Array<[number, number, number, number, number]>,
+): THREE.LineSegments | null {
+  const pts: number[] = [];
+  const push = (lines: Array<[number, number, number, number, number]>, sag: number) => {
+    for (const [ax, az, bx, bz, y] of lines) {
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n;
+        const t1 = (i + 1) / n;
+        pts.push(ax + (bx - ax) * t0, y - Math.sin(t0 * Math.PI) * sag, az + (bz - az) * t0);
+        pts.push(ax + (bx - ax) * t1, y - Math.sin(t1 * Math.PI) * sag, az + (bz - az) * t1);
+      }
+    }
+  };
+  push(lights, 1.05);
+  push(papel, 0.35);
+  push(laundry, 0.4);
+  if (!pts.length) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2a2420 }));
+}
+
 function dressMap(
   parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, cloth: Batch, bulbs: Batch, glow: Batch, shade: Batch,
   add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
   map: MapData, decor: MapDecor | undefined, teamDecor: boolean, detailed: boolean,
 ): void {
   if (!decor) return;
-  if (!detailed) for (const tr of decor.trees ?? []) {
+  for (const tr of decor.trees ?? []) {
     add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
     leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
     leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
@@ -587,7 +559,7 @@ function dressMap(
   }
   const bd = map.bounds;
   const reach = Math.max(38, Math.hypot(bd.maxX, bd.maxZ) + 8);
-  if (!detailed) for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2;
     const r = reach + (i % 3) * 4;
     const h = 5 + (i % 5) * 1.4;
@@ -608,6 +580,11 @@ function dressMap(
     const stripes = [a.color, 0xfff6ea];
     const w = a.maxX - a.minX;
     for (let i = 0; i < 4; i++) add(a.minX + (w / 4) * i, a.y, a.minZ, a.minX + (w / 4) * (i + 1), a.y + 0.08, a.maxZ, stripes[i % 2]!);
+    const stall = map.boxes.find((q) => q.mat === 'stall' && q.minX < a.maxX && q.maxX > a.minX && q.minZ < a.maxZ && q.maxZ > a.minZ);
+    if (stall) {
+      const posts: Array<[number, number]> = [[stall.minX + 0.08, stall.minZ + 0.08], [stall.maxX - 0.08, stall.minZ + 0.08], [stall.minX + 0.08, stall.maxZ - 0.08], [stall.maxX - 0.08, stall.maxZ - 0.08]];
+      for (const [px, pz] of posts) add(px - 0.03, stall.maxY, pz - 0.03, px + 0.03, a.y, pz + 0.03, 0x6a3a22);
+    }
   }
   // Contact shadows for the showcase crowd. The skinned meshes themselves skip
   // the shadow map so three characters stay inside the triangle budget.

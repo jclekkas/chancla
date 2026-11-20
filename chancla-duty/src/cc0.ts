@@ -88,8 +88,19 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
       mesh.castShadow = false;
       mesh.receiveShadow = false;
     }
-    if (mesh.name === 'duty-floor' && !golden) { mesh.material = tiles; mesh.receiveShadow = true; }
-    if (mesh.name === 'duty-floor' && golden) mesh.receiveShadow = true;
+    if (mesh.name === 'duty-floor') {
+      const paved = tiles.clone();
+      const plane = mesh.geometry as THREE.PlaneGeometry;
+      const gw = plane.parameters?.width ?? 54;
+      const gd = plane.parameters?.height ?? 38;
+      const tileM = golden ? 1.6 : 2.4;
+      for (const tex of [paved.map, paved.normalMap, paved.roughnessMap]) {
+        if (!tex) continue;
+        tex.repeat.set(gw / tileM, gd / tileM);
+      }
+      mesh.material = paved;
+      mesh.receiveShadow = true;
+    }
     if (mesh.name === 'duty-wood') { mesh.material = wood; mesh.castShadow = shadows; mesh.receiveShadow = true; }
   });
   try {
@@ -99,20 +110,18 @@ export async function applyCc0Look(renderer: THREE.WebGLRenderer, scene: THREE.S
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromEquirectangular(hdr).texture;
     scene.environment = env;
-    scene.environmentIntensity = golden ? 0.32 : 0.85;
-    if (!golden) {
-      scene.background = hdr;
-      scene.backgroundBlurriness = 0.04;
-      root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
-    }
-    renderer.toneMappingExposure = golden ? 1.14 : 1.05;
+    scene.environmentIntensity = golden ? 0.75 : 0.85;
+    scene.background = hdr;
+    scene.backgroundBlurriness = golden ? 0.02 : 0.04;
+    root.traverse((o) => { if (o.name === 'duty-sky') o.visible = false; });
+    renderer.toneMappingExposure = golden ? 1.02 : 1.05;
     pmrem.dispose();
   } catch { /* keep the gradient sky */ }
   const fog = scene.fog as THREE.Fog | null;
   if (fog) {
-    fog.color.set(golden ? 0xf3b07a : 0xf3ddc4);
-    fog.near = golden ? 18 : 36;
-    fog.far = golden ? 72 : 140;
+    fog.color.set(golden ? 0xf6dcc0 : 0xf3ddc4);
+    fog.near = golden ? 40 : 36;
+    fog.far = golden ? 170 : 140;
   }
 }
 

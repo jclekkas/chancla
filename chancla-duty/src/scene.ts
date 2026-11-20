@@ -287,11 +287,11 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xffd2a4, 0x8a4030, this.tier === 'high' ? 0.48 : 0.8);
-    this.root.add(new THREE.AmbientLight(0xfff1dc, this.tier === 'high' ? 0.22 : 0.28));
-    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffb15a : 0xfff3d8, this.tier === 'high' ? 2.6 : 2.0);
+    this.hemi = new THREE.HemisphereLight(this.tier === 'high' ? 0x9cc8ff : 0xffd2a4, this.tier === 'high' ? 0xc98a5a : 0x8a4030, this.tier === 'high' ? 0.45 : 0.8);
+    if (this.tier !== 'high') this.root.add(new THREE.AmbientLight(0xfff1dc, 0.28));
+    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc58a : 0xfff3d8, this.tier === 'high' ? 3.0 : 2.0);
     sun.position.set(...theme.sunPos);
-    if (this.tier === 'high') sun.position.y *= 0.42;
+    if (this.tier === 'high') sun.position.y *= 0.32;
     if (this.gpuTier) {
       sun.castShadow = true;
       sun.shadow.mapSize.set(this.tier === 'high' ? 2048 : 1024, this.tier === 'high' ? 2048 : 1024);
@@ -300,7 +300,7 @@ export class DutyScene {
       sun.shadow.normalBias = 0.02;
       const sc = sun.shadow.camera;
       // A tight shadow box keeps the map's far corners out of the shadow pass.
-      sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
+      sc.left = -24; sc.right = 24; sc.top = 24; sc.bottom = -24; sc.near = 0.5; sc.far = 80;
     }
     const fill = new THREE.DirectionalLight(0xffe0b8, this.tier === 'high' ? 0.38 : 0.35);
     fill.position.set(0, 6, 10);
@@ -669,28 +669,29 @@ export class DutyScene {
 
   async enableHigh(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<((scene: THREE.Scene, camera: THREE.Camera) => void) | null> {
     try {
-      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { FXAAPass }, { ShaderPass }] = await Promise.all([
+      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { ShaderPass }] = await Promise.all([
         import('three/examples/jsm/postprocessing/EffectComposer.js'),
         import('three/examples/jsm/postprocessing/RenderPass.js'),
         import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
         import('three/examples/jsm/postprocessing/GTAOPass.js'),
         import('three/examples/jsm/postprocessing/OutputPass.js'),
-        import('three/examples/jsm/postprocessing/FXAAPass.js'),
         import('three/examples/jsm/postprocessing/ShaderPass.js'),
       ]);
-      const composer = new EffectComposer(renderer);
+      const { HalfFloatType, WebGLRenderTarget } = await import('three');
+      const pr = Math.min(renderer.getPixelRatio(), 1.5);
+      const target = new WebGLRenderTarget(renderer.domElement.width * pr, renderer.domElement.height * pr, { type: HalfFloatType, samples: 2 });
+      const composer = new EffectComposer(renderer, target);
       composer.addPass(new RenderPass(scene, camera));
-      const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
+      const gtao = new GTAOPass(scene, camera, Math.floor(renderer.domElement.width / 2), Math.floor(renderer.domElement.height / 2));
       gtao.output = GTAOPass.OUTPUT.Default;
-      gtao.blendIntensity = 0.35;
+      gtao.blendIntensity = 1;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.11, 0.4, 0.92));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.08, 0.4, 0.92));
       composer.addPass(new ShaderPass({
-        uniforms: { tDiffuse: { value: null }, lift: { value: new THREE.Vector3(0.045, 0.02, 0.0) }, contrast: { value: 1.08 } },
+        uniforms: { tDiffuse: { value: null }, contrast: { value: 1.15 }, saturation: { value: 1.12 } },
         vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: 'uniform sampler2D tDiffuse; uniform vec3 lift; uniform float contrast; varying vec2 vUv; void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = (c - 0.5) * contrast + 0.5; c += lift * (1.0 - c); gl_FragColor = vec4(c, 1.0); }',
+        fragmentShader: 'uniform sampler2D tDiffuse; uniform float contrast; uniform float saturation; varying vec2 vUv; void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = (c - 0.18) * contrast + 0.18; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, saturation); c *= vec3(1.02, 1.0, 0.97); gl_FragColor = vec4(c, 1.0); }',
       }));
-      composer.addPass(new FXAAPass());
       composer.addPass(new OutputPass());
       return () => composer.render();
     } catch {

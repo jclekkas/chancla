@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MapBox, MapData, MapDecor } from '../../shared/map';
 import { groundTexture, signTexture } from '../../src/fps/render/materials';
+import { placeFacadeModules } from './facades';
 import { THEMES, type ThemeName } from '../../src/fps/render/world';
 
 const _m = new THREE.Matrix4();
@@ -15,8 +16,8 @@ const _e = new THREE.Euler();
 const _c = new THREE.Color();
 
 const HUE: Record<string, number> = {
-  stuccoTerracotta: 0xe07048, stuccoCream: 0xffe4c0, stuccoTurquoise: 0x3ec4b8,
-  stuccoMarigold: 0xf0a030, stuccoViolet: 0x8d5cb0, stuccoPink: 0xf07898,
+  stuccoTerracotta: 0xe39462, stuccoCream: 0xfff3df, stuccoTurquoise: 0x6fbfc4,
+  stuccoMarigold: 0xe8a84a, stuccoViolet: 0xc9a4d4, stuccoPink: 0xee9a86,
   stone: 0xf0e2cc, step: 0xf6e7c8, parapet: 0xfff0d8, planter: 0xc45a38,
   wood: 0xc48448, lintel: 0xf7efe0, stall: 0x2fafa6, crate: 0xb5814a,
   fountain: 0xfff6ea, statue: 0xf4efe4, kiosk: 0xf0c44a, table: 0xf07898,
@@ -63,11 +64,12 @@ function plasterTex(): THREE.CanvasTexture {
 function leafTex(): THREE.CanvasTexture {
   return canvasTex(128, 128, (g) => {
     g.clearRect(0, 0, 128, 128);
-    g.fillStyle = '#2f8a3a';
-    for (let i = 0; i < 14; i++) {
+    const greens = ['#1f6b32', '#2f8a3a', '#46a84e', '#1a5a2c'];
+    for (let i = 0; i < 18; i++) {
       g.save();
-      g.translate(20 + (i % 4) * 28, 16 + Math.floor(i / 4) * 30);
-      g.rotate(i);
+      g.translate(64 + Math.cos(i * 1.7) * (18 + (i % 5) * 8), 64 + Math.sin(i * 2.1) * (16 + (i % 4) * 9));
+      g.rotate(i * 0.7);
+      g.fillStyle = greens[i % greens.length]!;
       g.beginPath();
       g.ellipse(0, 0, 16, 7, 0, 0, Math.PI * 2);
       g.fill();
@@ -107,12 +109,12 @@ function paint(geo: THREE.BufferGeometry, hex: number): void {
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
     const ny = nrm.getY(i);
-    let ao = 0.88 + ny * 0.12;
-    if (y < 0.35) ao *= 0.9;
-    const sat = 1.05;
+    let ao = 0.94 + ny * 0.06;
+    if (y < 0.2) ao *= 0.9;
+    const sat = 1.08;
     cols[i * 3] = Math.min(1, (0.5 + (_c.r - 0.5) * sat) * ao);
     cols[i * 3 + 1] = Math.min(1, (0.5 + (_c.g - 0.5) * sat) * ao);
-    cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao * 0.92);
+    cols[i * 3 + 2] = Math.min(1, (0.5 + (_c.b - 0.5) * sat) * ao);
     const u = (((pos.getX(i) + pos.getZ(i)) * 0.42) % 1 + 1) % 1;
     const v = ((y * 0.5) % 1 + 1) % 1;
     uv.setXY(i, u, v);
@@ -135,7 +137,24 @@ function box(parts: THREE.BufferGeometry[], x0: number, y0: number, z0: number, 
     }
   }
   geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  worldUv(geo);
   parts.push(geo);
+}
+
+/** Box-projected UVs in world meters so a plaster tile stays plaster-sized on every wall. */
+function worldUv(geo: THREE.BufferGeometry, meters = 2.2): void {
+  const pos = geo.attributes.position as THREE.BufferAttribute | undefined;
+  const nrm = geo.attributes.normal as THREE.BufferAttribute | undefined;
+  const uv = geo.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!pos || !nrm || !uv) return;
+  for (let i = 0; i < pos.count; i++) {
+    const ax = Math.abs(nrm.getX(i));
+    const ay = Math.abs(nrm.getY(i));
+    const az = Math.abs(nrm.getZ(i));
+    const u = ay >= ax && ay >= az ? pos.getX(i) : ax >= az ? pos.getZ(i) : pos.getX(i);
+    const v = ay >= ax && ay >= az ? pos.getZ(i) : pos.getY(i);
+    uv.setXY(i, u / meters, v / meters);
+  }
 }
 
 interface Face { fx: number; fz: number; ux: number; uz: number; nx: number; nz: number; len: number; ry: number }
@@ -208,6 +227,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const root = new THREE.Group();
   root.name = 'duty-courtyard';
   const parts: THREE.BufferGeometry[] = [];
+  const trim: THREE.BufferGeometry[] = [];
   const wall = new THREE.MeshLambertMaterial({ map: plasterTex(), vertexColors: true });
   liveWater.length = 0;
   const a = new THREE.PlaneGeometry(1, 1).toNonIndexed();
@@ -216,7 +236,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   const c = new THREE.PlaneGeometry(1, 1).toNonIndexed();
   c.rotateY(Math.PI / 4);
   const leafCard = mergeGeometries([a, b, c], false) ?? a;
-  const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 220);
+  const leaves = new Batch(leafCard, new THREE.MeshLambertMaterial({ map: leafTex(), alphaTest: 0.35, side: THREE.DoubleSide, color: 0xffffff }), 720);
   const shade = new Batch(new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2a160f, transparent: true, opacity: 0.33, depthWrite: false }), 48);
   const blooms = new Batch(new THREE.SphereGeometry(0.12, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), 120);
   const cloth = new Batch(pennant(), new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.62, metalness: 0, side: THREE.DoubleSide }), 180);
@@ -227,42 +247,78 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
     color: 0xfff0c0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false,
   }), 140);
 
-  const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => box(parts, x0, y0, z0, x1, y1, z1, hex);
+  const add = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => {
+    const vol = Math.abs((x1 - x0) * (y1 - y0) * (z1 - z0));
+    box(detailed && vol < 0.45 ? trim : parts, x0, y0, z0, x1, y1, z1, hex);
+  };
 
   for (const b of boxes) placeBox(leaves, blooms, b, add, detailed);
   dressMap(parts, leaves, blooms, cloth, bulbs, glow, shade, add, map, decor, teamDecor, detailed);
+  if (detailed) {
+    const cable = cableFor(decor?.lights ?? []);
+    if (cable) root.add(cable);
+  }
 
+  const wallMesh = (geos: THREE.BufferGeometry[]) => {
+    const merged = mergeGeometries(geos, false);
+    if (!merged) return null;
+    const mesh = new THREE.Mesh(merged, wall);
+    mesh.name = 'duty-walls';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
   if (parts.length) {
-    const merged = mergeGeometries(parts, false);
-    if (merged) {
-      const mesh = new THREE.Mesh(merged, wall);
-      mesh.name = 'duty-walls';
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      root.add(mesh);
+    if (detailed && trim.length) {
+      const lod = new THREE.LOD();
+      const near = wallMesh([...parts, ...trim]);
+      const far = wallMesh(parts);
+      if (near) lod.addLevel(near, 0);
+      if (far) lod.addLevel(far, 24);
+      root.add(lod);
+    } else {
+      const mesh = wallMesh(parts);
+      if (mesh) root.add(mesh);
     }
-    for (const p of parts) p.dispose();
+    for (const p of [...parts, ...trim]) p.dispose();
   }
   for (const batch of [leaves, blooms, cloth, bulbs, glow, shade]) {
     const mesh = batch.finish();
     if (mesh) root.add(mesh);
   }
 
-  const floor = paintedFloor(decor);
+  if (detailed) placeFacadeModules(root, boxes);
+  const wires = wireLines(decor?.lights ?? [], decor?.papel ?? [], decor?.laundry ?? []);
+  if (wires) root.add(wires);
+  const floor = paintedFloor(decor, detailed);
   if (floor) root.add(floor);
+  if (detailed) {
+    const basin = boxes.find((b) => b.mat === 'fountain' && b.minY < 0.2);
+    if (basin) {
+      const outer = Math.max(basin.maxX - basin.minX, basin.maxZ - basin.minZ) * 0.72;
+      const ring = new THREE.RingGeometry(outer - 0.45, outer, 32);
+      ring.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(ring, new THREE.MeshStandardMaterial({ color: 0xe7d3b0, roughness: 0.78, metalness: 0.02 }));
+      mesh.name = 'duty-ring';
+      mesh.position.set((basin.minX + basin.maxX) / 2, 0.03, (basin.minZ + basin.maxZ) / 2);
+      mesh.receiveShadow = true;
+      root.add(mesh);
+    }
+  }
   for (const b of boxes) {
     if (b.mat === 'fountain' || b.mat === 'stall') {
       shade.add((b.minX + b.maxX) / 2, 0.03, (b.minZ + b.maxZ) / 2, (b.maxX - b.minX) * 0.55, (b.maxZ - b.minZ) * 0.55, 1, 0, 0x000000);
     }
-    if (b.mat === 'fountain') {
+    if (b.mat === 'fountain' && b.minY < 0.2) {
       const ripples = waterTex();
       liveWater.push(ripples);
+      const inset = detailed ? 3.4 : 0.7;
       const water = new THREE.Mesh(
-        new THREE.PlaneGeometry((b.maxX - b.minX) - 0.7, (b.maxZ - b.minZ) - 0.7),
-        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: 0.92, color: 0xd8ffff }),
+        new THREE.PlaneGeometry(Math.max(0.8, (b.maxX - b.minX) - inset), Math.max(0.8, (b.maxZ - b.minZ) - inset)),
+        new THREE.MeshBasicMaterial({ map: ripples, transparent: true, opacity: detailed ? 0.85 : 0.92, color: detailed ? 0x3aa0c8 : 0xd8ffff }),
       );
       water.rotation.x = -Math.PI / 2;
-      water.position.set((b.minX + b.maxX) / 2, b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
+      water.position.set((b.minX + b.maxX) / 2, detailed ? 0.68 : b.maxY - 0.02, (b.minZ + b.maxZ) / 2);
       root.add(water);
     }
     if (b.sign && b.facade) {
@@ -274,7 +330,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
       );
       if (mesh) root.add(mesh);
     }
-    if (b.mat === 'statue') {
+    if (b.mat === 'statue' && !detailed) {
       const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
       const sole = new THREE.BoxGeometry(1.5, 0.22, 0.62);
       paint(sole, 0xf5c542);
@@ -286,7 +342,7 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
       if (bit) root.add(new THREE.Mesh(bit, wall));
     }
   }
-  root.add(skyDome(theme.sky));
+  root.add(skyDome(detailed ? [0x4a90d9, 0xf6d7b0, 0xfff6e4] : theme.sky));
   if (detailed) {
     const skin = frameWall(boxes);
     if (skin) root.add(skin);
@@ -297,10 +353,32 @@ export function buildCourtyard(map: MapData, boxes: readonly MapBox[], themeName
   return { root, pinata, clouds, wall };
 }
 
-function hiddenByKit(b: MapBox): boolean {
-  if (b.mat === 'fountain' && b.minY < 0.2 && b.maxY < 2) return true;
-  if (b.mat === 'stall' || b.mat === 'crate' || b.mat === 'bin' || b.mat === 'hedge') return true;
-  return b.mat === 'stone' && b.maxY - b.minY < 1.25 && !b.facade;
+function cableFor(lines: Array<[number, number, number, number, number]>): THREE.Mesh | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const [ax, az, bx, bz, y] of lines) {
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n;
+      const t1 = (i + 1) / n;
+      const p0 = new THREE.Vector3(ax + (bx - ax) * t0, y - Math.sin(t0 * Math.PI) * 1.05, az + (bz - az) * t0);
+      const p1 = new THREE.Vector3(ax + (bx - ax) * t1, y - Math.sin(t1 * Math.PI) * 1.05, az + (bz - az) * t1);
+      const dir = p1.clone().sub(p0);
+      const len = dir.length();
+      if (len < 0.02) continue;
+      const g = new THREE.CylinderGeometry(0.012, 0.012, len, 4);
+      g.translate(0, len / 2, 0);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
+      g.translate(p0.x, p0.y, p0.z);
+      parts.push(g);
+    }
+  }
+  if (!parts.length) return null;
+  return new THREE.Mesh(mergeGeometries(parts, false) ?? parts[0]!, new THREE.MeshStandardMaterial({ color: 0x2c2926, roughness: 0.45, metalness: 0.55 }));
+}
+
+/** High tier only swaps the fountain box for the tiled basin. Everything else stays. */
+export function hiddenByKit(b: MapBox): boolean {
+  return b.mat === 'fountain';
 }
 
 function placeBox(
@@ -314,11 +392,11 @@ function placeBox(
   const hue = HUE[b.mat] ?? 0xffe4c0;
   if (b.mat.startsWith('stucco')) {
     add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
-    if (h >= 2.5 && b.minY === 0) add(b.minX - 0.04, 0, b.minZ - 0.04, b.maxX + 0.04, 0.55, b.maxZ + 0.04, shade(hue, 0.72));
+    if (h >= 2.5 && b.minY === 0) add(b.minX - 0.06, 0, b.minZ - 0.06, b.maxX + 0.06, detailed ? 0.85 : 0.55, b.maxZ + 0.06, shade(hue, detailed ? 0.58 : 0.72));
     if (h >= 4) {
       add(b.minX - 0.12, b.maxY, b.minZ - 0.12, b.maxX + 0.12, b.maxY + 0.22, b.maxZ + 0.12, 0xfff0d4);
     }
-    if (b.facade && h >= 3 && !detailed) facade(add, blooms, b, hue);
+    if (b.facade && h >= 3) facade(add, blooms, b, hue);
     return;
   }
   switch (b.mat) {
@@ -334,42 +412,61 @@ function placeBox(
       for (let x = b.minX + 0.4; x < b.maxX; x += 0.8) blooms.add(x, b.maxY + 0.22, cz, 1.1, 1.1, 1.1, 0, 0xf07898);
       return;
     case 'planter':
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc45a38);
-      add(b.minX + 0.06, b.maxY - 0.02, b.minZ + 0.06, b.maxX - 0.06, b.maxY + 0.02, b.maxZ - 0.06, 0x5b3a22);
-      if (!detailed) plantRow(leaves, blooms, b);
+      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.08, b.maxZ, 0xd86a42);
+      add(b.minX - 0.05, b.maxY - 0.14, b.minZ - 0.05, b.maxX + 0.05, b.maxY - 0.02, b.maxZ + 0.05, 0xe39462);
+      add(b.minX + 0.08, b.maxY - 0.06, b.minZ + 0.08, b.maxX - 0.08, b.maxY + 0.02, b.maxZ - 0.08, 0x5b3a22);
+      plantRow(leaves, blooms, b);
       return;
     case 'fountain':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xfff6ea);
       add(b.minX - 0.08, b.maxY - 0.08, b.minZ - 0.08, b.maxX + 0.08, b.maxY + 0.06, b.maxZ + 0.08, 0x3ec4b8);
       return;
     case 'statue':
+      if (detailed) return;
       add(b.minX + 0.2, b.minY, b.minZ + 0.2, b.maxX - 0.2, 2.4, b.maxZ - 0.2, 0x3ec4b8);
       add(cx - 0.5, 2.4, cz - 0.5, cx + 0.5, 2.6, cz + 0.5, 0xf5c542);
       return;
     case 'stall':
+      if (detailed) {
+        openStall(add, b, 0xf0a030);
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.06, b.maxZ, 0x2fafa6);
       add(b.minX - 0.04, b.maxY - 0.06, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xfff6ea);
       return;
     case 'kiosk':
+      if (detailed) {
+        openStall(add, b, b.sign === 'ELOTES' ? 0xf0c44a : 0x3ec4b8);
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.28, b.maxZ, b.sign === 'ELOTES' ? 0xf0c44a : 0x3f8f6a);
       add(b.minX - 0.12, b.maxY - 0.28, b.minZ - 0.12, b.maxX + 0.12, b.maxY, b.maxZ + 0.12, 0xe07048);
       return;
     case 'hedge': {
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
-      if (detailed) return;
+      if (!detailed) add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.2, b.maxZ, 0x246b30);
       const long = Math.max(w, d), alongX = w >= d;
-      const n = Math.max(2, Math.round(long / 0.55));
+      const n = Math.max(3, Math.round(long / (detailed ? 0.42 : 0.55)));
       for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n;
         const x = alongX ? b.minX + w * t : cx;
         const z = alongX ? cz : b.minZ + d * t;
-        leaves.add(x, b.maxY - 0.05, z, 1.1, 0.8, 1.1, 0, i % 2 ? 0x3fa84a : 0x2d7a34);
-        if (i % 2 === 0) blooms.add(x, b.maxY + 0.15, z, 1, 1, 1, 0, i % 4 ? 0xf0a030 : 0xf07898);
+        const lift = detailed ? h * 0.45 : b.maxY - 0.05;
+        leaves.add(x, lift, z, detailed ? 0.85 : 1.1, detailed ? h * 0.7 : 0.8, detailed ? 0.85 : 1.1, i * 0.4, i % 2 ? 0x3fa84a : 0x2d7a34);
+        if (detailed) leaves.add(x, lift + h * 0.28, z, 0.6, h * 0.4, 0.6, i * 0.8, 0x46b056);
+        if (i % 2 === 0) blooms.add(x, (detailed ? lift + h * 0.4 : b.maxY + 0.15), z, 1, 1, 1, 0, i % 4 ? 0xf0a030 : 0xf07898);
       }
       return;
     }
     case 'table': {
       const cloth = Math.round(cx + cz) % 2 ? 0xf07898 : 0x3ec4b8;
+      if (detailed) {
+        add(b.minX, b.maxY - 0.06, b.minZ, b.maxX, b.maxY, b.maxZ, cloth);
+        add(b.minX + 0.04, b.maxY - 0.02, b.minZ + 0.04, b.maxX - 0.04, b.maxY + 0.02, b.maxZ - 0.04, 0xfff6ea);
+        for (const [x, z] of [[b.minX + 0.08, b.minZ + 0.08], [b.maxX - 0.14, b.minZ + 0.08], [b.minX + 0.08, b.maxZ - 0.14], [b.maxX - 0.14, b.maxZ - 0.14]] as const) {
+          add(x, 0, z, x + 0.06, b.maxY - 0.06, z + 0.06, 0x6a3a22);
+        }
+        return;
+      }
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.04, b.maxZ, cloth);
       add(b.minX - 0.03, b.maxY - 0.04, b.minZ - 0.03, b.maxX + 0.03, b.maxY, b.maxZ + 0.03, 0xffffff);
       return;
@@ -384,8 +481,8 @@ function placeBox(
       return;
     }
     case 'stage':
-      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.05, b.maxZ, 0x6a3a86);
-      add(b.minX - 0.04, b.maxY - 0.05, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xf5c542);
+      add(b.minX, b.minY, b.minZ, b.maxX, b.maxY - 0.05, b.maxZ, 0x8a5a32);
+      add(b.minX - 0.04, b.maxY - 0.05, b.minZ - 0.04, b.maxX + 0.04, b.maxY, b.maxZ + 0.04, 0xf3e6c8);
       return;
     case 'crate':
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, 0xc48448);
@@ -400,6 +497,30 @@ function placeBox(
       return;
     default:
       add(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, hue);
+  }
+}
+
+function openStall(
+  add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
+  b: MapBox,
+  awning: number,
+): void {
+  const top = Math.max(b.maxY, 1.35);
+  const posts: Array<[number, number]> = [
+    [b.minX + 0.07, b.minZ + 0.07],
+    [b.maxX - 0.07, b.minZ + 0.07],
+    [b.minX + 0.07, b.maxZ - 0.07],
+    [b.maxX - 0.07, b.maxZ - 0.07],
+  ];
+  for (const [x, z] of posts) add(x - 0.045, 0, z - 0.045, x + 0.045, top, z + 0.045, 0x6a3a22);
+  add(b.minX + 0.1, Math.min(0.78, top - 0.2), b.minZ + 0.1, b.maxX - 0.1, Math.min(0.9, top - 0.08), b.maxZ - 0.1, 0xc48448);
+  add(b.minX + 0.16, 0, b.minZ + 0.18, b.minX + 0.52, 0.3, b.minZ + 0.52, 0xb5814a);
+  const span = (b.maxX - b.minX) + 0.36;
+  const stripes = [awning, 0xfff6ea];
+  for (let i = 0; i < 4; i++) {
+    const x0 = b.minX - 0.18 + span * (i / 4);
+    const x1 = b.minX - 0.18 + span * ((i + 1) / 4);
+    add(x0, top, b.minZ - 0.22, x1, top + 0.07, b.maxZ + 0.28, stripes[i % 2]!);
   }
 }
 
@@ -443,6 +564,41 @@ function arches(add: (x0: number, y0: number, z0: number, x1: number, y1: number
   }
 }
 
+function branchTree(parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, x: number, y: number, z: number): void {
+  const trunk = new THREE.CylinderGeometry(0.1, 0.16, 2.15, 6);
+  trunk.translate(x, y + 1.08, z);
+  paint(trunk, 0x6b4423);
+  worldUv(trunk, 1.1);
+  parts.push(trunk);
+  const tips: Array<[number, number, number]> = [
+    [0.05, 2.55, 0.08],
+    [0.72, 2.15, 0.22],
+    [-0.68, 2.25, -0.12],
+    [0.22, 2.35, 0.7],
+    [-0.28, 2.2, -0.66],
+    [0.55, 1.95, -0.48],
+    [-0.5, 2.55, 0.4],
+  ];
+  for (const [dx, dy, dz] of tips) {
+    const len = Math.hypot(dx, dy - 1.7, dz);
+    const branch = new THREE.CylinderGeometry(0.028, 0.045, len, 4);
+    branch.translate(0, len / 2, 0);
+    const dir = new THREE.Vector3(dx, dy - 1.7, dz).normalize();
+    branch.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+    branch.translate(x, y + 1.7, z);
+    paint(branch, 0x5c3a22);
+    worldUv(branch, 1.1);
+    parts.push(branch);
+    for (let k = 0; k < 3; k++) {
+      const jx = dx + ((k * 3) % 5 - 2) * 0.16;
+      const jz = dz + ((k * 5) % 5 - 2) * 0.16;
+      const jy = dy + (k % 2) * 0.16;
+      leaves.add(x + jx, y + jy, z + jz, 0.48, 0.36, 0.48, k * 0.8, k % 2 ? 0x2f7a34 : 0x3d9a48);
+    }
+    if (dx > 0.4) blooms.add(x + dx, y + dy + 0.1, z + dz, 0.55, 0.55, 0.55, 0, 0xd6337a);
+  }
+}
+
 function plantRow(leaves: Batch, blooms: Batch, b: MapBox): void {
   const w = b.maxX - b.minX, d = b.maxZ - b.minZ;
   const alongX = w >= d;
@@ -456,18 +612,47 @@ function plantRow(leaves: Batch, blooms: Batch, b: MapBox): void {
   }
 }
 
+function wireLines(
+  lights: Array<[number, number, number, number, number]>,
+  papel: Array<[number, number, number, number, number]>,
+  laundry: Array<[number, number, number, number, number]>,
+): THREE.LineSegments | null {
+  const pts: number[] = [];
+  const push = (lines: Array<[number, number, number, number, number]>, sag: number) => {
+    for (const [ax, az, bx, bz, y] of lines) {
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n;
+        const t1 = (i + 1) / n;
+        pts.push(ax + (bx - ax) * t0, y - Math.sin(t0 * Math.PI) * sag, az + (bz - az) * t0);
+        pts.push(ax + (bx - ax) * t1, y - Math.sin(t1 * Math.PI) * sag, az + (bz - az) * t1);
+      }
+    }
+  };
+  push(lights, 1.05);
+  push(papel, 0.35);
+  push(laundry, 0.4);
+  if (!pts.length) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x2a2420 }));
+}
+
 function dressMap(
   parts: THREE.BufferGeometry[], leaves: Batch, blooms: Batch, cloth: Batch, bulbs: Batch, glow: Batch, shade: Batch,
   add: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, hex: number) => void,
   map: MapData, decor: MapDecor | undefined, teamDecor: boolean, detailed: boolean,
 ): void {
   if (!decor) return;
-  if (!detailed) for (const tr of decor.trees ?? []) {
-    add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
-    leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
-    leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
-    leaves.add(tr.x - 0.7, 3.7, tr.z - 0.4, 1.8, 1.6, 1.8, 1.1, 0xd8f0d0);
-    blooms.add(tr.x + 0.4, 4.3, tr.z + 0.2, 1.2, 1.2, 1.2, 0, 0xf07898);
+  for (const tr of decor.trees ?? []) {
+    if (detailed) branchTree(parts, leaves, blooms, tr.x, tr.y, tr.z);
+    else {
+      add(tr.x - 0.14, tr.y, tr.z - 0.14, tr.x + 0.14, 3.2, tr.z + 0.14, 0x6a3a22);
+      leaves.add(tr.x, 4.05, tr.z, 2.6, 2.2, 2.6, 0, 0xffffff);
+      leaves.add(tr.x + 0.85, 3.55, tr.z + 0.3, 1.7, 1.5, 1.7, 0.6, 0xe8ffe8);
+      leaves.add(tr.x - 0.7, 3.7, tr.z - 0.4, 1.8, 1.6, 1.8, 1.1, 0xd8f0d0);
+    }
+    blooms.add(tr.x + 0.35, tr.y + 3.15, tr.z + 0.15, 0.7, 0.7, 0.7, 0, 0xd6337a);
     shade.add(tr.x, 0.035, tr.z, 1.7, 1.7, 1, 0, 0x000000);
   }
   if (decor.church) {
@@ -487,7 +672,7 @@ function dressMap(
   }
   const bd = map.bounds;
   const reach = Math.max(38, Math.hypot(bd.maxX, bd.maxZ) + 8);
-  if (!detailed) for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2;
     const r = reach + (i % 3) * 4;
     const h = 5 + (i % 5) * 1.4;
@@ -508,15 +693,26 @@ function dressMap(
     const stripes = [a.color, 0xfff6ea];
     const w = a.maxX - a.minX;
     for (let i = 0; i < 4; i++) add(a.minX + (w / 4) * i, a.y, a.minZ, a.minX + (w / 4) * (i + 1), a.y + 0.08, a.maxZ, stripes[i % 2]!);
+    const stall = map.boxes.find((q) => q.mat === 'stall' && q.minX < a.maxX && q.maxX > a.minX && q.minZ < a.maxZ && q.maxZ > a.minZ);
+    if (stall) {
+      const posts: Array<[number, number]> = [[stall.minX + 0.08, stall.minZ + 0.08], [stall.maxX - 0.08, stall.minZ + 0.08], [stall.minX + 0.08, stall.maxZ - 0.08], [stall.maxX - 0.08, stall.maxZ - 0.08]];
+      for (const [px, pz] of posts) add(px - 0.03, stall.maxY, pz - 0.03, px + 0.03, a.y, pz + 0.03, 0x6a3a22);
+    }
   }
   // Contact shadows for the showcase crowd. The skinned meshes themselves skip
   // the shadow map so three characters stay inside the triangle budget.
   shade.add(-2.6, 0.03, 2.2, 0.5, 0.35, 1, 0.4, 0x000000);
   shade.add(0.3, 0.03, 1.5, 0.5, 0.35, 1, -0.3, 0x000000);
   shade.add(2.1, 0.03, 3.3, 0.42, 0.3, 1, 0.2, 0x000000);
+  if (detailed && map.id === 'plaza') {
+    add(-26, 0.02, -14.2, 26, 0.12, -9.85, 0xe6d3b4);
+    add(-26, 0.02, 9.85, 26, 0.12, 14.2, 0xe6d3b4);
+    add(-26, 0, -9.95, 26, 0.2, -9.72, 0xc4b496);
+    add(-26, 0, 9.72, 26, 0.2, 9.95, 0xc4b496);
+  }
   lineProps(cloth, decor.laundry ?? [], true);
   lineProps(cloth, decor.papel ?? [], false);
-  stringLights(bulbs, glow, decor.lights ?? []);
+  stringLights(bulbs, glow, decor.lights ?? [], detailed);
   if (teamDecor) {
     for (const bn of decor.banners ?? []) {
       const c = bn.team === 0 ? 0xf0a030 : 0x3ec4b8;
@@ -542,27 +738,83 @@ function lineProps(cloth: Batch, lines: Array<[number, number, number, number, n
   }
 }
 
-function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, number, number, number]>): void {
-  const colors = [0xf07898, 0xfff0b0, 0x9ee8e4];
+function stringLights(bulbs: Batch, glow: Batch, lines: Array<[number, number, number, number, number]>, lanterns = false): void {
+  const colors = [0xffd27a, 0xfff0b0, 0xf0a030];
   for (const [ax, az, bx, bz, y] of lines) {
-    const n = 16;
+    const n = lanterns ? 10 : 16;
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const sag = Math.sin(t * Math.PI) * 1.05;
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
       const col = colors[i % 3]!;
-      bulbs.add(x, y - sag - 0.08, z, 0.1, 0.12, 0.1, 0, col);
-      glow.add(x, y - sag - 0.08, z, 0.28, 0.28, 0.28, 0, col);
+      const s = lanterns ? 0.09 : 0.1;
+      bulbs.add(x, y - sag - 0.22, z, s, s * 1.6, s, 0, col);
+      if (!lanterns) glow.add(x, y - sag - 0.12, z, 0.22, 0.22, 0.22, 0, col);
     }
   }
 }
 
-function paintedFloor(decor: MapDecor | undefined): THREE.Mesh | null {
-  const tex = groundTexture(26);
+/** Seamless cobbles. Eight stones across the tile, so a 1.5 m repeat is about 19 cm a stone. */
+function dutyGround(): THREE.CanvasTexture {
+  const S = 512;
+  const n = 8;
+  const cell = S / n;
+  return canvasTex(S, S, (g) => {
+    g.fillStyle = '#c4a07a';
+    g.fillRect(0, 0, S, S);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const k = (i * 13 + j * 29) % 36;
+        const tone = 168 + k;
+        g.fillStyle = `rgb(${tone + 40},${tone + 12},${tone - 28})`;
+        const inset = 5 + ((i + j) % 3);
+        const shift = (j % 2) * cell * 0.5;
+        const x = (i * cell + shift) % S;
+        g.fillRect(x + inset * 0.3, j * cell + 4, cell - inset, cell - 8);
+        g.strokeStyle = 'rgba(42,28,18,0.85)';
+        g.lineWidth = 3;
+        g.stroke();
+      }
+    }
+  });
+}
+
+function cobbleBump(): THREE.CanvasTexture {
+  const S = 128;
+  const tex = canvasTex(S, S, (g) => {
+    g.fillStyle = '#8080ff';
+    g.fillRect(0, 0, S, S);
+    g.fillStyle = '#b0b0ff';
+    for (let j = 0; j < 8; j++) {
+      for (let i = 0; i < 8; i++) {
+        g.fillRect(i * 16 + 2, j * 16 + 2, 12, 12);
+      }
+    }
+  });
+  tex.colorSpace = THREE.NoColorSpace;
+  return tex;
+}
+
+function paintedFloor(decor: MapDecor | undefined, detailed = false): THREE.Mesh | null {
+  const gw = decor?.ground.w ?? 54;
+  const gd = decor?.ground.d ?? 38;
+  const tex = detailed ? dutyGround() : groundTexture(26);
   if (!tex) return null;
+  const bump = detailed ? cobbleBump() : null;
+  if (detailed && tex) {
+    const tile = 1.5;
+    tex.repeat.set(gw / tile, gd / tile);
+    if (bump) bump.repeat.set(gw / tile, gd / tile);
+  }
+  const mat = detailed
+    ? new THREE.MeshStandardMaterial({
+      map: tex, normalMap: bump, color: 0xffffff, roughness: 0.82, metalness: 0.04,
+    })
+    : new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 });
+  if (detailed && mat instanceof THREE.MeshStandardMaterial) mat.normalScale = new THREE.Vector2(0.45, 0.45);
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(decor?.ground.w ?? 54, decor?.ground.d ?? 38),
-    new THREE.MeshLambertMaterial({ map: tex, color: 0xfff3e4 }),
+    mat,
   );
   mesh.name = 'duty-floor';
   mesh.receiveShadow = true;
@@ -591,7 +843,7 @@ function frameWall(boxes: readonly MapBox[]): THREE.Mesh | null {
       y,
       f.fz + f.uz * along - f.nz * inset,
     );
-    const bands = [0xc4a078, 0xa56b45, 0x5e8f86];
+    const bands = [0xfff3df, 0xe8a84a, 0x6fbfc4];
     for (let band = 0; band < 3; band++) {
       const s0 = a0 + (a1 - a0) * (band / 3);
       const s1 = a0 + (a1 - a0) * ((band + 1) / 3);

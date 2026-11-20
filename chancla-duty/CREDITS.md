@@ -4,7 +4,7 @@ Chancla Duty's new look uses public-domain (CC0) assets. The original Warfare ar
 
 ## Characters
 
-The high tier does not use the Grab3D soldier. The women in `public/chancla-duty/cc0/heroes/` are textured meshes: `chancla-lod0.glb` from Hunyuan3D-2.1, and `rosa`, `luna`, `abuela`, and `abuela-patio` from TripoSR with the FLUX reference images baked in. Luna's skirt and legs are the lower half of the Rosa mesh, recolored teal. Each woman has LOD0 (about 24k triangles), LOD1 (8k), and LOD2 (2.5k). The fountain, plank door, and first-person arms in that folder are TripoSR as well. They are not skinned; the Quaternius clips remain in the repo for a later retarget. A capsule casts the shadow.
+The high tier does not use the Grab3D soldier. Rosa, Luna, and the main Abuela in `public/chancla-duty/cc0/cast/` are Hunyuan3D-2.1 meshes and textures, each with a fitted 53-bone armature. The existing Idle, Walk, Run, SwordSlash, RecieveHit, and Death clips are retargeted by rest-pose offset. LOD0 keeps the source mesh (40k triangles), LOD1 is 8k, and LOD2 is 2.5k, one skinned draw each. The patio abuela and the props in `heroes/` are the earlier meshes. A capsule casts the shadow.
 
 ## Surfaces and sky
 
@@ -12,6 +12,7 @@ The high tier does not use the Grab3D soldier. The women in `public/chancla-duty
 
 - `painted_plaster_wall` — wall color, normal, roughness (1K)
 - `terracotta_floor_tiles` — floor color, normal, roughness (1K)
+- `cobblestone_floor_04` — plaza and patio paving, color, normal, and roughness (1K). Walls keep their painted hue through a brightness-multiply of this photo's luminance.
 - `wood_table_001` — wood color, normal, roughness (1K). Photography by Dimitrios Savva, processing by Rico Cilliers
 - `kloofendal_48d_partly_cloudy` — 1K HDRI for image-based lighting and the cloudy sky
 

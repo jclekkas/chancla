@@ -62,10 +62,10 @@ function viewChancla(hex: number, heel: boolean): THREE.Group {
     emissive: hex, emissiveIntensity: 0.12,
   });
   const strapMat = new THREE.MeshStandardMaterial({
-    color: 0xfff6d8, roughness: 0.28, emissive: 0xffe29a, emissiveIntensity: 0.7,
+    color: 0xf6e2b8, roughness: 0.4, emissive: 0x000000, emissiveIntensity: 0,
   });
   const rimMat = new THREE.MeshStandardMaterial({
-    color: 0xfff1c2, emissive: 0xfff1c2, emissiveIntensity: 0.85, roughness: 0.3,
+    color: 0xfff1c2, roughness: 0.35, metalness: 0.02,
   });
   const shape = new THREE.Shape();
   shape.moveTo(0, -0.11);
@@ -79,9 +79,7 @@ function viewChancla(hex: number, heel: boolean): THREE.Group {
   rim.scale(1.06, 0.35, 1.06);
   const rimMesh = new THREE.Mesh(rim, rimMat);
   rimMesh.position.y = -0.01;
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.015, 0.08, 8), strapMat);
-  post.position.set(0, 0.04, 0.055);
-  const toe = new THREE.Vector3(0, 0.075, 0.05);
+  const toe = new THREE.Vector3(0, 0.055, 0.05);
   const strapBar = (end: THREE.Vector3) => {
     const mid = toe.clone().add(end).multiplyScalar(0.5);
     const dir = end.clone().sub(toe);
@@ -98,7 +96,7 @@ function viewChancla(hex: number, heel: boolean): THREE.Group {
     rib.rotation.y = i % 2 ? 0.08 : -0.08;
     g.add(rib);
   }
-  g.add(rimMesh, soleMesh, post, strapBar(new THREE.Vector3(-0.085, 0.02, -0.03)), strapBar(new THREE.Vector3(0.085, 0.02, -0.03)));
+  g.add(rimMesh, soleMesh, strapBar(new THREE.Vector3(-0.085, 0.02, -0.03)), strapBar(new THREE.Vector3(0.085, 0.02, -0.03)));
   if (heel) {
     const block = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.048, 0.08, 8), soleMat);
     block.position.set(0, 0.01, -0.06);
@@ -156,6 +154,8 @@ const burstL = new Float32Array(BURST);
 export class DutyScene {
   readonly root = new THREE.Group();
   readonly stats: DutyStats = { cpuMs: 0, syncMs: 0, frames: 0, calls: 0, triangles: 0, gpu: '', tier: 'fast' };
+  /** Review shots keep the chancla in frame while the camera is on the menu. */
+  handForShot = false;
   readonly viewmodels: THREE.Object3D[] = [];
   private readonly skin: THREE.Material;
   private readonly actors: Actor[] = [];
@@ -272,7 +272,8 @@ export class DutyScene {
     this.worldOpts = opts;
     const map: MapData = opts.map ?? EL_PATIO;
     const boxes = opts.boxes ?? map.boxes;
-    const theme = THEMES[opts.theme ?? 'afternoon'];
+    const asked = opts.theme ?? 'afternoon';
+    const theme = THEMES[this.tier === 'high' && asked === 'noon' ? 'afternoon' : asked];
     const detailed = this.tier === 'high' && kitReady();
     for (const child of [...this.root.children]) {
       if (child.userData['keep']) continue;
@@ -284,35 +285,36 @@ export class DutyScene {
     if (this.shots) this.root.add(this.shots);
     if (this.sparks) this.root.add(this.sparks);
 
-    this.hemi = new THREE.HemisphereLight(0xffe0b0, 0xc47a48, this.tier === 'high' ? 0.72 : 0.8);
-    this.root.add(new THREE.AmbientLight(0xfff6ea, this.tier === 'high' ? 0.38 : 0.28));
-    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc27a : 0xfff3d8, this.tier === 'high' ? 2.25 : 2.0);
+    this.hemi = new THREE.HemisphereLight(this.tier === 'high' ? 0x9cc8ff : 0xffd2a4, this.tier === 'high' ? 0xc98a5a : 0x8a4030, this.tier === 'high' ? 0.45 : 0.8);
+    if (this.tier !== 'high') this.root.add(new THREE.AmbientLight(0xfff1dc, 0.28));
+    const sun = new THREE.DirectionalLight(this.tier === 'high' ? 0xffc58a : 0xfff3d8, this.tier === 'high' ? 3.0 : 2.0);
     sun.position.set(...theme.sunPos);
-    if (this.tier === 'high') sun.position.y *= 0.62;
+    if (this.tier === 'high') sun.position.y *= 0.32;
     if (this.gpuTier) {
       sun.castShadow = true;
       sun.shadow.mapSize.set(this.tier === 'high' ? 2048 : 1024, this.tier === 'high' ? 2048 : 1024);
-      sun.shadow.radius = 1;
+      sun.shadow.radius = this.tier === 'high' ? 1.6 : 1;
       sun.shadow.bias = -0.00025;
       sun.shadow.normalBias = 0.02;
       const sc = sun.shadow.camera;
       // A tight shadow box keeps the map's far corners out of the shadow pass.
-      sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 0.5; sc.far = 70;
+      sc.left = -24; sc.right = 24; sc.top = 24; sc.bottom = -24; sc.near = 0.5; sc.far = 80;
     }
-    const fill = new THREE.DirectionalLight(0xfff3e2, this.tier === 'high' ? 1.15 : 0.35);
+    const fill = new THREE.DirectionalLight(0xffe0b8, this.tier === 'high' ? 0.38 : 0.35);
     fill.position.set(0, 6, 10);
     this.root.add(this.hemi, sun, fill);
     const yard = buildCourtyard(map, boxes, opts.theme ?? 'afternoon', opts.teamDecor !== false, detailed);
     if (detailed) {
       dressKit(yard.root, boxes, map);
-      addFilmTown(yard.root, boxes);
+      try { addFilmTown(yard.root, boxes); }
+      catch (err) { console.error('film town', err); }
       this.placeGenerated(yard.root);
     }
     this.root.add(yard.root);
     this.pinata = yard.pinata;
     this.clouds = yard.clouds;
     this.wall = yard.wall;
-    if (this.tier !== 'fast' && this.gl && this.worldScene) void applyCc0Look(this.gl, this.worldScene, this.root, true);
+    if (this.tier !== 'fast' && this.gl && this.worldScene) void applyCc0Look(this.gl, this.worldScene, this.root, true, this.tier === 'high');
   }
 
   bind(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
@@ -322,7 +324,7 @@ export class DutyScene {
       (window as unknown as { __duty?: { assets?: boolean } }).__duty && ((window as unknown as { __duty: { assets?: boolean } }).__duty.assets = true);
       return;
     }
-    const jobs: Promise<unknown>[] = [applyCc0Look(renderer, scene, this.root, true)];
+    const jobs: Promise<unknown>[] = [];
     if (this.tier === 'high') {
       jobs.push(loadKit());
       jobs.push(loadFilmCast(this.root).then((cast) => { this.cast = cast; }));
@@ -338,7 +340,7 @@ export class DutyScene {
         this.shots.geometry = shot;
         this.shots.material = new THREE.MeshStandardMaterial({ color: 0x2bb5b0, roughness: 0.7, metalness: 0 });
       }
-      if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true);
+      if (this.gl && this.worldScene) await applyCc0Look(this.gl, this.worldScene, this.root, true, this.tier === 'high');
       const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
       if (box) box.assets = true;
     }).catch((err) => { console.warn('duty bind', err); });
@@ -347,8 +349,7 @@ export class DutyScene {
   private placeGenerated(yard: THREE.Object3D): void {
     const heroes = this.heroes;
     if (!heroes) return;
-    yard.traverse((o) => { if (o.name === 'duty-basin') o.visible = false; });
-    if (heroes.fountain) {
+    if (heroes.fountain && !yard.getObjectByName('duty-basin')) {
       const fountain = heroes.fountain.clone(true);
       fountain.position.set(0, 0, 0);
       fountain.name = 'hero-fountain';
@@ -392,26 +393,15 @@ export class DutyScene {
 
   private applyHeldChancla(): void {
     const heroes = this.heroes;
-    const src = heroes?.chancla;
-    if (!src) return;
+    // The Hunyuan sandal's thong post reads as a peg through the strap.
+    // Keep the procedural sole, with the hand under the heel.
     for (const g of this.viewmodels) {
-      for (const child of [...g.children]) {
-        if (child.name === 'reach' || child === g.children[0]) continue;
-        g.remove(child);
-      }
-      const shoe = src.clone();
+      const shoe = g.children.find((child) => child !== g.children[0] && child.name !== 'reach');
+      if (!shoe) continue;
       shoe.name = 'hero-chancla';
-      shoe.position.set(0.04, -0.16, -0.04);
-      shoe.rotation.set(1.05, 0.35, 0.15);
-      g.add(shoe);
-      if (heroes?.arms) {
-        const arms = heroes.arms.clone(true);
-        arms.name = 'hero-arms';
-        arms.position.set(0.02, -0.08, 0.0);
-        arms.rotation.set(0.4, Math.PI, 0.1);
-        arms.scale.multiplyScalar(0.85);
-        g.add(arms);
-      }
+      shoe.position.set(0.06, 0.0, 0.02);
+      shoe.rotation.set(1.05, 0.4, 0.08);
+      shoe.scale.setScalar(0.55);
     }
     if (this.shots && heroes?.chanclaShot && heroes.chanclaMat) {
       this.shots.geometry = heroes.chanclaShot;
@@ -490,10 +480,20 @@ export class DutyScene {
       const spots: Array<[number, number, number, number, number, boolean, number, number]> = [];
       if (mode === 'menu') {
         const face = (x: number, z: number) => Math.atan2(5.2 - x, 8.6 - z);
-        spots.push([-2.2, 0, 1.8, face(-2.2, 1.8), 0.8, true, 9, 9]);
-        spots.push([0.6, 0, 2.4, face(0.6, 2.4), 0, true, (now * 0.001) % 3.2, 9]);
-        spots.push([2.4, 0, 0.6, face(2.4, 0.6), 0, true, 9, 9]);
-        spots.push([-4.4, 0, 0.2, face(-4.4, 0.2), 0, true, 9, 9]);
+        const shot = new URLSearchParams(location.search).get('shot');
+        if (shot === 'abuela') {
+          spots.push([7, 0, 14, 0, 0, true, 9, 9]);
+          spots.push([-7, 0, 14, 0, 0, true, 9, 9]);
+          spots.push([0, 0, 4.5, 0.08, 0, true, 9, 9]);
+        } else if (shot === 'cast') {
+          spots.push([-1.05, 0, 4.5, 0.12, 0, true, 9, 9]);
+          spots.push([0.05, 0, 4.45, 0, 0, true, 9, 9]);
+          spots.push([1.15, 0, 4.5, -0.12, 0, true, 9, 9]);
+        } else {
+          spots.push([-1.7, 0, 4.4, face(-1.7, 4.4), 0, true, 9, 9]);
+          spots.push([1.6, 0, 4.2, face(1.6, 4.2), 0, true, (now * 0.001) % 3.2, 9]);
+          spots.push([0.05, 0, 5.2, face(0.05, 5.2), 0, true, 9, 9]);
+        }
       } else if (mode === 'match' && session) {
         for (const remote of session.remotes.values()) {
           spots.push([remote.x, remote.y, remote.z, remote.yaw + Math.PI, Math.hypot(remote.vx, remote.vz), remote.alive, remote.msSinceThrow / 1000, remote.msSinceHit / 1000]);
@@ -591,7 +591,7 @@ export class DutyScene {
     if (this.clouds) this.clouds.rotation.y = now * 0.000015;
     scrollWater(now);
     const weapon = session?.weapon ?? 0;
-    const showHand = mode !== 'menu';
+    const showHand = mode !== 'menu' || this.handForShot;
     const cd = session?.cooldownMs ?? 0;
     for (let i = 0; i < this.viewmodels.length; i++) {
       const vm = this.viewmodels[i]!;
@@ -601,9 +601,15 @@ export class DutyScene {
       const bar = document.getElementById('duty-charge');
       const held = bar ? Number(/scaleX\(([\d.]+)\)/.exec(bar.style.transform)?.[1] ?? 0) : 0;
       const cock = Math.max(held, wind * 0.7);
+      const shoe = vm.getObjectByName('hero-chancla');
+      if (shoe) shoe.scale.setScalar(this.handForShot ? 0.82 : 1);
+      const palm = vm.children[0];
+      if (palm && this.handForShot) palm.scale.set(1.7, 1.3, 1.6);
+      if (this.handForShot) vm.scale.setScalar(1);
+      else vm.scale.setScalar(1);
       const bob = Math.sin(now * 0.0032) * 0.016;
       const sway = Math.sin(now * 0.0021) * 0.05;
-      vm.position.set(0.32, -0.28 + bob + cock * 0.06, -0.46 + cock * 0.08);
+      vm.position.set(this.handForShot ? 0.22 : 0.32, (this.handForShot ? -0.24 : -0.28) + bob + cock * 0.06, (this.handForShot ? -0.4 : -0.46) + cock * 0.08);
       vm.rotation.set(0.2 - cock * 0.7, -0.35 - sway * 0.4, 0.12 + cock * 0.25);
       const reach = vm.getObjectByName('reach');
       if (reach) reach.visible = cock > 0.22;
@@ -648,22 +654,29 @@ export class DutyScene {
 
   async enableHigh(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<((scene: THREE.Scene, camera: THREE.Camera) => void) | null> {
     try {
-      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { FXAAPass }] = await Promise.all([
+      const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { GTAOPass }, { OutputPass }, { ShaderPass }] = await Promise.all([
         import('three/examples/jsm/postprocessing/EffectComposer.js'),
         import('three/examples/jsm/postprocessing/RenderPass.js'),
         import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
         import('three/examples/jsm/postprocessing/GTAOPass.js'),
         import('three/examples/jsm/postprocessing/OutputPass.js'),
-        import('three/examples/jsm/postprocessing/FXAAPass.js'),
+        import('three/examples/jsm/postprocessing/ShaderPass.js'),
       ]);
-      const composer = new EffectComposer(renderer);
+      const { HalfFloatType, WebGLRenderTarget } = await import('three');
+      const pr = Math.min(renderer.getPixelRatio(), 1.5);
+      const target = new WebGLRenderTarget(renderer.domElement.width * pr, renderer.domElement.height * pr, { type: HalfFloatType, samples: 4 });
+      const composer = new EffectComposer(renderer, target);
       composer.addPass(new RenderPass(scene, camera));
-      const gtao = new GTAOPass(scene, camera, renderer.domElement.width, renderer.domElement.height);
+      const gtao = new GTAOPass(scene, camera, Math.floor(renderer.domElement.width / 2), Math.floor(renderer.domElement.height / 2));
       gtao.output = GTAOPass.OUTPUT.Default;
-      gtao.blendIntensity = 0.35;
+      gtao.blendIntensity = 1;
       composer.addPass(gtao);
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.04, 0.25, 0.96));
-      composer.addPass(new FXAAPass());
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(renderer.domElement.width, renderer.domElement.height), 0.08, 0.4, 0.92));
+      composer.addPass(new ShaderPass({
+        uniforms: { tDiffuse: { value: null }, contrast: { value: 1.15 }, saturation: { value: 1.12 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform sampler2D tDiffuse; uniform float contrast; uniform float saturation; varying vec2 vUv; void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = (c - 0.18) * contrast + 0.18; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, saturation); c *= vec3(1.02, 1.0, 0.97); gl_FragColor = vec4(c, 1.0); }',
+      }));
       composer.addPass(new OutputPass());
       return () => composer.render();
     } catch {

@@ -376,8 +376,10 @@ export function dressKit(parent: THREE.Object3D, boxes: readonly MapBox[], map: 
   // High tier retires the Kenney toy kit. Real plants and a stone fountain stay.
   if (new URLSearchParams(location.search).get('kit') !== 'kenney') {
     if (new URLSearchParams(location.search).get('plants') === '1') placeGreens(map);
-    placeStoneFountain(map);
-    placeFacades(boxes);
+    if (new URLSearchParams(location.search).get('kit') === 'boxes') {
+      placeStoneFountain(map);
+      placeFacades(boxes);
+    }
     flushPiles(parent);
     return;
   }

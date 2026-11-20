@@ -14,7 +14,7 @@ import * as THREE from 'three';
 const origGetContext = HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, attrs?: unknown) {
   if (String(type).indexOf('webgl') === 0) {
-    const next = { ...(attrs as Record<string, unknown> | undefined), antialias: false, powerPreference: 'high-performance' };
+    const next = { ...(attrs as Record<string, unknown> | undefined), antialias: true, powerPreference: 'high-performance' };
     return origGetContext.call(this, type, next);
   }
   return origGetContext.call(this, type, attrs as never);
@@ -58,7 +58,7 @@ Engine.prototype.start = function () {
   this.renderer.outputColorSpace = THREE.SRGBColorSpace;
   this.renderer.shadowMap.enabled = tier !== 'fast';
   this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  this.renderer.setPixelRatio(1);
+  this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, tier === 'high' ? 1.5 : 1));
   for (const vm of duty.viewmodels) this.vmScene.add(vm);
   const stats = duty.stats;
   (window as unknown as { __duty?: unknown }).__duty = { engine: this, scene: duty, stats, gpu: gpu.name, ready: false };
@@ -72,6 +72,29 @@ Engine.prototype.start = function () {
     });
   } else {
     (window as unknown as { __duty?: { ready?: boolean } }).__duty!.ready = true;
+  }
+  const shot = new URLSearchParams(location.search).get('shot');
+  if (shot && duty) {
+    const views: Record<string, { map: string; pos: [number, number, number]; look: [number, number, number]; hand: boolean }> = {
+      plaza: { map: 'plaza', pos: [0.4, 1.9, 7.2], look: [0, 1.55, -4], hand: false },
+      street: { map: 'plaza', pos: [1.2, 1.75, 7.6], look: [0, 1.6, -4], hand: true },
+      cast: { map: 'plaza', pos: [0.1, 1.65, 7.5], look: [0.05, 1.15, 4.5], hand: false },
+      abuela: { map: 'plaza', pos: [0.55, 1.38, 6.35], look: [0, 1.15, 4.5], hand: false },
+      patio: { map: 'patio', pos: [1.5, 1.65, 7.2], look: [-2, 1.5, -6], hand: false },
+      fiesta: { map: 'fiesta', pos: [0.4, 2.4, 12], look: [0, 1.8, -2], hand: false },
+      detail: { map: 'plaza', pos: [-1.6, 1.55, 1.4], look: [0.2, 1.15, -2.2], hand: false },
+    };
+    const view = views[shot] ?? views.plaza!;
+    const engine = this;
+    const frameShot = () => {
+      const box = (window as unknown as { __duty?: { assets?: boolean } }).__duty;
+      if (!box?.assets) { window.setTimeout(frameShot, 300); return; }
+      document.querySelectorAll<HTMLElement>('.screen, #click-to-play, button, .panel').forEach((el) => { el.style.visibility = 'hidden'; });
+      duty!.handForShot = view.hand;
+      engine.setShowcase(view.map, view.pos, view.look);
+      document.body.dataset['shot'] = 'ready';
+    };
+    window.setTimeout(frameShot, 400);
   }
 };
 
@@ -109,11 +132,22 @@ function installRender(engine: Engine): void {
         frameStart = 0;
       }
     }
-    if (scene === engine.vmScene) engine.vm.root.visible = false;
+    if (scene === engine.vmScene) {
+      engine.vm.root.visible = false;
+      engine.vmScene.background = null;
+    }
     if (!rendering && highRender && scene === engine.scene) {
       rendering = true;
       highRender(scene, camera);
       rendering = false;
+      if (duty?.handForShot) {
+        engine.vm.root.visible = false;
+        engine.renderer.setRenderTarget(null);
+        engine.renderer.autoClear = false;
+        engine.renderer.autoClearColor = false;
+        engine.renderer.clearDepth();
+        orig(engine.vmScene, engine.vmCamera);
+      }
     } else orig(scene, camera);
     if (duty && scene === engine.scene && engine.renderer.info.render.calls > 4) {
       duty.stats.calls = engine.renderer.info.render.calls;
